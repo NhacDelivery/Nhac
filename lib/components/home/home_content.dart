@@ -154,8 +154,19 @@ class _HomeContentState extends State<HomeContent> {
   }
 
   Future<void> _fetchProdutosNecessidades() async {
+    if (LocalCacheService.produtosNecessidadesCache != null) {
+      if (mounted) {
+        setState(() {
+          _produtosNecessidades.clear();
+          _produtosNecessidades.addAll(LocalCacheService.produtosNecessidadesCache!.cast<ProdutosModel>());
+        });
+      }
+      return;
+    }
+
     try {
       final produtos = await _produtoRepository.buscarNecessidades();
+      LocalCacheService.produtosNecessidadesCache = List.from(produtos);
       if (mounted) {
         setState(() {
           _produtosNecessidades.clear();
@@ -168,8 +179,19 @@ class _HomeContentState extends State<HomeContent> {
   }
 
   Future<void> _fetchProdutosPromocao() async {
+    if (LocalCacheService.produtosPromocaoCache != null) {
+      if (mounted) {
+        setState(() {
+          _produtosPromocao.clear();
+          _produtosPromocao.addAll(LocalCacheService.produtosPromocaoCache!.cast<ProdutosModel>());
+        });
+      }
+      return;
+    }
+
     try {
       final promocoes = await _produtoRepository.buscarPromocoes();
+      LocalCacheService.produtosPromocaoCache = List.from(promocoes);
       if (mounted) {
         setState(() {
           _produtosPromocao.clear();
@@ -183,6 +205,18 @@ class _HomeContentState extends State<HomeContent> {
 
   Future<void> _fetchLojas() async {
     if (_isLoadingLojas || !_hasMoreLojas || !mounted) return;
+
+    if (LocalCacheService.lojasCache != null && _currentPageLojas == 0) {
+      if (mounted) {
+        setState(() {
+          _lojas.clear();
+          _lojas.addAll(LocalCacheService.lojasCache!.cast<LojasModel>());
+          _currentPageLojas = LocalCacheService.currentPageLojasCache;
+          _hasMoreLojas = LocalCacheService.hasMoreLojasCache;
+        });
+      }
+      return;
+    }
 
     setState(() {
       _isLoadingLojas = true;
@@ -198,6 +232,7 @@ class _HomeContentState extends State<HomeContent> {
           setState(() {
             _hasMoreLojas = false;
             _isLoadingLojas = false;
+            LocalCacheService.hasMoreLojasCache = false;
           });
         }
         return;
@@ -213,6 +248,10 @@ class _HomeContentState extends State<HomeContent> {
           }
 
           _isLoadingLojas = false;
+          
+          LocalCacheService.lojasCache = List.from(_lojas);
+          LocalCacheService.currentPageLojasCache = _currentPageLojas;
+          LocalCacheService.hasMoreLojasCache = _hasMoreLojas;
         });
       }
     } on NetworkException catch (e) {
@@ -575,6 +614,7 @@ class _HomeContentState extends State<HomeContent> {
     _currentPageLojas = 0;
     _hasMoreLojas = true;
     _lojas.clear();
+    LocalCacheService.limparCacheHome();
     await Future.wait([
       _pegarLocalizacaoUsuario(),
       context.read<UserProvider>().carregarDadosUsuario(),

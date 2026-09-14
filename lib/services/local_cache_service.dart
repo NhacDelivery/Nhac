@@ -109,6 +109,24 @@ class LocalCacheService {
     }
   }
 
+  // Cache em memória para a Home (produtos e lojas)
+  // Limpo quando o app fecha (já que é memória) ou quando o usuário dá pull-to-refresh
+  static List<dynamic>? produtosNecessidadesCache;
+  static List<dynamic>? produtosPromocaoCache;
+  
+  static List<dynamic>? lojasCache;
+  static int currentPageLojasCache = 0;
+  static bool hasMoreLojasCache = true;
+
+  static void limparCacheHome() {
+    produtosNecessidadesCache = null;
+    produtosPromocaoCache = null;
+    lojasCache = null;
+    currentPageLojasCache = 0;
+    hasMoreLojasCache = true;
+  }
+
+
 
   static Future<void> limparTudo() async {
     await Future.wait([
