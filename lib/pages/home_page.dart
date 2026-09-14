@@ -10,6 +10,7 @@ import 'package:nhac/controllers/cart_provider.dart';
 import 'package:nhac/controllers/endereco_provider.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:nhac/pages/carrinho_page.dart';
+import 'package:nhac/pages/feed_page.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
@@ -110,7 +111,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       case 1:
         return Icons.shopping_cart_outlined;
       case 2:
-        return Icons.shopping_bag_outlined;
+        return Icons.newspaper_outlined;
       case 3:
         return Icons.person_outline;
       default:
@@ -161,7 +162,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 children: [
                   const HomeContent(),
                   CarrinhoPage(isActive: _selectedIndex == 1),
-                  _buildPlaceholderContent(2),
+                  const FeedPage(),
                   const ProfileContent(),
                 ],
               ),
@@ -319,29 +320,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildPlaceholderContent(int index) {
-    return Stack(
-      children: [
-        Center(
-          child: Text(
-            'tela $index',
-            style: TextStyle(color: const Color(0xFF5D201C), fontSize: 24.sp),
-          ),
-        ),
-        Positioned(
-          top: 257.h,
-          left: 70.w,
-          width: 232.w,
-          height: 200.h,
-          child: const Image(
-            image: AssetImage('assets/construction.gif'),
-            fit: BoxFit.fitHeight,
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildDynamicNavBar() {
     return GestureDetector(
       onTap: () {
@@ -419,8 +397,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           label: 'Carrinho',
                           index: 1),
                       _buildNavItem(
-                          icon: Icons.shopping_bag_outlined,
-                          label: 'N sei',
+                          icon: Icons.newspaper_outlined,
+                          label: 'Feed',
                           index: 2),
                       _buildNavItem(
                           icon: Icons.person_outline,
