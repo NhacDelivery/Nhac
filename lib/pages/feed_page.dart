@@ -60,203 +60,205 @@ class _FeedPageState extends State<FeedPage>
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
-      ),
-      slivers: [
-        // ── Pull-to-refresh ──────────────────────────────────────────────────
-        CupertinoSliverRefreshControl(
-          refreshIndicatorExtent: 120.h,
-          refreshTriggerPullDistance: 160.h,
-          onRefresh: () => _carregarPosts(_categorias[_tabController.index]),
-          builder: (context, refreshState, pulledExtent,
-              refreshTriggerPullDistance, refreshIndicatorExtent) {
-            return Center(
-              child: Opacity(
-                opacity:
-                    (pulledExtent / refreshIndicatorExtent).clamp(0.0, 1.0),
-                child: Lottie.asset(
-                  'assets/animations/loading_nhac.json',
-                  width: 180.w,
-                  height: 180.h,
-                  animate: refreshState == RefreshIndicatorMode.refresh ||
-                      refreshState == RefreshIndicatorMode.armed,
-                ),
-              ),
-            );
-          },
+    return SafeArea(
+      child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
         ),
-
-        // ── Header: localização + search bar + carrossel ──────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(24.w, 16.h, 24.w, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Título + ícone de notificação
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Feed',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 26.sp,
-                        color: const Color(0xFF5D201C),
-                      ),
-                    ),
-                    Icon(Icons.notifications_none_outlined,
-                        color: const Color(0xFF5D201C), size: 26.r),
-                  ],
-                ),
-                SizedBox(height: 16.h),
-
-                // Search bar — igual à Home
-                GestureDetector(
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      PageRouteBuilder(
-                        pageBuilder: (context, animation,
-                                secondaryAnimation) =>
-                            const SearchPage(),
-                        transitionsBuilder:
-                            (context, animation, secondaryAnimation, child) {
-                          return FadeTransition(
-                              opacity: animation, child: child);
-                        },
-                        transitionDuration:
-                            const Duration(milliseconds: 300),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 16.w,
-                      vertical: 12.h,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(50.r),
-                      boxShadow: [
-                        BoxShadow(
-                          color:
-                              const Color(0xFF5D201C).withValues(alpha: 0.05),
-                          blurRadius: 10.r,
-                          offset: const Offset(0.0, 4.0),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.search, color: Colors.grey, size: 22.r),
-                        SizedBox(width: 8.w),
-                        Expanded(
-                          child: Text(
-                            'Procurar',
-                            style: TextStyle(
-                                color: Colors.grey.shade400, fontSize: 16.sp),
-                          ),
-                        ),
-                        Icon(Icons.tune, color: Colors.grey, size: 22.r),
-                      ],
-                    ),
+        slivers: [
+          // ── Pull-to-refresh ──────────────────────────────────────────────────
+          CupertinoSliverRefreshControl(
+            refreshIndicatorExtent: 120.h,
+            refreshTriggerPullDistance: 160.h,
+            onRefresh: () => _carregarPosts(_categorias[_tabController.index]),
+            builder: (context, refreshState, pulledExtent,
+                refreshTriggerPullDistance, refreshIndicatorExtent) {
+              return Center(
+                child: Opacity(
+                  opacity:
+                      (pulledExtent / refreshIndicatorExtent).clamp(0.0, 1.0),
+                  child: Lottie.asset(
+                    'assets/animations/loading_nhac.json',
+                    width: 180.w,
+                    height: 180.h,
+                    animate: refreshState == RefreshIndicatorMode.refresh ||
+                        refreshState == RefreshIndicatorMode.armed,
                   ),
                 ),
-
-                SizedBox(height: 24.h),
-
-                // Carrossel de banners — o mesmo componente da Home
-                const HomeBannerCarousel(),
-
-                SizedBox(height: 24.h),
-              ],
-            ),
+              );
+            },
           ),
-        ),
 
-        // ── TabBar de categorias ──────────────────────────────────────────
-        SliverPersistentHeader(
-          pinned: true,
-          delegate: _StickyTabBarDelegate(
-            child: Container(
-              color: const Color(0xFFFFE7E5),
-              child: TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                labelColor: const Color(0xFFFF6961),
-                unselectedLabelColor: Colors.grey,
-                labelStyle: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14.sp,
-                ),
-                unselectedLabelStyle: TextStyle(
-                  fontWeight: FontWeight.w400,
-                  fontSize: 14.sp,
-                ),
-                indicator: UnderlineTabIndicator(
-                  borderSide: BorderSide(
-                    color: const Color(0xFFFF6961),
-                    width: 2.5,
-                  ),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-                indicatorSize: TabBarIndicatorSize.label,
-                padding: EdgeInsets.symmetric(horizontal: 8.w),
-                tabs: _categorias.map((c) => Tab(text: c)).toList(),
-              ),
-            ),
-          ),
-        ),
-
-        // ── Conteúdo: skeleton / vazio / posts ───────────────────────────
-        if (_isLoading)
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
-                child: _buildSkeletonCard(),
-              ),
-              childCount: 4,
-            ),
-          )
-        else if (_posts.isEmpty)
-          SliverFillRemaining(
-            child: Center(
+          // ── Header: localização + search bar + carrossel ──────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(24.w, 16.h, 24.w, 0),
               child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.newspaper_outlined,
-                      size: 56.r, color: Colors.grey.shade300),
-                  SizedBox(height: 12.h),
-                  Text(
-                    'Nenhum post por aqui ainda.',
-                    style: TextStyle(
-                        color: Colors.grey.shade400, fontSize: 15.sp),
+                  // Título + ícone de notificação
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Feed',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 26.sp,
+                          color: const Color(0xFF5D201C),
+                        ),
+                      ),
+                      Icon(Icons.notifications_none_outlined,
+                          color: const Color(0xFF5D201C), size: 26.r),
+                    ],
                   ),
+                  SizedBox(height: 16.h),
+
+                  // Search bar — igual à Home
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        PageRouteBuilder(
+                          pageBuilder: (context, animation,
+                                  secondaryAnimation) =>
+                              const SearchPage(),
+                          transitionsBuilder:
+                              (context, animation, secondaryAnimation, child) {
+                            return FadeTransition(
+                                opacity: animation, child: child);
+                          },
+                          transitionDuration:
+                              const Duration(milliseconds: 300),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 16.w,
+                        vertical: 12.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(50.r),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                const Color(0xFF5D201C).withValues(alpha: 0.05),
+                            blurRadius: 10.r,
+                            offset: const Offset(0.0, 4.0),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.search, color: Colors.grey, size: 22.r),
+                          SizedBox(width: 8.w),
+                          Expanded(
+                            child: Text(
+                              'Procurar',
+                              style: TextStyle(
+                                  color: Colors.grey.shade400, fontSize: 16.sp),
+                            ),
+                          ),
+                          Icon(Icons.tune, color: Colors.grey, size: 22.r),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  SizedBox(height: 24.h),
+
+                  // Carrossel de banners — o mesmo componente da Home
+                  const HomeBannerCarousel(),
+
+                  SizedBox(height: 24.h),
                 ],
               ),
             ),
-          )
-        else
-          SliverPadding(
-            padding: EdgeInsets.symmetric(horizontal: 16.w),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) => Padding(
-                  padding: EdgeInsets.only(top: index == 0 ? 12.h : 0),
-                  child: _buildPostCard(_posts[index]),
+          ),
+
+          // ── TabBar de categorias ──────────────────────────────────────────
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _StickyTabBarDelegate(
+              child: Container(
+                color: const Color(0xFFFFE7E5),
+                child: TabBar(
+                  controller: _tabController,
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.start,
+                  labelColor: const Color(0xFFFF6961),
+                  unselectedLabelColor: Colors.grey,
+                  labelStyle: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14.sp,
+                  ),
+                  unselectedLabelStyle: TextStyle(
+                    fontWeight: FontWeight.w400,
+                    fontSize: 14.sp,
+                  ),
+                  indicator: UnderlineTabIndicator(
+                    borderSide: BorderSide(
+                      color: const Color(0xFFFF6961),
+                      width: 2.5,
+                    ),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  indicatorSize: TabBarIndicatorSize.label,
+                  padding: EdgeInsets.symmetric(horizontal: 8.w),
+                  tabs: _categorias.map((c) => Tab(text: c)).toList(),
                 ),
-                childCount: _posts.length,
               ),
             ),
           ),
 
-        SliverToBoxAdapter(child: SizedBox(height: 120.h)),
-      ],
+          // ── Conteúdo: skeleton / vazio / posts ───────────────────────────
+          if (_isLoading)
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) => Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
+                  child: _buildSkeletonCard(),
+                ),
+                childCount: 4,
+              ),
+            )
+          else if (_posts.isEmpty)
+            SliverFillRemaining(
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.newspaper_outlined,
+                        size: 56.r, color: Colors.grey.shade300),
+                    SizedBox(height: 12.h),
+                    Text(
+                      'Nenhum post por aqui ainda.',
+                      style: TextStyle(
+                          color: Colors.grey.shade400, fontSize: 15.sp),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: 16.w),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => Padding(
+                    padding: EdgeInsets.only(top: index == 0 ? 12.h : 0),
+                    child: _buildPostCard(_posts[index]),
+                  ),
+                  childCount: _posts.length,
+                ),
+              ),
+            ),
+
+          SliverToBoxAdapter(child: SizedBox(height: 120.h)),
+        ],
+      ),
     );
   }
 
