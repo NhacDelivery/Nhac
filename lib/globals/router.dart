@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nhac/pages/auth/cadastro/verificar_email_cadastro.dart';
 import 'package:nhac/pages/bem_vindo.dart';
 import 'package:nhac/pages/auth/continuar_senha.dart';
 import 'package:nhac/pages/auth/email_cliente.dart';
 import 'package:nhac/pages/auth/insira_telefone.dart';
 import 'package:nhac/pages/carrinho_page.dart';
+import 'package:nhac/pages/chat_loja_page.dart';
 import 'package:nhac/pages/checkout_page.dart';
 import 'package:nhac/pages/rastreio_pedido_page.dart';
 import 'package:nhac/pages/splash_screen.dart';
@@ -198,6 +200,16 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
     GoRoute(
+      path: '/cadastro/verificar-email',
+      pageBuilder: (context, state) {
+        final email = state.extra as String? ?? '';
+        return _buildSlideRightToLeftPage(
+          key: state.pageKey,
+          child: VerificarEmailCadastro(email: email),
+        );
+      },
+    ),
+    GoRoute(
       path: '/cadastro/telefone',
       builder: (context, state) => const TelefoneCadastro(),
     ),
@@ -355,5 +367,18 @@ final GoRouter appRouter = GoRouter(
       );
     },
   ),
+      GoRoute(
+      path: '/chat-loja',
+      pageBuilder: (context, state) {
+        final dados = state.extra as Map<String, dynamic>? ?? const {};
+        return _buildSlideRightToLeftPage(
+          key: state.pageKey,
+          child: ChatLojaPage(
+            lojaId: (dados['lojaId'] ?? '').toString(),
+            lojaNome: (dados['lojaNome'] ?? 'Loja').toString(),
+          ),
+        );
+      },
+    ),
   ],
   );

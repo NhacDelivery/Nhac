@@ -72,6 +72,27 @@ class AuthService with ChangeNotifier {
     }
   }
 
+  Future<void> enviarCodigoCadastro(String email) async {
+    try {
+      await _dio.post('/auth/enviar-codigo-cadastro', data: {
+        'email': email.trim(),
+      });
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<void> confirmarEmailCadastro(String email, String codigo) async {
+    try {
+      await _dio.post('/auth/confirmar-email-cadastro', data: {
+        'email': email.trim(),
+        'codigo': codigo.trim(),
+      });
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
   String formatarTelefoneE164(String telefoneBR) {
     final numeros = telefoneBR.replaceAll(RegExp(r'\D'), '');
     return '+55$numeros';

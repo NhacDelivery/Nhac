@@ -134,6 +134,18 @@ class MockAuthService extends ChangeNotifier implements AuthService {
   @override
   // TODO: implement isPhoneUser
   bool get isPhoneUser => throw UnimplementedError();
+
+  @override
+  Future<void> confirmarEmailCadastro(String email, String codigo) {
+    // TODO: implement confirmarEmailCadastro
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<void> enviarCodigoCadastro(String email) {
+    // TODO: implement enviarCodigoCadastro
+    throw UnimplementedError();
+  }
 }
 
 void main() {

@@ -709,6 +709,9 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
             'key': _googleApiKey,
             'components': 'country:br',
             'language': 'pt-BR',
+            // 'address' restringe a endereços com logradouro — sem isso vêm
+            // cidades, estados e países na lista.
+            'types': 'address',
           },
         );
 

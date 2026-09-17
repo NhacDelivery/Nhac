@@ -142,7 +142,10 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
   }
 
   Future<void> _abrirMensagemRestaurante() async {
-    context.showError('Canal de mensagem indisponível para esta loja no momento.');
+    context.push('/chat-loja', extra: {
+      'lojaId': _loja!.id,
+      'lojaNome': _loja!.nome,
+    });
   }
 
   double _calcularDistanciaKm() {

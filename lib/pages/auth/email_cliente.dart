@@ -266,7 +266,10 @@ class _EmailClienteState extends State<EmailCliente> {
       if (existe) {
         localContext.push('/continuar_senha');
       } else {
-        localContext.push('/cadastro/nome');
+        // O backend exige e-mail confirmado por código antes do /auth/registrar.
+        await authService.enviarCodigoCadastro(emailDoUsuario);
+        if (!localContext.mounted) return;
+        localContext.push('/cadastro/verificar-email', extra: emailDoUsuario);
       }
     } catch (e) {
       if (localContext.mounted) {

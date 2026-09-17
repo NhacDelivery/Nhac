@@ -70,6 +70,8 @@ class _AddressPickerSheetState extends State<AddressPickerSheet> {
         final response = await places.findAutocompletePredictions(
           query,
           countries: ['br'],
+          // Sem isso o Google devolve cidade, estado e país junto.
+          placeTypesFilter: [PlaceTypeFilter.ADDRESS],
         );
         
         setState(() {

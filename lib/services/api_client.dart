@@ -55,11 +55,11 @@ class ApiClient {
           final statusCode = e.response?.statusCode;
           final defaultMessage = responseData?['message'] ?? 'Erro desconhecido';
 
-          if ((statusCode == 401 || statusCode == 403) && 
-              !e.requestOptions.path.contains('/login') && 
-              !e.requestOptions.path.contains('/auth/alterar-senha')) {
-             _cachedToken = null;
-             await authServiceRoteador.logout(); 
+          if ((statusCode == 401 || statusCode == 403) &&
+            !e.requestOptions.path.contains('/login') &&
+            !e.requestOptions.path.contains('/auth/alterar-senha')) {
+          _cachedToken = null;
+          await authServiceRoteador.logout();
              if (statusCode == 401) {
                 return handler.reject(DioException(
                   requestOptions: e.requestOptions, 
