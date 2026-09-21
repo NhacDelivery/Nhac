@@ -22,7 +22,6 @@ class ApiClient {
     dio = Dio(
       BaseOptions(
         baseUrl: AppConstants.apiBaseUrl,
-   
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 15),
         sendTimeout: const Duration(seconds: 15),
@@ -45,48 +44,49 @@ class ApiClient {
           return handler.next(options);
         },
         onResponse: (response, handler) {
-          debugPrint('✅ [RES HTTP] ${response.statusCode} ${response.requestOptions.path}');
+          debugPrint(
+              '✅ [RES HTTP] ${response.statusCode} ${response.requestOptions.path}');
           return handler.next(response);
         },
         onError: (DioException e, handler) async {
-          debugPrint('❌ [ERR HTTP] Status: ${e.response?.statusCode} | Rota: ${e.requestOptions.path}');
-          
+          debugPrint(
+              '❌ [ERR HTTP] Status: ${e.response?.statusCode} | Rota: ${e.requestOptions.path}');
+
           final responseData = e.response?.data;
           final statusCode = e.response?.statusCode;
-          final defaultMessage = responseData?['message'] ?? 'Erro desconhecido';
+          final defaultMessage =
+              responseData?['message'] ?? 'Erro desconhecido';
 
-          if ((statusCode == 401 || statusCode == 403) &&
-            !e.requestOptions.path.contains('/login') &&
-            !e.requestOptions.path.contains('/auth/alterar-senha')) {
-          _cachedToken = null;
-          await authServiceRoteador.logout();
-             if (statusCode == 401) {
-                return handler.reject(DioException(
-                  requestOptions: e.requestOptions, 
-                  error: UnauthorizedException(defaultMessage),
-                ));
-             } else {
-                return handler.reject(DioException(
-                  requestOptions: e.requestOptions, 
-                  error: ForbiddenException("Você não tem permissão para isso."),
-                ));
-             }
+          if (statusCode == 401 &&
+              !e.requestOptions.path.contains('/login') &&
+              !e.requestOptions.path.contains('/auth/alterar-senha')) {
+            _cachedToken = null;
+            await authServiceRoteador.logout();
+            return handler.reject(DioException(
+              requestOptions: e.requestOptions,
+              response: e.response,
+              type: e.type,
+              error: UnauthorizedException(defaultMessage),
+            ));
           }
 
-          if (responseData != null) {
-            debugPrint('Detalhes do Erro: $responseData');
+          if (responseData is Map) {
+            debugPrint(
+              'Erro API: status=$statusCode code=${responseData['error']}',
+            );
           }
 
-          if (e.type == DioExceptionType.connectionTimeout || 
-              e.type == DioExceptionType.receiveTimeout || 
+          if (e.type == DioExceptionType.connectionTimeout ||
+              e.type == DioExceptionType.receiveTimeout ||
               e.type == DioExceptionType.sendTimeout ||
               e.type == DioExceptionType.connectionError ||
               e.type == DioExceptionType.unknown ||
               e.type == DioExceptionType.cancel) {
-             return handler.reject(DioException(
-                requestOptions: e.requestOptions,
-                error: ServerException("Sem conexão com a internet ou servidor indisponível. Verifique sua rede e tente novamente."),
-             ));
+            return handler.reject(DioException(
+              requestOptions: e.requestOptions,
+              error: ServerException(
+                  "Sem conexão com a internet ou servidor indisponível. Verifique sua rede e tente novamente."),
+            ));
           }
 
           // Tratamento por Status Code
@@ -94,8 +94,11 @@ class ApiClient {
           switch (statusCode) {
             case 400:
               // Verifica se possui o detalhamento de campos
-              if (responseData != null && responseData is Map && responseData.containsKey('details')) {
-                customError = ValidationException(defaultMessage, responseData['details']);
+              if (responseData != null &&
+                  responseData is Map &&
+                  responseData.containsKey('details')) {
+                customError = ValidationException(
+                    defaultMessage, responseData['details']);
               } else {
                 customError = BusinessRuleException(defaultMessage);
               }
@@ -105,6 +108,9 @@ class ApiClient {
               break;
             case 403:
               customError = ForbiddenException(defaultMessage);
+              break;
+            case 409:
+              customError = BusinessRuleException(defaultMessage);
               break;
             case 404:
               customError = NotFoundException(defaultMessage);
@@ -123,6 +129,8 @@ class ApiClient {
 
           return handler.reject(DioException(
             requestOptions: e.requestOptions,
+            response: e.response,
+            type: e.type,
             error: customError,
           ));
         },

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:lottie/lottie.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:nhac/globals/app_constants.dart';
 import 'package:flutter_google_places_sdk/flutter_google_places_sdk.dart';
 import 'package:nhac/utils/endereco_utils.dart';
 
@@ -16,14 +16,15 @@ class AddressPickerSheet extends StatefulWidget {
 
 class _AddressPickerSheetState extends State<AddressPickerSheet> {
   final TextEditingController _searchController = TextEditingController();
-  final DraggableScrollableController _sheetController = DraggableScrollableController();
+  final DraggableScrollableController _sheetController =
+      DraggableScrollableController();
   final FocusNode _focusNode = FocusNode();
   List<Map<String, dynamic>> _sugestoes = [];
   bool _estaDigitando = false;
   bool _isLoadingSearch = false;
   Timer? _debounce;
   final Dio _dio = Dio();
-  final String _googleApiKey = dotenv.env['GOOGLE_PLACES_API_KEY'] ?? '';
+  final String _googleApiKey = AppConstants.googlePlacesApiKey;
 
   @override
   void initState() {
@@ -41,7 +42,7 @@ class _AddressPickerSheetState extends State<AddressPickerSheet> {
 
   void _filtrarEnderecos(String query) {
     if (_debounce?.isActive ?? false) _debounce?.cancel();
-    
+
     if (query.isEmpty) {
       setState(() {
         _sugestoes = [];
@@ -50,7 +51,7 @@ class _AddressPickerSheetState extends State<AddressPickerSheet> {
       });
       return;
     }
-    
+
     setState(() {
       _estaDigitando = true;
       _isLoadingSearch = true;
@@ -60,7 +61,8 @@ class _AddressPickerSheetState extends State<AddressPickerSheet> {
       if (!mounted) return;
       if (_googleApiKey.isEmpty) {
         debugPrint('🚨 ERRO CRÍTICO: A chave do Google (API Key) está vazia!');
-        debugPrint('Verifique se o arquivo .env existe e se está declarado no pubspec.yaml.');
+        debugPrint(
+            'Verifique se o arquivo .env existe e se está declarado no pubspec.yaml.');
         setState(() => _isLoadingSearch = false);
         return;
       }
@@ -73,14 +75,16 @@ class _AddressPickerSheetState extends State<AddressPickerSheet> {
           // Sem isso o Google devolve cidade, estado e país junto.
           placeTypesFilter: [PlaceTypeFilter.ADDRESS],
         );
-        
+
         setState(() {
-          _sugestoes = response.predictions.map((p) => {
-            'description': p.fullText,
-            'place_id': p.placeId,
-            'main_text': p.primaryText,
-            'secondary_text': p.secondaryText,
-          }).toList();
+          _sugestoes = response.predictions
+              .map((p) => {
+                    'description': p.fullText,
+                    'place_id': p.placeId,
+                    'main_text': p.primaryText,
+                    'secondary_text': p.secondaryText,
+                  })
+              .toList();
           _isLoadingSearch = false;
         });
       } catch (e) {
@@ -128,7 +132,9 @@ class _AddressPickerSheetState extends State<AddressPickerSheet> {
             if (types.contains('street_number')) {
               numero = c['long_name'];
             }
-            if (types.contains('sublocality') || types.contains('sublocality_level_1') || types.contains('neighborhood')) {
+            if (types.contains('sublocality') ||
+                types.contains('sublocality_level_1') ||
+                types.contains('neighborhood')) {
               bairro = c['long_name'];
             }
             if (types.contains('administrative_area_level_2')) {
@@ -192,9 +198,19 @@ class _AddressPickerSheetState extends State<AddressPickerSheet> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Container(width: 8.w, height: 8.h, decoration: BoxDecoration(color: Colors.grey.shade300, shape: BoxShape.circle)),
+                    Container(
+                        width: 8.w,
+                        height: 8.h,
+                        decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            shape: BoxShape.circle)),
                     SizedBox(width: 8.w),
-                    Container(width: 8.w, height: 8.h, decoration: BoxDecoration(color: Colors.grey.shade300, shape: BoxShape.circle)),
+                    Container(
+                        width: 8.w,
+                        height: 8.h,
+                        decoration: BoxDecoration(
+                            color: Colors.grey.shade300,
+                            shape: BoxShape.circle)),
                   ],
                 ),
               ),
@@ -205,21 +221,32 @@ class _AddressPickerSheetState extends State<AddressPickerSheet> {
                   children: [
                     Text(
                       'Onde você quer receber o seu pedido?',
-                      style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold, color: const Color(0xFF5D201C)),
+                      style: TextStyle(
+                          fontSize: 22.sp,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF5D201C)),
                     ),
                     SizedBox(height: 8.h),
-                    Text('Busque pelo nome da rua e pelo número do seu endereço.', style: TextStyle(fontSize: 14.sp, color: Colors.grey)),
+                    Text(
+                        'Busque pelo nome da rua e pelo número do seu endereço.',
+                        style: TextStyle(fontSize: 14.sp, color: Colors.grey)),
                     SizedBox(height: 24.h),
                     TextField(
                       controller: _searchController,
                       focusNode: _focusNode,
                       onChanged: _filtrarEnderecos,
-                      style: TextStyle(color: const Color(0xFF5D201C), fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          color: const Color(0xFF5D201C),
+                          fontWeight: FontWeight.w600),
                       decoration: InputDecoration(
                         hintText: 'Nome da rua e número',
                         hintStyle: const TextStyle(color: Color(0xFFC9BCBC)),
-                        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey, width: 1.0)),
-                        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFC9BCBC), width: 2.0)),
+                        enabledBorder: const UnderlineInputBorder(
+                            borderSide:
+                                BorderSide(color: Colors.grey, width: 1.0)),
+                        focusedBorder: const UnderlineInputBorder(
+                            borderSide: BorderSide(
+                                color: Color(0xFFC9BCBC), width: 2.0)),
                         suffixIcon: _searchController.text.isNotEmpty
                             ? IconButton(
                                 icon: Icon(Icons.clear, size: 20.r),
@@ -233,34 +260,46 @@ class _AddressPickerSheetState extends State<AddressPickerSheet> {
                     ),
                     SizedBox(height: 20.h),
                     if (_isLoadingSearch)
-                      Center(child: Lottie.asset('assets/animations/loading_nhac.json', width: 150.w, height: 150.h))
+                      Center(
+                          child: Lottie.asset(
+                              'assets/animations/loading_nhac.json',
+                              width: 150.w,
+                              height: 150.h))
                     else if (_sugestoes.isEmpty && _estaDigitando)
                       Padding(
                         padding: EdgeInsets.symmetric(vertical: 40.h),
                         child: Center(
                           child: Column(
                             children: [
-                              Icon(Icons.search_off_outlined, size: 48.r, color: Colors.grey.shade200),
+                              Icon(Icons.search_off_outlined,
+                                  size: 48.r, color: Colors.grey.shade200),
                               SizedBox(height: 16.h),
-                              const Text('Nenhum endereço encontrado', style: TextStyle(color: Colors.grey)),
+                              const Text('Nenhum endereço encontrado',
+                                  style: TextStyle(color: Colors.grey)),
                             ],
                           ),
                         ),
                       )
                     else
                       ..._sugestoes.map((item) => ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: Colors.grey.shade100, shape: BoxShape.circle),
-                          child: Icon(Icons.location_on_outlined, size: 20.r, color: Colors.grey),
-                        ),
-                        title: Text(item['main_text'].toString(), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15.sp)),
-                        subtitle: Text(item['secondary_text'].toString()),
-                        onTap: () {
-                           _obterDetalhes(item['place_id']);
-                        },
-                      )),
+                            contentPadding: EdgeInsets.zero,
+                            leading: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  shape: BoxShape.circle),
+                              child: Icon(Icons.location_on_outlined,
+                                  size: 20.r, color: Colors.grey),
+                            ),
+                            title: Text(item['main_text'].toString(),
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15.sp)),
+                            subtitle: Text(item['secondary_text'].toString()),
+                            onTap: () {
+                              _obterDetalhes(item['place_id']);
+                            },
+                          )),
                     SizedBox(height: 20.h),
                   ],
                 ),
