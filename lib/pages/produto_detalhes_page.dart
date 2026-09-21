@@ -681,7 +681,9 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               return Column(
                 children: snapshot.data!.take(3).map((avaliacao) {
                   return _buildReviewItem(
-                    name: avaliacao.userId.isNotEmpty ? 'Usuário' : 'Anônimo',
+                    name: avaliacao.nomeUsuario.trim().isNotEmpty
+                        ? avaliacao.nomeUsuario
+                        : 'Anônimo',
                     avatarColor: Colors.brown.shade200,
                     avatarIcon: Icons.person,
                     review: avaliacao.comentario,
