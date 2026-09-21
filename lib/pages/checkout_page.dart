@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:nhac/pages/qrcode_pix_page.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nhac/models/pedido_model.dart';
+import 'package:geocoding/geocoding.dart';
+import 'package:nhac/models/pedido/criar_pedido_request.dart';
+import 'package:uuid/uuid.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -11,8 +13,6 @@ import 'package:nhac/controllers/endereco_provider.dart';
 import 'package:nhac/models/usuario/endereco_model.dart';
 import 'package:nhac/components/botoes/botao_largo_nhac.dart';
 import 'package:nhac/services/auth_service.dart';
-import 'package:nhac/models/usuario/cupom_model.dart';
-import 'package:nhac/repositories/cupom_repository.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/repositories/loja_repository.dart';
@@ -36,11 +36,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
   bool _isLoading = true;
   bool _isSubmitting = false;
 
-  CupomModel? _cupomAplicado;
-  final TextEditingController _cupomController = TextEditingController();
-  bool _validandoCupom = false;
-  final CupomRepository _cupomRepository = CupomRepository();
   double _taxaFrete = 0.0;
+  int? _tempoEstimadoMinutos;
+  String? _checkoutIdempotencyKey;
 
   @override
   void initState() {
@@ -51,20 +49,58 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Future<void> _carregarDadosIniciais() async {
+    await _verificarNumeroEndereco();
+    if (!mounted) return;
+
     final cartProvider = context.read<CartProvider>();
-    if (cartProvider.lojaId.isNotEmpty) {
-      try {
-        final loja = await LojaRepository().buscarLoja(cartProvider.lojaId);
-        if (loja != null && mounted) {
-          setState(() {
-            _taxaFrete = loja.dadosOperacionais?.taxaEntregaBase ?? 0.0;
-          });
-        }
-      } catch (e) {
-        debugPrint("Erro ao carregar loja: $e");
+    final enderecoProvider = context.read<EnderecoProvider>();
+    if (cartProvider.lojaId.isNotEmpty &&
+        enderecoProvider.enderecos.isNotEmpty) {
+      final endereco = enderecoProvider.enderecos.firstWhere(
+        (e) => e.isPadrao,
+        orElse: () => enderecoProvider.enderecos.first,
+      );
+      await _recalcularFrete(endereco);
+    }
+  }
+
+  Future<void> _recalcularFrete(EnderecoModel endereco) async {
+    final cartProvider = context.read<CartProvider>();
+    if (cartProvider.lojaId.isEmpty) return;
+
+    final enderecoCompleto = [
+      endereco.rua,
+      endereco.numero,
+      endereco.bairro,
+      endereco.cidade,
+      endereco.estado,
+      endereco.cep,
+    ].where((v) => v.trim().isNotEmpty).join(', ');
+
+    try {
+      final locais = await locationFromAddress(enderecoCompleto);
+      if (locais.isEmpty) return;
+      final local = locais.first;
+      final resposta = await LojaRepository().calcularFrete(
+        cartProvider.lojaId,
+        lat: local.latitude,
+        lng: local.longitude,
+      );
+      if (!mounted) return;
+      setState(() {
+        _taxaFrete = resposta.valor;
+        _tempoEstimadoMinutos = resposta.tempoEstimadoMinutos;
+      });
+    } catch (e) {
+      debugPrint('Não foi possível recalcular o frete: $e');
+      final loja = await LojaRepository().buscarLoja(cartProvider.lojaId);
+      if (loja != null && mounted) {
+        setState(() {
+          _taxaFrete = loja.dadosOperacionais?.taxaEntregaBase ?? 0.0;
+          _tempoEstimadoMinutos = loja.dadosOperacionais?.tempoEntregaMax;
+        });
       }
     }
-    await _verificarNumeroEndereco();
   }
 
   Future<void> _verificarNumeroEndereco() async {
@@ -75,7 +111,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         : enderecoProvider.enderecos.firstWhere(
             (e) => e.isPadrao,
             orElse: () => EnderecoModel(
-              id: '', 
+              id: '',
               bairro: '',
               cep: '',
               cidade: '',
@@ -87,7 +123,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (enderecoisPadrao != null &&
         enderecoisPadrao.id.isNotEmpty &&
         enderecoisPadrao.numero.isEmpty) {
-        
       await _pedirNumeroEndereco(enderecoisPadrao);
     }
     if (mounted) setState(() => _isLoading = false);
@@ -150,20 +185,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
             child:
                 Text('Cancelar', style: TextStyle(color: Colors.grey.shade600)),
           ),
-         ElevatedButton(
-              onPressed: () async {
-                if (formKey.currentState!.validate()) {
-                  final numero = numeroController.text.trim();
-                  final enderecoAtualizado = endereco.copyWith(numero: numero);
-                  
-                  await context
-                      .read<EnderecoProvider>()
-                      .atualizarEndereco(enderecoAtualizado.id, enderecoAtualizado);
-                      
-                  if (!mounted) return;
-                  Navigator.pop(context);
-                }
-              },
+          ElevatedButton(
+            onPressed: () async {
+              if (formKey.currentState!.validate()) {
+                final numero = numeroController.text.trim();
+                final enderecoAtualizado = endereco.copyWith(numero: numero);
+
+                await context.read<EnderecoProvider>().atualizarEndereco(
+                    enderecoAtualizado.id, enderecoAtualizado);
+
+                if (!mounted) return;
+                Navigator.pop(context);
+              }
+            },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFE645C),
               shape: RoundedRectangleBorder(
@@ -180,41 +214,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   void dispose() {
     _trocoController.dispose();
     _cpfController.dispose();
-    _cupomController.dispose();
     super.dispose();
-  }
-
-  Future<void> _aplicarCupom(double subtotal) async {
-    final codigo = _cupomController.text.trim();
-    if (codigo.isEmpty) return;
-
-    setState(() => _validandoCupom = true);
-    try {
-      final cupom = await _cupomRepository.validarCupom(codigo);
-      if (subtotal < cupom.usoMinimo) {
-        throw Exception('Valor mínimo para este cupom é R\$ ${cupom.usoMinimo.toStringAsFixed(2)}');
-      }
-      setState(() {
-        _cupomAplicado = cupom;
-      });
-      if (mounted) {
-        context.showSuccess('Cupom aplicado com sucesso!');
-      }
-    } catch (e) {
-      setState(() => _cupomAplicado = null);
-      if (mounted) {
-        context.showError(e.toString().replaceAll('Exception: ', ''));
-      }
-    } finally {
-      if (mounted) setState(() => _validandoCupom = false);
-    }
-  }
-
-  void _removerCupom() {
-    setState(() {
-      _cupomAplicado = null;
-      _cupomController.clear();
-    });
   }
 
   @override
@@ -238,19 +238,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     final subtotal = cartProvider.valorTotal;
     final frete = _taxaFrete;
-    
-    double descontoValue = 0.0;
-    if (_cupomAplicado != null) {
-      if (_cupomAplicado!.tipo == 'PERCENTUAL') {
-        descontoValue = subtotal * (_cupomAplicado!.desconto / 100);
-      } else {
-        descontoValue = _cupomAplicado!.desconto;
-      }
-      if (descontoValue > subtotal) descontoValue = subtotal;
-    }
-    
-    final total = subtotal + frete - descontoValue;
-    final tempoEntrega = '30 - 50 min';
+
+    final total = subtotal + frete;
+    final tempoEntrega = _tempoEstimadoMinutos == null
+        ? 'Tempo calculado no fechamento'
+        : 'Até $_tempoEstimadoMinutos min';
     final podeFinalizar =
         enderecoisPadrao != null && enderecoisPadrao.numero.isNotEmpty;
 
@@ -423,69 +415,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
             ],
             SizedBox(height: 24.h),
-            _buildSectionTitle('Cupom de desconto'),
-            SizedBox(height: 8.h),
-            Container(
-              padding: EdgeInsets.all(16.w),
-              decoration: _cardDecoration(),
-              child: _cupomAplicado != null
-                  ? Row(
-                      children: [
-                        Icon(Icons.local_offer, color: const Color(0xFFFF6961), size: 24.r),
-                        SizedBox(width: 12.w),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _cupomAplicado!.titulo,
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14.sp),
-                              ),
-                              Text(
-                                _cupomAplicado!.codigo,
-                                style: TextStyle(color: Colors.grey.shade600, fontSize: 12.sp),
-                              ),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Colors.grey),
-                          onPressed: _removerCupom,
-                        ),
-                      ],
-                    )
-                  : Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _cupomController,
-                            decoration: InputDecoration(
-                              hintText: 'Digite seu cupom',
-                              hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14.sp),
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12.r),
-                                borderSide: BorderSide(color: Colors.grey.shade300),
-                              ),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 12.w),
-                        ElevatedButton(
-                          onPressed: _validandoCupom ? null : () => _aplicarCupom(subtotal),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFFFF6961),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.r)),
-                            padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 12.h),
-                          ),
-                          child: _validandoCupom
-                              ? SizedBox(width: 20.w, height: 20.w, child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                              : const Text('Aplicar', style: TextStyle(color: Colors.white)),
-                        ),
-                      ],
-                    ),
-            ),
-            SizedBox(height: 24.h),
             _buildSectionTitle('Resumo do pedido'),
             SizedBox(height: 8.h),
             Container(
@@ -570,27 +499,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       ],
                     ),
                   ),
-                  if (descontoValue > 0) ...[
-                    SizedBox(height: 8.h),
-                    MergeSemantics(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Desconto',
-                              style: TextStyle(
-                                  color: const Color(0xFFFF6961), fontSize: 14.sp)),
-                          Text(
-                            '- ${currencyFormat.format(descontoValue)}',
-                            style: TextStyle(
-                              color: const Color(0xFFFF6961),
-                              fontSize: 14.sp,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                   SizedBox(height: 12.h),
                   MergeSemantics(
                     child: Row(
@@ -639,6 +547,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ),
             SizedBox(height: 40.h),
             BotaoLargoNhac(
+              key: const Key('checkout-confirmar-button'),
               texto: _isSubmitting ? 'Enviando pedido...' : 'Confirmar pedido',
               onPressed: (podeFinalizar && !_isSubmitting)
                   ? () => _confirmarPedido(context, total, cartProvider)
@@ -650,7 +559,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
       ),
     );
   }
-
 
   Widget _buildSectionTitle(String title) {
     return Text(
@@ -681,7 +589,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final isSelected = _formaPagamento == title;
     return Semantics(
       button: true,
-      label: 'Forma de pagamento $title. ${isSelected ? "Selecionada" : "Toque para selecionar"}',
+      label:
+          'Forma de pagamento $title. ${isSelected ? "Selecionada" : "Toque para selecionar"}',
       child: GestureDetector(
         onTap: () {
           setState(() {
@@ -690,33 +599,35 @@ class _CheckoutPageState extends State<CheckoutPage> {
             if (!_mostrarCampoTroco) _trocoController.clear();
           });
         },
-      child: Container(
-        padding: EdgeInsets.symmetric(vertical: 12.h),
-        child: Row(
-          children: [
-            Icon(icon,
-                size: 24.r,
-                color: isSelected
-                    ? const Color(0xFFFF6961)
-                    : Colors.grey.shade500),
-            SizedBox(width: 16.w),
-            Expanded(
-              child: Text(
-                title,
-                style: TextStyle(
-                  fontSize: 15.sp,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: isSelected ? const Color(0xFFFF6961) : Colors.black87,
+        child: Container(
+          padding: EdgeInsets.symmetric(vertical: 12.h),
+          child: Row(
+            children: [
+              Icon(icon,
+                  size: 24.r,
+                  color: isSelected
+                      ? const Color(0xFFFF6961)
+                      : Colors.grey.shade500),
+              SizedBox(width: 16.w),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15.sp,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color:
+                        isSelected ? const Color(0xFFFF6961) : Colors.black87,
+                  ),
                 ),
               ),
-            ),
-            if (isSelected)
-              Icon(Icons.check_circle,
-                  color: const Color(0xFFFF6961), size: 20.r),
-          ],
+              if (isSelected)
+                Icon(Icons.check_circle,
+                    color: const Color(0xFFFF6961), size: 20.r),
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 
@@ -736,7 +647,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
       builder: (ctx) => _AddressSelectionSheet(enderecos: enderecos),
     );
     await enderecoProvider.buscarEnderecos();
-    setState(() {});
+    if (!mounted) return;
+    final atualizado = enderecoProvider.enderecos.firstWhere(
+      (e) => e.isPadrao,
+      orElse: () => enderecoProvider.enderecos.first,
+    );
+    await _recalcularFrete(atualizado);
+    if (mounted) setState(() {});
   }
 
   void _mostrarDialogEnderecoVazio(BuildContext context) {
@@ -777,7 +694,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           ),
           ElevatedButton(
             onPressed: () {
-              Navigator.pop(context); 
+              Navigator.pop(context);
               context.push('/enderecos-salvos');
             },
             style: ElevatedButton.styleFrom(
@@ -793,9 +710,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
+  String _formaPagamentoApi() {
+    switch (_formaPagamento) {
+      case 'Cartão de crédito':
+        return 'CARTAO';
+      case 'PIX':
+        return 'PIX';
+      case 'Dinheiro':
+      default:
+        return 'DINHEIRO';
+    }
+  }
+
   Future<void> _confirmarPedido(
       BuildContext context, double total, CartProvider cartProvider) async {
-    if (_isSubmitting) return; 
+    if (_isSubmitting) return;
     setState(() => _isSubmitting = true);
 
     final enderecoProvider = context.read<EnderecoProvider>();
@@ -813,10 +742,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    final trocoText = _trocoController.text.replaceAll(RegExp(r'[^0-9,]'), '').replaceAll(',', '.');
-    final trocoPara = (_formaPagamento == 'Dinheiro' && trocoText.isNotEmpty) 
-      ? double.tryParse(trocoText) 
-      : null;
+    final trocoText = _trocoController.text
+        .replaceAll(RegExp(r'[^0-9,]'), '')
+        .replaceAll(',', '.');
+    final trocoPara = (_formaPagamento == 'Dinheiro' && trocoText.isNotEmpty)
+        ? double.tryParse(trocoText)
+        : null;
 
     final cpfPagador = _cpfController.text.replaceAll(RegExp(r'\D'), '');
     if (_formaPagamento == 'PIX' && cpfPagador.isEmpty) {
@@ -825,18 +756,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    final pedido = PedidoModel(
-      usuarioId: uid,
+    final pedido = CriarPedidoRequest(
       lojaId: cartProvider.lojaId,
-      valorTotal: total,
-      taxaFrete: _taxaFrete, 
-      formaPagamento: _formaPagamento == 'Cartão de crédito' ? 'CARTAO' : _formaPagamento,
+      formaPagamento: _formaPagamentoApi(),
       trocoPara: trocoPara,
       cpfPagador: _formaPagamento == 'PIX' ? cpfPagador : null,
       observacao: cartProvider.observacao,
-      cupomId: _cupomAplicado?.id,
       enderecoEntrega: enderecoisPadrao,
-      itens: cartProvider.itens.values.toList(),
+      itens: cartProvider.itens.values
+          .map(CriarPedidoItemRequest.fromCartItem)
+          .toList(),
     );
 
     final navigator = Navigator.of(context, rootNavigator: true);
@@ -849,17 +778,43 @@ class _CheckoutPageState extends State<CheckoutPage> {
             child: CircularProgressIndicator(color: Color(0xFFFF6961))),
       );
 
-      final respostaPedido = await PedidoRepository().finalizarPedido(pedido);
-      final idGerado = respostaPedido['id'] ?? respostaPedido['pedidoId'] ?? 'ID Indisponível';
-      final clientSecret = respostaPedido['clientSecret'];
-      final pixCopiaECola = respostaPedido['pixCopiaECola'];
-      final qrCodeUrl = respostaPedido['qrCodeUrl'];
+      _checkoutIdempotencyKey ??= const Uuid().v4();
+      final respostaPedido = await PedidoRepository().finalizarPedido(
+        pedido,
+        idempotencyKey: _checkoutIdempotencyKey!,
+      );
+      final idGerado = respostaPedido.pedidoId;
+      final clientSecret = respostaPedido.clientSecret;
+      final pixCopiaECola = respostaPedido.pixCopiaECola;
+      final qrCodeUrl = respostaPedido.qrCodeUrl;
 
       navigator.pop(); // Close loading
-      
+
       if (!context.mounted) return;
 
-      if (_formaPagamento == 'Cartão de crédito' && clientSecret != null && clientSecret.toString().isNotEmpty) {
+      final pagamentoEletronico =
+          _formaPagamento == 'Cartão de crédito' || _formaPagamento == 'PIX';
+      final artefatoPagamentoAusente =
+          (_formaPagamento == 'Cartão de crédito' &&
+                  (clientSecret == null || clientSecret.isEmpty)) ||
+              (_formaPagamento == 'PIX' &&
+                  (pixCopiaECola == null || pixCopiaECola.isEmpty));
+
+      if (respostaPedido.replay &&
+          pagamentoEletronico &&
+          artefatoPagamentoAusente) {
+        await cartProvider.esvaziarCarrinho();
+        if (!context.mounted) return;
+        context.showSuccess(
+          'Esse pedido já havia sido criado. Acompanhe o status no rastreio.',
+        );
+        context.go('/rastreio?pedidoId=$idGerado');
+        return;
+      }
+
+      if (_formaPagamento == 'Cartão de crédito' &&
+          clientSecret != null &&
+          clientSecret.isNotEmpty) {
         try {
           await Stripe.instance.initPaymentSheet(
             paymentSheetParameters: SetupPaymentSheetParameters(
@@ -868,75 +823,91 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ),
           );
           await Stripe.instance.presentPaymentSheet();
-          
+
           if (!context.mounted) return;
 
-          // Polling curto: verifica o status real do pedido no backend antes
-          // de exibir sucesso. Isso cobre a janela entre o Stripe confirmar
-          // no client e o webhook processar no backend. Se o polling falhar
-          // ou atingir o limite, exibe sucesso mesmo assim (graceful fallback
-          // — o Stripe já confirmou o pagamento no lado do cliente).
+          // Polling curto: verifica o status real do pedido no backend.
+          // Se o webhook ainda não tiver sido processado, o app segue para o
+          // rastreio exibindo "aguardando confirmação", sem afirmar que o
+          // pagamento já foi confirmado pelo servidor.
           final pedidoRepo = PedidoRepository();
-          const statusSucesso = {'PAGO', 'CONFIRMADO', 'APROVADO', 'EM_PREPARO', 'PREPARANDO'};
           bool statusConfirmado = false;
 
           for (int i = 0; i < 3; i++) {
             try {
               await Future.delayed(const Duration(seconds: 2));
               if (!context.mounted) return;
-              final pedido = await pedidoRepo.buscarPedidoPorId(idGerado.toString());
-              final status = pedido.status?.toUpperCase() ?? '';
-              if (statusSucesso.contains(status)) {
+              final pedidoAtual =
+                  await pedidoRepo.buscarPedidoPorId(idGerado.toString());
+              if (pedidoAtual.status.pagamentoConfirmado) {
                 statusConfirmado = true;
                 break;
               }
             } catch (_) {
-              // Ignora erros de polling — fallback é exibir sucesso de qualquer forma
+              // O rastreio continuará acompanhando o status pelo backend.
             }
           }
 
           if (!context.mounted) return;
-          debugPrint('Cartão: status do pedido confirmado pelo backend = $statusConfirmado');
-          _exibirSucessoEVoltar(idGerado.toString(), cartProvider);
+          if (statusConfirmado) {
+            _exibirSucessoEVoltar(idGerado.toString(), cartProvider);
+          } else {
+            await cartProvider.esvaziarCarrinho();
+            if (!context.mounted) return;
+            context.showSuccess(
+              'Pagamento enviado. Estamos aguardando a confirmação do backend.',
+            );
+            context.go('/rastreio?pedidoId=$idGerado');
+          }
         } on StripeException {
+          await cartProvider.esvaziarCarrinho();
+          _checkoutIdempotencyKey = null;
           if (!context.mounted) return;
-          setState(() => _isSubmitting = false);
-          context.showError('Pagamento cancelado ou falhou.');
+          context.showError(
+            'O pedido foi criado, mas o pagamento não foi confirmado. '
+            'Acompanhe o pedido antes de tentar uma nova compra.',
+          );
+          context.go('/rastreio?pedidoId=$idGerado');
           return;
         }
-
       } else if (_formaPagamento == 'PIX') {
         // Esvaziar carrinho — o pedido já foi criado no backend com sucesso,
         // independentemente de o PIX ter sido pago ou não.
         await cartProvider.esvaziarCarrinho();
         if (!context.mounted) return;
-        Navigator.push(context, MaterialPageRoute(
-          builder: (context) => QrCodePixPage(
-            pixQrCode: qrCodeUrl.toString(),
-            pixCopiaECola: pixCopiaECola.toString(),
-            paymentId: idGerado.toString(),
-            valor: total,
-          ),
-        ));
+        Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => QrCodePixPage(
+                pixQrCode: qrCodeUrl ?? pixCopiaECola ?? '',
+                pixCopiaECola: pixCopiaECola,
+                paymentId: idGerado.toString(),
+                valor: total,
+              ),
+            ));
       } else {
         // Dinheiro
         _exibirSucessoEVoltar(idGerado.toString(), cartProvider);
       }
-
     } on CustomCheckoutException catch (e) {
+      // Resposta de negócio é definitiva; a próxima tentativa pode gerar uma
+      // nova chave (por exemplo, após um conflito 409 de payload alterado).
+      _checkoutIdempotencyKey = null;
       navigator.pop(); // Close loading
       if (!context.mounted) return;
       setState(() => _isSubmitting = false);
-      
+
       if (e.produtoId != null) {
         cartProvider.marcarItemComoEsgotado(e.produtoId!);
       }
-      
+
       showDialog(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-          title: Text(e.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+          title: Text(e.title,
+              style: const TextStyle(fontWeight: FontWeight.bold)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -944,7 +915,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               Text(e.message),
               if (e.suggestions != null && e.suggestions!.isNotEmpty) ...[
                 SizedBox(height: 16.h),
-                const Text('Sugestões:', style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text('Sugestões:',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
                 ...e.suggestions!.map((s) => Text('• $s')),
               ]
             ],
@@ -968,15 +940,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   void _exibirSucessoEVoltar(String idGerado, CartProvider cartProvider) {
+    _checkoutIdempotencyKey = null;
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24.r)),
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(24.r)),
         backgroundColor: Colors.white,
         title: Text(
           'Pedido confirmado!',
-          style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold, color: const Color(0xFF5D201C)),
+          style: TextStyle(
+              fontSize: 22.sp,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF5D201C)),
         ),
         content: Text(
           'O seu pedido foi recebido com sucesso!\n\nID do Pedido: $idGerado',
@@ -991,9 +968,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFE645C),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(50.r)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(50.r)),
             ),
-            child: const Text('Voltar ao Início', style: TextStyle(color: Colors.white)),
+            child: const Text('Voltar ao Início',
+                style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -1064,7 +1043,9 @@ class _AddressSelectionSheet extends StatelessWidget {
                     ),
                     child: Icon(
                       endereco.bairro.toLowerCase().contains('trabalho') ||
-                             (endereco.complemento ?? '').toLowerCase().contains('trabalho')
+                              (endereco.complemento ?? '')
+                                  .toLowerCase()
+                                  .contains('trabalho')
                           ? Icons.work_outline
                           : Icons.home_outlined,
                       color: const Color(0xFFFF6961),

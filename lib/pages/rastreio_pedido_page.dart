@@ -1,19 +1,20 @@
-// ignore_for_file: curly_braces_in_flow_control_structures
+import 'dart:async';
 
-import 'dart:math' as math;
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:nhac/models/pedido_model.dart';
-import 'package:nhac/models/loja/lojas.dart';
-import 'package:nhac/repositories/pedido_repository.dart';
-import 'package:nhac/repositories/loja_repository.dart';
-import 'package:intl/intl.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:intl/intl.dart';
+import 'package:nhac/models/entrega/rota_entrega_model.dart';
+import 'package:nhac/models/loja/lojas.dart';
+import 'package:nhac/models/pedido/status_pedido.dart';
+import 'package:nhac/models/pedido_model.dart';
+import 'package:nhac/repositories/entrega_repository.dart';
+import 'package:nhac/repositories/loja_repository.dart';
+import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/services/live_notification_service.dart';
-import 'package:nhac/globals/ui_utils.dart';
+import 'package:nhac/services/pedido_status_socket_service.dart';
 
 class RastreioPedidoPage extends StatefulWidget {
   final String pedidoId;
@@ -28,202 +29,237 @@ class RastreioPedidoPage extends StatefulWidget {
 }
 
 class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
+  final PedidoRepository _pedidoRepository = PedidoRepository();
+  final LojaRepository _lojaRepository = LojaRepository();
+  final EntregaRepository _entregaRepository = EntregaRepository();
+  final PedidoStatusSocketService _statusSocket = PedidoStatusSocketService();
+
   PedidoModel? _pedido;
   LojasModel? _loja;
+  RotaEntregaModel? _rota;
+  StreamSubscription<StatusPedido>? _statusSubscription;
   bool _isLoading = true;
+  bool _cancelando = false;
   String _erro = '';
 
   final NumberFormat currencyFormat =
       NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
   GoogleMapController? _mapController;
 
-  final LatLng _lojaLocation = const LatLng(-23.550520, -46.633308);
-  LatLng _clienteLocation = const LatLng(-23.558520, -46.640308);
+  LatLng? get _lojaLocation => _rota == null
+      ? null
+      : LatLng(_rota!.origem.latitude, _rota!.origem.longitude);
+
+  LatLng? get _clienteLocation => _rota == null
+      ? null
+      : LatLng(_rota!.destino.latitude, _rota!.destino.longitude);
 
   @override
   void initState() {
     super.initState();
     _carregarDados();
+    _conectarStatus();
   }
 
-  Future<void> _carregarDados() async {
+  @override
+  void dispose() {
+    _statusSubscription?.cancel();
+    _statusSocket.dispose();
+    _mapController?.dispose();
+    super.dispose();
+  }
+
+  Future<void> _conectarStatus() async {
+    _statusSubscription = _statusSocket.status.listen((_) {
+      if (mounted) {
+        _carregarDados(silencioso: true);
+      }
+    });
+    await _statusSocket.conectar(widget.pedidoId);
+  }
+
+  Future<void> _carregarDados({bool silencioso = false}) async {
+    if (!silencioso && mounted) {
+      setState(() {
+        _isLoading = true;
+        _erro = '';
+      });
+    }
+
     try {
-      final pedidoRepo = PedidoRepository();
-      final lojaRepo = LojaRepository();
-
-      final pedido = await pedidoRepo.buscarPedidoPorId(widget.pedidoId);
-
+      final pedido = await _pedidoRepository.buscarPedidoPorId(widget.pedidoId);
       LojasModel? loja;
+      RotaEntregaModel? rota;
+
       try {
-        loja = await lojaRepo.buscarLoja(pedido.lojaId);
-      } catch (e) {
-        debugPrint("Erro ao buscar loja do pedido: $e");
-       
+        loja = await _lojaRepository.buscarLoja(pedido.lojaId);
+      } catch (_) {}
+
+      try {
+        rota = await _entregaRepository.buscarRota(widget.pedidoId);
+      } catch (_) {
+        // O pedido continua acessível mesmo se a rota ainda não estiver disponível.
       }
 
-      if (mounted) {
-        setState(() {
-          _pedido = pedido;
-          _loja = loja;
-        });
+      if (!mounted) return;
+      setState(() {
+        _pedido = pedido;
+        _loja = loja;
+        _rota = rota;
+        _isLoading = false;
+        _erro = '';
+      });
+
+      _publicarNotificacaoAoVivo();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _erro = 'Erro ao carregar dados do pedido: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _publicarNotificacaoAoVivo() {
+    final pedido = _pedido;
+    if (pedido == null) return;
+
+    var nomeProduto = 'Seu pedido';
+    if (pedido.itens.isNotEmpty) {
+      nomeProduto = pedido.itens.first.nome;
+      if (pedido.itens.length > 1) {
+        nomeProduto += ' e mais';
       }
+    }
 
-      await _atualizarCoordenadasCliente();
+    final tempo = _tempoEstimadoMinutos();
+    LiveNotificationService.showLiveNotification(
+      pedidoId: widget.pedidoId,
+      nomeProduto: nomeProduto,
+      status: pedido.status.label,
+      tempoEstimado: tempo > 0 ? '$tempo min' : pedido.status.label,
+      progresso: pedido.status.stage,
+    );
+  }
 
+  Future<void> _cancelarPedido() async {
+    if (_pedido?.status != StatusPedido.pendente || _cancelando) return;
+
+    setState(() => _cancelando = true);
+    try {
+      await _pedidoRepository.cancelarPedido(widget.pedidoId);
+      await _carregarDados(silencioso: true);
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-        
-        final tempoEstimadoMin = _calcularTempoEstimadoMinutos();
-        final statusTexto = _statusPedidoTexto();
-        
-        int stageIndex = 0;
-        final status = (_pedido?.status ?? '').toUpperCase();
-        if (status == 'AGUARDANDO_PAGAMENTO' || status == 'PENDENTE') stageIndex = 0;
-        else if (status == 'PAGO' || status == 'CONFIRMADO' || status == 'APROVADO') stageIndex = 1;
-        else if (status == 'EM_PREPARO' || status == 'PREPARANDO') stageIndex = 2;
-        else if (status == 'SAIU_PARA_ENTREGA') stageIndex = 3;
-        else if (status == 'ENTREGUE') stageIndex = 4;
-        
-        String nomeProduto = 'Seu pedido';
-        if (_pedido?.itens != null && _pedido!.itens.isNotEmpty) {
-           nomeProduto = _pedido!.itens.first.nome;
-           if (_pedido!.itens.length > 1) {
-              nomeProduto += ' e mais';
-           }
-        }
-        
-        LiveNotificationService.showLiveNotification(
-          pedidoId: widget.pedidoId,
-          nomeProduto: nomeProduto,
-          status: statusTexto,
-          tempoEstimado: tempoEstimadoMin > 0 ? '$tempoEstimadoMin min' : 'Entregue',
-          progresso: stageIndex,
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pedido cancelado.')),
         );
       }
     } catch (e) {
       if (mounted) {
-        setState(() {
-          _erro = 'Erro ao carregar dados do pedido: $e';
-          _isLoading = false;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
       }
-    }
-  }
-
-  Future<void> _atualizarCoordenadasCliente() async {
-    final endereco = _pedido?.enderecoEntrega;
-    if (endereco == null) return;
-
-    final enderecoCompleto = [
-      endereco.rua,
-      endereco.numero,
-      endereco.bairro,
-      endereco.cidade,
-      endereco.estado,
-      endereco.cep,
-    ].where((valor) => valor.trim().isNotEmpty).join(', ');
-
-    if (enderecoCompleto.trim().isEmpty) return;
-
-    try {
-      final locations = await locationFromAddress(enderecoCompleto);
-      if (locations.isNotEmpty && mounted) {
-        final localizacao = locations.first;
-        setState(() {
-          _clienteLocation =
-              LatLng(localizacao.latitude, localizacao.longitude);
-        });
-      }
-    } catch (_) {
-      
+    } finally {
+      if (mounted) setState(() => _cancelando = false);
     }
   }
 
   Future<void> _abrirMensagemRestaurante() async {
+    final loja = _loja;
+    if (loja == null) return;
     context.push('/chat-loja', extra: {
-      'lojaId': _loja!.id,
-      'lojaNome': _loja!.nome,
+      'lojaId': loja.id,
+      'lojaNome': loja.nome,
     });
   }
 
-  double _calcularDistanciaKm() {
-    const raioTerra = 6371.0;
-    final lat1 = _lojaLocation.latitude * (math.pi / 180);
-    final lat2 = _clienteLocation.latitude * (math.pi / 180);
-    final dLat =
-        (_clienteLocation.latitude - _lojaLocation.latitude) * (math.pi / 180);
-    final dLng = (_clienteLocation.longitude - _lojaLocation.longitude) *
-        (math.pi / 180);
+  int _tempoEstimadoMinutos() {
+    final pedido = _pedido;
+    if (pedido == null || pedido.status.terminal) return 0;
 
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(lat1) *
-            math.cos(lat2) *
-            math.sin(dLng / 2) *
-            math.sin(dLng / 2);
+    if (pedido.status == StatusPedido.saiuEntrega) {
+      return _rota?.duracaoEstimadaMinutos ?? 0;
+    }
 
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return raioTerra * c;
+    return _loja?.dadosOperacionais?.tempoEntregaMax ??
+        _rota?.duracaoEstimadaMinutos ??
+        45;
   }
 
-  int _calcularTempoEstimadoMinutos() {
-    final distanciaKm = _calcularDistanciaKm();
-    final tempoBaseLoja = _loja?.dadosOperacionais?.tempoEntregaMax ?? 45;
-    final minutosPorKm = (distanciaKm * 6).round();
-    final status = (_pedido?.status ?? '').toUpperCase();
+  String _statusPedidoTexto() => _pedido?.status.label ?? 'Pedido em andamento';
 
-    switch (status) {
-      case 'AGUARDANDO_PAGAMENTO':
-      case 'PENDENTE':
-        return math.max(25, tempoBaseLoja + 10);
-      case 'PAGO':
-      case 'CONFIRMADO':
-      case 'APROVADO':
-        return math.max(20, (tempoBaseLoja * 0.7 + minutosPorKm).round());
-      case 'EM_PREPARO':
-      case 'PREPARANDO':
-        return math.max(15, (tempoBaseLoja * 0.5 + minutosPorKm).round());
-      case 'SAIU_PARA_ENTREGA':
-        return math.max(10, minutosPorKm + 5);
-      case 'ENTREGUE':
-        return 0;
-      default:
-        return math.max(20, tempoBaseLoja + minutosPorKm);
+  Widget _buildMapa() {
+    final origem = _lojaLocation;
+    final destino = _clienteLocation;
+
+    if (origem == null || destino == null) {
+      return Container(
+        color: Colors.grey.shade200,
+        alignment: Alignment.center,
+        child: const Text('Rota ainda indisponível'),
+      );
     }
-  }
 
-  String _statusPedidoTexto() {
-    final status = (_pedido?.status ?? '').toUpperCase();
+    final pontos = _rota!.waypoints.isNotEmpty
+        ? _rota!.waypoints.map((p) => LatLng(p.latitude, p.longitude)).toList()
+        : <LatLng>[origem, destino];
 
-    switch (status) {
-      case 'AGUARDANDO_PAGAMENTO':
-        return 'Aguardando pagamento';
-      case 'PENDENTE':
-        return 'Pedido pendente';
-      case 'PAGO':
-      case 'CONFIRMADO':
-      case 'APROVADO':
-        return 'Pagamento confirmado';
-      case 'EM_PREPARO':
-      case 'PREPARANDO':
-        return 'Em preparo';
-      case 'SAIU_PARA_ENTREGA':
-        return 'Saiu para entrega';
-      case 'ENTREGUE':
-        return 'Entregue';
-      case 'CANCELADO':
-        return 'Pedido cancelado';
-      case 'RECUSADO':
-      case 'EXPIRADO':
-        return 'Pagamento falhou';
-      default:
-        if (status.isEmpty) return 'Pedido em andamento';
-        return status.replaceAll('_', ' ').replaceAllMapped(
-              RegExp(r'\b\w'),
-              (match) => match.group(0)!.toUpperCase(),
-            );
-    }
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(target: origem, zoom: 14.5),
+      onMapCreated: (controller) {
+        _mapController = controller;
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (!mounted) return;
+          _mapController?.animateCamera(
+            CameraUpdate.newLatLngBounds(
+              LatLngBounds(
+                southwest: LatLng(
+                  origem.latitude < destino.latitude
+                      ? origem.latitude
+                      : destino.latitude,
+                  origem.longitude < destino.longitude
+                      ? origem.longitude
+                      : destino.longitude,
+                ),
+                northeast: LatLng(
+                  origem.latitude > destino.latitude
+                      ? origem.latitude
+                      : destino.latitude,
+                  origem.longitude > destino.longitude
+                      ? origem.longitude
+                      : destino.longitude,
+                ),
+              ),
+              50,
+            ),
+          );
+        });
+      },
+      markers: {
+        Marker(
+          markerId: const MarkerId('loja'),
+          position: origem,
+          infoWindow: InfoWindow(title: _loja?.nome ?? 'Loja'),
+        ),
+        Marker(
+          markerId: const MarkerId('cliente'),
+          position: destino,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+          infoWindow: const InfoWindow(title: 'Endereço de entrega'),
+        ),
+      },
+      polylines: {
+        Polyline(
+          polylineId: const PolylineId('rota'),
+          points: pontos,
+          color: Colors.red,
+          width: 4,
+        ),
+      },
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: false,
+    );
   }
 
   @override
@@ -258,85 +294,29 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
       );
     }
 
-    final distanciaKm = _calcularDistanciaKm();
-    final tempoEstimadoMin = _calcularTempoEstimadoMinutos();
+    final status = _pedido!.status;
+    final distanciaKm = _rota?.distanciaKm ?? 0;
+    final tempoEstimadoMin = _tempoEstimadoMinutos();
     final previsao = DateTime.now().add(Duration(minutes: tempoEstimadoMin));
-    final horaPrevisao = DateFormat('HH:mm').format(previsao);
-    final tempoExibicao = tempoEstimadoMin > 0 ? '$tempoEstimadoMin min total' : 'Entregue';
-    final distanciaTexto = '${distanciaKm.toStringAsFixed(1)} km';
-    final tempoEstimadoTexto = '$tempoEstimadoMin min';
-    
+    final horaPrevisao =
+        status.terminal ? '--:--' : DateFormat('HH:mm').format(previsao);
+    final tempoExibicao = status == StatusPedido.entregue
+        ? 'Entregue'
+        : status == StatusPedido.cancelado
+            ? 'Cancelado'
+            : '$tempoEstimadoMin min total';
+    final distanciaTexto =
+        _rota == null ? 'Indisponível' : '${distanciaKm.toStringAsFixed(1)} km';
+    final tempoEstimadoTexto =
+        tempoEstimadoMin > 0 ? '$tempoEstimadoMin min' : '--';
+
     int quantidadeItens =
         _pedido!.itens.fold(0, (sum, item) => sum + item.quantidade);
 
     return Scaffold(
       body: Stack(
         children: [
-          GoogleMap(
-            initialCameraPosition: CameraPosition(
-              target: _lojaLocation,
-              zoom: 14.5,
-            ),
-            onMapCreated: (controller) {
-              _mapController = controller;
-              Future.delayed(const Duration(milliseconds: 500), () {
-                _mapController?.animateCamera(
-                  CameraUpdate.newLatLngBounds(
-                    LatLngBounds(
-                      southwest: LatLng(
-                        _lojaLocation.latitude < _clienteLocation.latitude
-                            ? _lojaLocation.latitude
-                            : _clienteLocation.latitude,
-                        _lojaLocation.longitude < _clienteLocation.longitude
-                            ? _lojaLocation.longitude
-                            : _clienteLocation.longitude,
-                      ),
-                      northeast: LatLng(
-                        _lojaLocation.latitude > _clienteLocation.latitude
-                            ? _lojaLocation.latitude
-                            : _clienteLocation.latitude,
-                        _lojaLocation.longitude > _clienteLocation.longitude
-                            ? _lojaLocation.longitude
-                            : _clienteLocation.longitude,
-                      ),
-                    ),
-                    50.0, // padding
-                  ),
-                );
-              });
-            },
-            markers: {
-              Marker(
-                markerId: const MarkerId('loja'),
-                position: _lojaLocation,
-                icon: BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueRed),
-                infoWindow: InfoWindow(title: _loja!.nome),
-              ),
-              Marker(
-                markerId: const MarkerId('cliente'),
-                position: _clienteLocation,
-                icon: BitmapDescriptor.defaultMarkerWithHue(
-                    BitmapDescriptor.hueBlue),
-                infoWindow: InfoWindow(
-                  title: 'Endereço do cliente',
-                  snippet:
-                      '${_pedido!.enderecoEntrega.rua}, ${_pedido!.enderecoEntrega.numero}',
-                ),
-              ),
-            },
-            polylines: {
-              Polyline(
-                polylineId: const PolylineId('rota'),
-                points: [_lojaLocation, _clienteLocation],
-                color: Colors.red.withValues(alpha: 0.5),
-                width: 4,
-                patterns: [PatternItem.dash(20), PatternItem.gap(10)],
-              ),
-            },
-            myLocationButtonEnabled: false,
-            zoomControlsEnabled: false,
-          ),
+          _buildMapa(),
 
           Positioned(
             top: MediaQuery.of(context).padding.top + 16.h,
@@ -385,6 +365,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
                       SizedBox(width: 8.w),
                       Text(
                         _statusPedidoTexto(),
+                        key: const Key('pedido-status-text'),
                         style: TextStyle(
                             fontWeight: FontWeight.bold, fontSize: 16.sp),
                       ),
@@ -556,10 +537,24 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
                       ),
                       Text(
                         tempoEstimadoTexto,
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16.sp),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16.sp),
                       ),
                     ],
                   ),
+                  if (status == StatusPedido.pendente) ...[
+                    SizedBox(height: 20.h),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        key: const Key('pedido-cancelar-button'),
+                        onPressed: _cancelando ? null : _cancelarPedido,
+                        child: Text(
+                          _cancelando ? 'Cancelando...' : 'Cancelar pedido',
+                        ),
+                      ),
+                    ),
+                  ],
                   SizedBox(height: 32.h),
                 ],
               ),
