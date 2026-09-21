@@ -13,7 +13,7 @@ import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/globals/ui_utils.dart';
 
 class RecuperacaoInputPage extends StatefulWidget {
-  final String metodo; // 'email' ou 'sms'
+  final String metodo; // Mantido por compatibilidade de navegação; backend usa e-mail.
 
   const RecuperacaoInputPage({super.key, required this.metodo});
 
@@ -83,11 +83,10 @@ class _RecuperacaoInputPageState extends State<RecuperacaoInputPage> {
     });
 
     try {
-      if (widget.metodo == 'email') {
-        await authService.esqueciSenhaEmail(_controller.text.trim(), cancelToken: cancelToken);
-      } else {
-        await authService.esqueciSenha(_controller.text.trim(), cancelToken: cancelToken);
-      }
+      await authService.esqueciSenhaEmail(
+        _controller.text.trim(),
+        cancelToken: cancelToken,
+      );
       timeoutTimer.cancel();
 
       if (!mounted) return;

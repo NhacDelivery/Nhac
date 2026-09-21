@@ -13,7 +13,7 @@ class ChatRepository {
 
   /// POST /conversas/lojas/{lojaId} — idempotente, devolve o id da conversa.
   ///
-  /// O backend responde com o id cru (ResponseEntity<String>), então a
+  /// O backend pode responder com texto ou objeto contendo o id; por isso a
   /// resposta chega como texto e não como JSON. O trecho abaixo aceita os
   /// dois formatos pra não quebrar se o contrato virar um objeto depois.
   Future<String> abrirConversaComLoja(String lojaId) async {

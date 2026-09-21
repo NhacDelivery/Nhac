@@ -70,11 +70,11 @@ class _NovaSenhaRecuperacaoPageState extends State<NovaSenhaRecuperacaoPage> {
     setState(() => _isLoading = true);
 
     try {
-      if (widget.metodo == 'email') {
-        await authService.redefinirSenhaEmail(widget.contato, widget.codigo, _senhaController.text);
-      } else {
-        await authService.redefinirSenha(widget.contato, widget.codigo, _senhaController.text);
-      }
+      await authService.redefinirSenhaEmail(
+        widget.contato,
+        widget.codigo,
+        _senhaController.text,
+      );
 
       if (!mounted) return;
       context.showSuccess("Senha redefinida com sucesso! Faça login.");

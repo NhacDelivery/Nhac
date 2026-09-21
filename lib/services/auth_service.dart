@@ -149,32 +149,6 @@ class AuthService with ChangeNotifier {
  
   Future<void> signOut() => logout();
 
-  Future<void> esqueciSenha(String telefone, {CancelToken? cancelToken}) async {
-    try {
-      await _dio.post(
-        '/auth/esqueci-senha', 
-        data: {
-          'telefone': formatarTelefoneE164(telefone),
-        },
-        cancelToken: cancelToken,
-      );
-    } catch (e) {
-      throw mapException(e);
-    }
-  }
-
-  Future<void> redefinirSenha(String telefone, String codigo, String novaSenha) async {
-    try {
-      await _dio.post('/auth/redefinir-senha', data: {
-        'telefone': formatarTelefoneE164(telefone),
-        'codigo': codigo,
-        'novaSenha': novaSenha,
-      });
-    } catch (e) {
-      throw mapException(e);
-    }
-  }
-
   Future<void> esqueciSenhaEmail(String email, {CancelToken? cancelToken}) async {
     try {
       await _dio.post(

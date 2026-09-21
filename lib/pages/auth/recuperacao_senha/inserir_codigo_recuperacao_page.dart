@@ -54,11 +54,7 @@ class _InserirCodigoRecuperacaoPageState extends State<InserirCodigoRecuperacaoP
   Future<void> _reenviarCodigo() async {
     final authService = context.read<AuthService>();
     try {
-      if (widget.metodo == 'email') {
-        await authService.esqueciSenhaEmail(widget.contato);
-      } else {
-        await authService.esqueciSenha(widget.contato);
-      }
+      await authService.esqueciSenhaEmail(widget.contato);
       _iniciarTimer();
       if (mounted) {
         context.showSuccess("Código reenviado com sucesso!");
