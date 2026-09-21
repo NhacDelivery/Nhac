@@ -17,6 +17,8 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/globals/ui_utils.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
+import 'package:nhac/globals/app_constants.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -68,23 +70,30 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cartProvider = context.read<CartProvider>();
     if (cartProvider.lojaId.isEmpty) return;
 
-    final enderecoCompleto = [
-      endereco.rua,
-      endereco.numero,
-      endereco.bairro,
-      endereco.cidade,
-      endereco.estado,
-      endereco.cep,
-    ].where((v) => v.trim().isNotEmpty).join(', ');
-
     try {
-      final locais = await locationFromAddress(enderecoCompleto);
-      if (locais.isEmpty) return;
-      final local = locais.first;
+      double latitude;
+      double longitude;
+      if (AppConstants.e2eMode) {
+        latitude = AppConstants.e2eLatitude;
+        longitude = AppConstants.e2eLongitude;
+      } else {
+        final enderecoCompleto = [
+          endereco.rua,
+          endereco.numero,
+          endereco.bairro,
+          endereco.cidade,
+          endereco.estado,
+          endereco.cep,
+        ].where((v) => v.trim().isNotEmpty).join(', ');
+        final locais = await locationFromAddress(enderecoCompleto);
+        if (locais.isEmpty) return;
+        latitude = locais.first.latitude;
+        longitude = locais.first.longitude;
+      }
       final resposta = await LojaRepository().calcularFrete(
         cartProvider.lojaId,
-        lat: local.latitude,
-        lng: local.longitude,
+        lat: latitude,
+        lng: longitude,
       );
       if (!mounted) return;
       setState(() {
@@ -275,6 +284,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             _buildSectionTitle('Endereço de entrega'),
             SizedBox(height: 8.h),
             Container(
+              key: E2EKeys.checkoutAddress,
               padding: EdgeInsets.all(16.w),
               decoration: _cardDecoration(),
               child: Row(
@@ -511,12 +521,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               fontSize: 16.sp,
                               color: const Color(0xFF5D201C)),
                         ),
-                        Text(
-                          currencyFormat.format(total),
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18.sp,
-                              color: const Color(0xFFFF6961)),
+                        Semantics(
+                          key: E2EKeys.checkoutTotal,
+                          value: total.toStringAsFixed(2),
+                          child: Text(
+                            currencyFormat.format(total),
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18.sp,
+                                color: const Color(0xFFFF6961)),
+                          ),
                         ),
                       ],
                     ),
@@ -547,7 +561,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ),
             SizedBox(height: 40.h),
             BotaoLargoNhac(
-              key: const Key('checkout-confirmar-button'),
+              key: E2EKeys.checkoutConfirm,
               texto: _isSubmitting ? 'Enviando pedido...' : 'Confirmar pedido',
               onPressed: (podeFinalizar && !_isSubmitting)
                   ? () => _confirmarPedido(context, total, cartProvider)
@@ -588,6 +602,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Widget _buildPaymentOption(String title, IconData icon) {
     final isSelected = _formaPagamento == title;
     return Semantics(
+      key: title == 'Dinheiro' ? E2EKeys.checkoutCash : null,
       button: true,
       label:
           'Forma de pagamento $title. ${isSelected ? "Selecionada" : "Toque para selecionar"}',
@@ -945,6 +960,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
+        key: E2EKeys.checkoutSuccess,
         shape:
             RoundedRectangleBorder(borderRadius: BorderRadius.circular(24.r)),
         backgroundColor: Colors.white,
@@ -955,12 +971,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
               fontWeight: FontWeight.bold,
               color: const Color(0xFF5D201C)),
         ),
-        content: Text(
-          'O seu pedido foi recebido com sucesso!\n\nID do Pedido: $idGerado',
-          style: TextStyle(fontSize: 14.sp, color: const Color(0xFF5D201C)),
+        content: Semantics(
+          key: E2EKeys.checkoutSuccessOrderId,
+          value: idGerado,
+          child: Text(
+            'O seu pedido foi recebido com sucesso!\n\nID do Pedido: $idGerado',
+            style: TextStyle(fontSize: 14.sp, color: const Color(0xFF5D201C)),
+          ),
         ),
         actions: [
           ElevatedButton(
+            key: E2EKeys.checkoutSuccessContinue,
             onPressed: () {
               cartProvider.esvaziarCarrinho();
               Navigator.of(dialogContext).pop();

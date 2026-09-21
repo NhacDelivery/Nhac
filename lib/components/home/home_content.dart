@@ -28,6 +28,8 @@ import 'package:geocoding/geocoding.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:nhac/components/fly_to_cart_overlay.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
+import 'package:nhac/globals/app_constants.dart';
 
 @NowaGenerated()
 class HomeContent extends StatefulWidget {
@@ -356,6 +358,7 @@ class _HomeContentState extends State<HomeContent> {
                   ],
                 ),
                 child: InkWell(
+                  key: E2EKeys.homeStore(loja.id),
                   borderRadius: BorderRadius.circular(16.r),
                   onTap: () {
                     if (loja.isAberto) {
@@ -539,6 +542,10 @@ class _HomeContentState extends State<HomeContent> {
   }
 
   Future<void> _carregarGpsComCache() async {
+    if (AppConstants.e2eMode) {
+      if (mounted) setState(() => _currentAddress = 'Endereço E2E');
+      return;
+    }
     final cachedGps = await LocalCacheService.carregarLocalizacaoGps();
     if (cachedGps != null && mounted) {
       setState(() => _currentAddress = cachedGps);
@@ -547,6 +554,7 @@ class _HomeContentState extends State<HomeContent> {
   }
 
   Future<void> _pegarLocalizacaoUsuario() async {
+    if (AppConstants.e2eMode) return;
     bool serviceEnabled;
     LocationPermission permission;
 

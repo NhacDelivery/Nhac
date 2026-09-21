@@ -20,13 +20,16 @@ import 'package:nhac/globals/app_state.dart';
 import 'package:nhac/globals/app_constants.dart';
 import 'package:nhac/globals/router.dart';
 import 'package:firebase_core/firebase_core.dart';
+
 import './firebase_options.dart';
+
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:nhac/services/push_notification_service.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:nhac/e2e/e2e_bootstrap.dart';
 
 import 'package:nhac/services/live_notification_service.dart';
 
@@ -57,6 +60,13 @@ late final SharedPreferences sharedPrefs;
 @NowaGenerated()
 main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (AppConstants.e2eMode) {
+    await E2EBootstrap.prepare();
+    sharedPrefs = await SharedPreferences.getInstance();
+    E2EBootstrap.runIsolated(const MyApp());
+    return;
+  }
 
   final sentryDsn = AppConstants.sentryDsn;
 
@@ -91,7 +101,8 @@ main() async {
           );
 
           FirebaseMessaging.onBackgroundMessage(
-              _firebaseMessagingBackgroundHandler);
+            _firebaseMessagingBackgroundHandler,
+          );
 
           final pushService = PushNotificationService(authServiceRoteador);
           await pushService.initialize();
@@ -163,13 +174,16 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider<AppState>(create: (context) => AppState()),
         ChangeNotifierProvider<AuthService>.value(value: authServiceRoteador),
         ChangeNotifierProvider<CadastroController>(
-            create: (context) => CadastroController()),
+          create: (context) => CadastroController(),
+        ),
         ChangeNotifierProvider<UserProvider>(
-            create: (context) => UserProvider()),
+          create: (context) => UserProvider(),
+        ),
         ChangeNotifierProvider(create: (_) => CartProvider()),
         ChangeNotifierProvider(create: (_) => EnderecoProvider()),
         ChangeNotifierProvider<ConnectivityService>(
-            create: (context) => ConnectivityService()),
+          create: (context) => ConnectivityService(),
+        ),
         Provider<LojaRepository>(create: (_) => LojaRepository()),
         Provider<ProdutoRepository>(create: (_) => ProdutoRepository()),
         Provider<PedidoRepository>(create: (_) => PedidoRepository()),

@@ -10,6 +10,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
 import 'package:nhac/globals/ui_utils.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
 
 @NowaGenerated()
 class ContinuarSenha extends StatefulWidget {
@@ -118,6 +119,7 @@ class _ContinuarSenhaState extends State<ContinuarSenha> {
                       SizedBox(
                         width: double.infinity,
                         child: TextFormField(
+                          key: E2EKeys.loginPassword,
                           enabled: true,
                           autofocus: true,
                           showCursor: true,
@@ -257,6 +259,7 @@ class _ContinuarSenhaState extends State<ContinuarSenha> {
           Padding(
               padding: const EdgeInsets.only(left: 21.0, right: 21.0, bottom: 24.0, top: 8.0),
               child: BotaoLargoNhac(
+                key: E2EKeys.loginSubmit,
                 texto: 'Continuar',
                 onPressed: _senhaValida ? () => logar() : null,
                 carregando: _isLoading,

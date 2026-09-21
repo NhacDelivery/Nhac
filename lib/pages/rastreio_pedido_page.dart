@@ -15,6 +15,8 @@ import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/services/live_notification_service.dart';
 import 'package:nhac/services/pedido_status_socket_service.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
+import 'package:nhac/globals/app_constants.dart';
 
 class RastreioPedidoPage extends StatefulWidget {
   final String pedidoId;
@@ -121,6 +123,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
   }
 
   void _publicarNotificacaoAoVivo() {
+    if (AppConstants.e2eMode) return;
     final pedido = _pedido;
     if (pedido == null) return;
 
@@ -190,6 +193,13 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
   String _statusPedidoTexto() => _pedido?.status.label ?? 'Pedido em andamento';
 
   Widget _buildMapa() {
+    if (AppConstants.e2eMode) {
+      return Container(
+        color: Colors.grey.shade200,
+        alignment: Alignment.center,
+        child: const Text('Mapa indisponível no modo E2E'),
+      );
+    }
     final origem = _lojaLocation;
     final destino = _clienteLocation;
 
@@ -314,8 +324,14 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
         _pedido!.itens.fold(0, (sum, item) => sum + item.quantidade);
 
     return Scaffold(
+      key: E2EKeys.trackingRoot,
       body: Stack(
         children: [
+          Semantics(
+            key: E2EKeys.trackingOrderId,
+            value: widget.pedidoId,
+            child: const SizedBox.shrink(),
+          ),
           _buildMapa(),
 
           Positioned(
@@ -363,11 +379,15 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
                   Row(
                     children: [
                       SizedBox(width: 8.w),
-                      Text(
-                        _statusPedidoTexto(),
-                        key: const Key('pedido-status-text'),
-                        style: TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16.sp),
+                      Semantics(
+                        key: E2EKeys.trackingStatus,
+                        value: _pedido!.status.apiValue,
+                        child: Text(
+                          _statusPedidoTexto(),
+                          key: const Key('pedido-status-text'),
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 16.sp),
+                        ),
                       ),
                     ],
                   ),

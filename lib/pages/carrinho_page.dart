@@ -9,6 +9,7 @@ import 'package:nhac/models/usuario/endereco_model.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
 
 class CarrinhoPage extends StatefulWidget {
   final bool isActive;
@@ -324,6 +325,7 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
     bool isProgrammaticDeleting = false;
 
     return StatefulBuilder(
+      key: E2EKeys.cartItem(item.produtoId),
       builder: (context, setState) {
         return TweenAnimationBuilder<double>(
           duration: Duration(milliseconds: isProgrammaticDeleting ? 500 : 0),
@@ -533,15 +535,23 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                                 },
                                                               ),
                                                             ),
-                                                            Text(
-                                                              item.quantidade
+                                                            Semantics(
+                                                              key: E2EKeys
+                                                                  .cartItemQuantity(
+                                                                      item.produtoId),
+                                                              value: item
+                                                                  .quantidade
                                                                   .toString(),
-                                                              style: TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  fontSize:
-                                                                      14.sp),
+                                                              child: Text(
+                                                                item.quantidade
+                                                                    .toString(),
+                                                                style: TextStyle(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
+                                                                    fontSize:
+                                                                        14.sp),
+                                                              ),
                                                             ),
                                                             Semantics(
                                                               button: true,
@@ -621,11 +631,15 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                           fontSize: 14.sp),
                                                     ),
                                                 SizedBox(height: 4.h),
-                                                Text(
-                                                  '${item.quantidade} un',
-                                                  style: TextStyle(
-                                                      color: Colors.grey,
-                                                      fontSize: 12.sp),
+                                                Semantics(
+                                                  key: E2EKeys.cartStoreId,
+                                                  value: item.lojaId,
+                                                  child: Text(
+                                                    '${item.quantidade} un',
+                                                    style: TextStyle(
+                                                        color: Colors.grey,
+                                                        fontSize: 12.sp),
+                                                  ),
                                                 ),
                                               ],
                                             ),

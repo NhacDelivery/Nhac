@@ -11,6 +11,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
 import 'package:nhac/components/nhac_input_field.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
 
 import 'package:nhac/utils/validators.dart';
 
@@ -105,6 +106,7 @@ class _EmailClienteState extends State<EmailCliente> {
                       ),
                       const SizedBox(height: 22.0),
                       NhacInputField(
+                        key: E2EKeys.loginEmail,
                         controller: _emailController,
                         autofocus: true,
                         keyboardType: TextInputType.emailAddress,
@@ -230,6 +232,7 @@ class _EmailClienteState extends State<EmailCliente> {
                 ),
               ),
               BotaoLargoNhac(
+                key: E2EKeys.loginSubmit,
                 texto: 'Continuar',
                 carregando: _isLoading,
                 onPressed: _emailValido

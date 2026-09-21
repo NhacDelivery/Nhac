@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:nhac/components/nhac_logo.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/components/botoes/botao_nhac.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
 
 @NowaGenerated()
 class BemVindo extends StatefulWidget {
@@ -72,7 +73,11 @@ class _BemVindoState extends State<BemVindo> {
                   textAlign: TextAlign.center,
                 ),
                 SizedBox(height: 32.h),
-                SizedBox(width: double.infinity, height: 49.h, child: const BotaoNhac()),
+                SizedBox(
+                  width: double.infinity,
+                  height: 49.h,
+                  child: const BotaoNhac(key: E2EKeys.welcomeContinue),
+                ),
               ],
             ),
           ),

@@ -11,6 +11,8 @@ import '../repositories/loja_repository.dart';
 import '../services/auth_service.dart';
 import 'package:provider/provider.dart';
 import '../globals/ui_utils.dart';
+import '../e2e/e2e_keys.dart';
+import '../globals/app_constants.dart';
 
 class LojaPage extends StatefulWidget {
   final LojasModel loja;
@@ -193,7 +195,9 @@ class _LojaPageState extends State<LojaPage>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          CachedNetworkImage(
+          AppConstants.e2eMode
+              ? Container(color: const Color(0xFF42567A))
+              : CachedNetworkImage(
             imageUrl: "https://picsum.photos/seed/picsum/800/400",
             fit: BoxFit.cover,
             errorWidget: (context, url, error) =>
@@ -482,6 +486,7 @@ class _LojaPageState extends State<LojaPage>
                         ),
                       ),
                       child: ProductCard(
+                        key: E2EKeys.storeProduct(produto.id),
                         produto: produto,
                         lojaFechada: !widget.loja.isAberto,
                       ),
