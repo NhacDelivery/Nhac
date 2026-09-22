@@ -60,7 +60,7 @@ class _ContinuarSenhaState extends State<ContinuarSenha> {
 
       await authService.login(
         email: cadastroData.email,
-        senha: _senhaController.text.trim()
+        senha: _senhaController.text
       );
       
       if (!localContext.mounted) return;
@@ -219,30 +219,6 @@ class _ContinuarSenhaState extends State<ContinuarSenha> {
                                 style: TextStyle(
                                   fontSize: 14.0,
                                   color: Color(0xFFFF6961),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      SizedBox(
-                        height: 40.0,
-                        width: double.infinity,
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: Semantics(
-                            button: true,
-                            label: 'Toque para criar uma conta',
-                            child: GestureDetector(
-                              onTap: () {
-                                context.push('/cadastro/nome');
-                              },
-                              child: const Text(
-                                'Não tem conta? Criar conta',
-                                style: TextStyle(
-                                  fontSize: 14.0,
-                                  color: Color(0xFF5D201C),
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),

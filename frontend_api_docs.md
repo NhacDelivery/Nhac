@@ -87,3 +87,17 @@ Compara o código digitado com o gerado. Tem limite de 3 tentativas e os código
     - *"Código expirado ou não encontrado. Solicite um novo código."*
     - *"Limite de tentativas excedido para este código. Solicite um novo."*
     - *"Código de verificação inválido."*
+
+## Validar código de recuperação de senha
+
+* **URL:** `POST /api/v1/auth/validar-codigo-redefinicao/email`
+* **Autenticação:** Não requer token.
+* **Payload:** `{"email":"usuario@exemplo.com","codigo":"123456"}`
+* **200 OK:** Corpo vazio. O código está válido e ainda pode ser usado para redefinir a senha.
+* **400:** Email/código malformado, código incorreto, expirado ou limite de tentativas excedido.
+
+A tela de código só deve avançar após o HTTP 200. Essa consulta não consome o
+código nem estende sua validade. `POST /api/v1/auth/redefinir-senha/email`
+continua conferindo o código e consumindo-o na redefinição. Ambas as etapas usam
+somente códigos `RESET_SENHA`, com validade de 15 minutos e limite de 3 erros.
+O backend com essa nova rota deve ser publicado antes do app que a utiliza.

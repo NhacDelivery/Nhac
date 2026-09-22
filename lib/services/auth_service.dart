@@ -163,6 +163,17 @@ class AuthService with ChangeNotifier {
     }
   }
 
+  Future<void> validarCodigoRecuperacaoEmail(String email, String codigo) async {
+    try {
+      await _dio.post('/auth/validar-codigo-redefinicao/email', data: {
+        'email': email.trim(),
+        'codigo': codigo.trim(),
+      });
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
   Future<void> redefinirSenhaEmail(String email, String codigo, String novaSenha) async {
     try {
       await _dio.post('/auth/redefinir-senha/email', data: {
