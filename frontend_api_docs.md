@@ -101,3 +101,24 @@ código nem estende sua validade. `POST /api/v1/auth/redefinir-senha/email`
 continua conferindo o código e consumindo-o na redefinição. Ambas as etapas usam
 somente códigos `RESET_SENHA`, com validade de 15 minutos e limite de 3 erros.
 O backend com essa nova rota deve ser publicado antes do app que a utiliza.
+
+## Cupons de boas-vindas
+
+Todas as rotas abaixo exigem o JWT do cliente. O dono do cupom vem da sessão;
+o aplicativo não envia um ID de usuário.
+
+- `GET /api/v1/cupons`: lista os cupons da conta, com status `DISPONIVEL`, `USADO` ou `EXPIRADO`.
+- `POST /api/v1/cupons/boas-vindas`: recebe o cupom uma vez por conta. Repetir a chamada retorna o mesmo cupom sem renovar a validade.
+- `POST /api/v1/cupons/validar`, JSON `{"cupomId":"uuid","subtotal":30}`: valida uma prévia e retorna `descontoAplicado`, sem consumir o cupom.
+- `POST /api/v1/pedidos`: recebe `cupomId` opcional, recalcula o subtotal pelos preços do banco e aplica o desconto na mesma transação do pedido.
+
+O padrão inicial é R$ 5 sobre produtos a partir de R$ 25, válido por 30 dias a
+partir do resgate. O frete não recebe desconto. As propriedades do backend são
+`nhac.cupom.boas-vindas.valor`, `nhac.cupom.boas-vindas.minimo` e
+`nhac.cupom.boas-vindas.validade-dias`. Mudanças afetam apenas novos resgates.
+O mínimo precisa ser maior que o desconto e os valores precisam ser positivos.
+
+O cupom é reservado quando o pedido é criado. Um replay com a mesma chave de
+idempotência não o consome novamente. Falhas transacionais de criação/pagamento
+revertem o uso; cancelar o pedido o libera, mantendo a validade original.
+O banco precisa da migração `V1003__cupons_boas_vindas.sql` antes do novo app.

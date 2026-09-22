@@ -1,203 +1,133 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import 'package:nhac/components/seta_voltar.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/models/usuario/cupom_model.dart';
 import 'package:nhac/repositories/cupom_repository.dart';
-import 'package:nhac/services/auth_service.dart';
-import 'package:provider/provider.dart';
 
 class CuponsPage extends StatefulWidget {
-  const CuponsPage({super.key});
+  final double? subtotal;
+  const CuponsPage({super.key, this.subtotal});
 
   @override
   State<CuponsPage> createState() => _CuponsPageState();
 }
 
 class _CuponsPageState extends State<CuponsPage> {
-  int _abaSelecionada = 0;
-  final TextEditingController _cupomController = TextEditingController();
-  final CupomRepository _repository = CupomRepository();
+  final _repository = CupomRepository();
+  final _moeda = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
   List<CupomModel> _cupons = [];
-  bool _isLoading = true;
-  bool _isResgatando = false;
+  bool _carregando = true;
+  bool _ocupado = false;
+  String? _erro;
 
   @override
   void initState() {
     super.initState();
-    _carregarCupons();
+    _carregar();
   }
 
-  Future<void> _carregarCupons() async {
-    final auth = context.read<AuthService>();
-    if (auth.usuarioId == null) {
-      if (mounted) setState(() => _isLoading = false);
-      return;
-    }
-
+  Future<void> _carregar() async {
     try {
-      final cupons = await _repository.buscarCupons(auth.usuarioId!);
-      if (mounted) {
-        setState(() {
-          _cupons = cupons;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        context.showError(e.toString());
-      }
-    }
-  }
-
-  Future<void> _resgatarCupom() async {
-    final codigo = _cupomController.text.trim();
-    if (codigo.isEmpty) return;
-
-    final auth = context.read<AuthService>();
-    if (auth.usuarioId == null) return;
-
-    setState(() => _isResgatando = true);
-    try {
-      await _repository.resgatarCupom(auth.usuarioId!, codigo);
+      final cupons = await _repository.buscarCupons();
       if (!mounted) return;
-      context.showSuccess('Cupom resgatado com sucesso!');
-      _cupomController.clear();
-      await _carregarCupons();
+      setState(() {
+        _cupons = cupons;
+        _erro = null;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _erro = e.toString());
+    } finally {
+      if (mounted) setState(() => _carregando = false);
+    }
+  }
+
+  Future<void> _ganhar() async {
+    if (_ocupado) return;
+    setState(() => _ocupado = true);
+    try {
+      final cupom = await _repository.ganharBoasVindas();
+      if (!mounted) return;
+      context.showSuccess(cupom.status == 'DISPONIVEL'
+          ? 'Seu cupom de boas-vindas está disponível!'
+          : 'Você já recebeu seu cupom de boas-vindas.');
+      await _carregar();
     } catch (e) {
       if (mounted) context.showError(e.toString());
     } finally {
-      if (mounted) setState(() => _isResgatando = false);
+      if (mounted) setState(() => _ocupado = false);
     }
   }
 
-  Future<void> _usarCupom(CupomModel cupom) async {
-    if (cupom.status != 'DISPONIVEL') {
-      context.showError('Este cupom não está disponível para uso.');
+  Future<void> _usar(CupomModel cupom) async {
+    if (_ocupado) return;
+    if (widget.subtotal == null) {
+      context.showInfo('Escolha seus produtos e aplique o cupom no checkout.');
       return;
     }
-
+    setState(() => _ocupado = true);
     try {
-      context.showSuccess('Validando cupom...');
-      final cupomValidado = await _repository.validarCupom(cupom.codigo);
-      if (!mounted) return;
-      context.pop(cupomValidado); // Retorna ao checkout
+      final validado = await _repository.validarCupom(cupom.id, widget.subtotal!);
+      if (mounted) context.pop(validado);
     } catch (e) {
       if (mounted) context.showError(e.toString());
+    } finally {
+      if (mounted) setState(() => _ocupado = false);
     }
   }
 
-  List<CupomModel> _getCuponsFiltrados() {
-    final statusAlvo = _abaSelecionada == 0 ? 'DISPONIVEL' : (_abaSelecionada == 1 ? 'USADO' : 'EXPIRADO');
-    return _cupons.where((c) => c.status == statusAlvo).toList();
-  }
-
-  @override
-  void dispose() {
-    _cupomController.dispose();
-    super.dispose();
+  String _validade(CupomModel cupom) {
+    final data = DateTime.tryParse(cupom.dataValidade ?? '');
+    return data == null ? 'Sem validade definida' : 'Válido até ${DateFormat('dd/MM/yyyy').format(data)}';
   }
 
   @override
   Widget build(BuildContext context) {
-    final cuponsFiltrados = _getCuponsFiltrados();
-
     return Scaffold(
       backgroundColor: const Color(0xFFFFE7E5),
       body: SafeArea(
-        child: Column(
+        child: ListView(
+          padding: const EdgeInsets.all(24),
           children: [
-            Expanded(
-              child: SingleChildScrollView(
-                physics: const BouncingScrollPhysics(),
+            const Align(alignment: Alignment.centerLeft, child: SetaVoltar()),
+            const SizedBox(height: 24),
+            const Text('Meus cupons', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            const Text('Receba seu cupom de boas-vindas uma vez por conta e aplique no checkout. O desconto vale para os produtos, sem incluir a entrega.'),
+            const SizedBox(height: 16),
+            if (!_carregando && _erro == null && _cupons.isEmpty)
+              ElevatedButton(
+                onPressed: _ocupado ? null : _ganhar,
+                child: Text(_ocupado ? 'Resgatando...' : 'Ganhar cupom de boas-vindas'),
+              ),
+            if (_carregando) const Center(child: CircularProgressIndicator()),
+            if (_erro != null) ...[
+              Text(_erro!),
+              TextButton(onPressed: _carregar, child: const Text('Tentar novamente')),
+            ],
+            for (final cupom in _cupons)
+              Card(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24.w),
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      SizedBox(height: 16.h),
-                      const Row(children: [SetaVoltar()]),
-                      SizedBox(height: 24.h),
-                      Text('Cupons', style: TextStyle(fontSize: 28.sp, fontWeight: FontWeight.bold, color: const Color(0xFF5D201C))),
-                      SizedBox(height: 24.h),
-                      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                        _buildTabItem(0, 'Disponíveis (${_cupons.where((c) => c.status == 'DISPONIVEL').length})'),
-                        _buildTabItem(1, 'Usados (${_cupons.where((c) => c.status == 'USADO').length})'),
-                        _buildTabItem(2, 'Expirados (${_cupons.where((c) => c.status == 'EXPIRADO').length})'),
-                      ]),
-                      SizedBox(height: 32.h),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
-                        decoration: BoxDecoration(color: Colors.grey.shade50, borderRadius: BorderRadius.circular(16.r), border: Border.all(color: Colors.grey.shade200)),
-                        child: Row(
-                          children: [
-                            Expanded(child: TextField(controller: _cupomController, decoration: const InputDecoration(hintText: 'Digite o código do cupom', border: InputBorder.none, hintStyle: TextStyle(color: Colors.grey, fontSize: 14)))),
-                            TextButton(
-                              onPressed: _isResgatando ? null : _resgatarCupom,
-                              child: _isResgatando 
-                                ? SizedBox(height: 16.h, width: 16.w, child: const CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFF6961)))
-                                : Text('Resgatar', style: TextStyle(color: const Color(0xFFFF6961), fontWeight: FontWeight.bold)),
-                            ),
-                          ],
+                      Text(cupom.titulo, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text('${_moeda.format(cupom.desconto)} de desconto em produtos a partir de ${_moeda.format(cupom.usoMinimo)}'),
+                      Text(_validade(cupom)),
+                      Text(cupom.status == 'USADO' ? 'Usado' : cupom.status == 'EXPIRADO' ? 'Expirado' : 'Disponível'),
+                      if (cupom.status == 'DISPONIVEL')
+                        TextButton(
+                          onPressed: _ocupado ? null : () => _usar(cupom),
+                          child: Text(widget.subtotal == null ? 'Como usar' : 'Aplicar cupom'),
                         ),
-                      ),
-                      SizedBox(height: 32.h),
-                      if (_isLoading)
-                        const Center(child: CircularProgressIndicator(color: Color(0xFFFF6961)))
-                      else if (cuponsFiltrados.isEmpty)
-                        Center(child: Text('Nenhum cupom encontrado.', style: TextStyle(color: Colors.grey.shade600)))
-                      else
-                        ListView.separated(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: cuponsFiltrados.length,
-                          separatorBuilder: (context, index) => Divider(height: 32.h, color: const Color(0xFFF5F5F5)),
-                          itemBuilder: (context, index) {
-                            final cupom = cuponsFiltrados[index];
-                            final isDisponivel = cupom.status == 'DISPONIVEL';
-                            return Row(
-                              children: [
-                                Container(padding: EdgeInsets.all(12.w), decoration: BoxDecoration(color: const Color(0xFFFFF5F5), borderRadius: BorderRadius.circular(12.r)), child: Icon(Icons.local_offer, color: isDisponivel ? const Color(0xFFFF6961) : Colors.grey, size: 28.sp)),
-                                SizedBox(width: 16.w),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(cupom.titulo, style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold, color: isDisponivel ? const Color(0xFF5D201C) : Colors.grey)),
-                                      SizedBox(height: 4.h),
-                                      Text(cupom.dataValidade ?? 'Sem validade', style: TextStyle(fontSize: 12.sp, color: Colors.grey.shade600)),
-                                    ],
-                                  ),
-                                ),
-                                if (isDisponivel)
-                                  TextButton(onPressed: () => _usarCupom(cupom), child: Text('Usar', style: TextStyle(color: const Color(0xFFFF6961), fontWeight: FontWeight.bold, fontSize: 14.sp))),
-                              ],
-                            );
-                          },
-                        ),
-                      SizedBox(height: 32.h),
                     ],
                   ),
                 ),
               ),
-            ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildTabItem(int index, String label) {
-    bool isSelected = _abaSelecionada == index;
-    return GestureDetector(
-      onTap: () => setState(() => _abaSelecionada = index),
-      child: Column(
-        children: [
-          Text(label, style: TextStyle(fontSize: 14.sp, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? const Color(0xFFFF6961) : const Color(0xFF5D201C))),
-          if (isSelected) Container(margin: EdgeInsets.only(top: 4.h), height: 2.h, width: 20.w, color: const Color(0xFFFF6961)),
-        ],
       ),
     );
   }

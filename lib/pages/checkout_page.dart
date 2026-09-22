@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:nhac/models/usuario/cupom_model.dart';
+import 'package:nhac/repositories/cupom_repository.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:nhac/pages/qrcode_pix_page.dart';
 import 'package:go_router/go_router.dart';
@@ -28,6 +30,8 @@ class CheckoutPage extends StatefulWidget {
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
+  CupomModel? _cupom;
+  double? _subtotalValidado;
   String _formaPagamento = 'Dinheiro';
   final TextEditingController _trocoController = TextEditingController();
   final TextEditingController _cpfController = TextEditingController();
@@ -248,7 +252,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final subtotal = cartProvider.valorTotal;
     final frete = _taxaFrete;
 
-    final total = subtotal + frete;
+    final desconto = _subtotalValidado == subtotal ? (_cupom?.descontoAplicado ?? 0) : 0.0;
+    final total = subtotal + frete - desconto;
     final tempoEntrega = _tempoEstimadoMinutos == null
         ? 'Tempo calculado no fechamento'
         : 'Até $_tempoEstimadoMinutos min';
@@ -425,6 +430,33 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
             ],
             SizedBox(height: 24.h),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.local_offer_outlined),
+              title: Text(_cupom == null ? 'Adicionar cupom' : _cupom!.titulo),
+              subtitle: _cupom == null ? null : Text(
+                _subtotalValidado == subtotal
+                    ? 'Desconto de ${currencyFormat.format(desconto)}'
+                    : 'Carrinho alterado. Selecione o cupom novamente.',
+              ),
+              onTap: _isSubmitting ? null : () async {
+                final cupom = await context.push<CupomModel>('/cupons', extra: subtotal);
+                if (!mounted || cupom == null) return;
+                setState(() {
+                  _cupom = cupom;
+                  _subtotalValidado = subtotal;
+                });
+              },
+              trailing: _cupom == null ? const Icon(Icons.chevron_right) : IconButton(
+                tooltip: 'Remover cupom',
+                onPressed: _isSubmitting ? null : () => setState(() {
+                  _cupom = null;
+                  _subtotalValidado = null;
+                }),
+                icon: const Icon(Icons.close),
+              ),
+            ),
+            SizedBox(height: 16.h),
             _buildSectionTitle('Resumo do pedido'),
             SizedBox(height: 8.h),
             Container(
@@ -492,6 +524,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     ),
                   ),
                   SizedBox(height: 8.h),
+                  if (desconto > 0)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Desconto do cupom'),
+                          Text('- ${currencyFormat.format(desconto)}'),
+                        ],
+                      ),
+                    ),
                   MergeSemantics(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -743,6 +786,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
     setState(() => _isSubmitting = true);
 
     final enderecoProvider = context.read<EnderecoProvider>();
+    if (enderecoProvider.enderecos.isEmpty) {
+      setState(() => _isSubmitting = false);
+      context.showError('Adicione um endereço de entrega.');
+      return;
+    }
     final enderecoisPadrao = enderecoProvider.enderecos.firstWhere(
       (e) => e.isPadrao,
       orElse: () => enderecoProvider.enderecos.first,
@@ -771,8 +819,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
+    if (_cupom != null) {
+      try {
+        final validado = await CupomRepository().validarCupom(_cupom!.id, cartProvider.valorTotal);
+        if (!mounted) return;
+        setState(() {
+          _cupom = validado;
+          _subtotalValidado = cartProvider.valorTotal;
+        });
+        total = cartProvider.valorTotal + _taxaFrete - validado.descontoAplicado;
+      } catch (e) {
+        if (!mounted) return;
+        setState(() => _isSubmitting = false);
+        context.showError(e.toString());
+        return;
+      }
+    }
+
     final pedido = CriarPedidoRequest(
       lojaId: cartProvider.lojaId,
+      cupomId: _cupom?.id,
       formaPagamento: _formaPagamentoApi(),
       trocoPara: trocoPara,
       cpfPagador: _formaPagamento == 'PIX' ? cpfPagador : null,
