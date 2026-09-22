@@ -7,7 +7,6 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nhac/controllers/cart_provider.dart';
 import 'package:nhac/controllers/endereco_provider.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:nhac/services/auth_service.dart';
@@ -56,11 +55,7 @@ class _ProfileContentState extends State<ProfileContent> {
 
   void _logoutUsuario(BuildContext context) async {
     final authService = context.read<AuthService>();
-    final userProvider = context.read<UserProvider>();
-    final carrinho = context.read<CartProvider>();
     Navigator.pop(context);
-    userProvider.limparUsuario();
-    carrinho.esvaziarCarrinho();
     await authService.signOut();
   }
 

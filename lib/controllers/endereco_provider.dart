@@ -10,7 +10,30 @@ class EnderecoProvider with ChangeNotifier {
 
   EnderecoProvider({AuthService? authService, EnderecoRepository? repository})
       : _authService = authService ?? authServiceRoteador,
-        _enderecoRepository = repository ?? EnderecoRepository();
+        _enderecoRepository = repository ?? EnderecoRepository() {
+    _sessionUserId = _authService.usuarioId;
+    _authService.addListener(_onSessionChanged);
+  }
+
+  String? _sessionUserId;
+  int _sessionVersion = 0;
+  bool _disposed = false;
+
+  void _onSessionChanged() {
+    if (_sessionUserId == _authService.usuarioId) return;
+    _sessionUserId = _authService.usuarioId;
+    _sessionVersion++;
+    _enderecos = [];
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _authService.removeListener(_onSessionChanged);
+    super.dispose();
+  }
 
   List<EnderecoModel> _enderecos = [];
   bool _isLoading = false;
@@ -22,16 +45,21 @@ class EnderecoProvider with ChangeNotifier {
     final usuarioId = _authService.usuarioId;
     if (usuarioId == null) return;
 
+    final sessionVersion = _sessionVersion;
     try {
       _isLoading = true;
       notifyListeners();
 
-      _enderecos = await _enderecoRepository.buscarEnderecos(usuarioId);
+      final resultado = await _enderecoRepository.buscarEnderecos(usuarioId);
+      if (_disposed || sessionVersion != _sessionVersion) return;
+      _enderecos = resultado;
     } catch (e) {
       debugPrint("Erro ao buscar endereços: $e");
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!_disposed && sessionVersion == _sessionVersion) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 

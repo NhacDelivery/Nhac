@@ -4,21 +4,31 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nhac/models/usuario/carrinho_model.dart';
 
 class CartRepository {
-  static const String _cartKey = '@nhac_cart_items';
+  static Future<void> _gravacoesPendentes = Future<void>.value();
 
-  Future<void> salvarCarrinhoLocal(List<CartItemModel> itens) async {
-    try {
+  static Future<void> _gravar(Future<void> Function() operation) {
+    final gravacao = _gravacoesPendentes.then((_) => operation());
+    _gravacoesPendentes = gravacao.catchError((Object _) {});
+    return gravacao;
+  }
+
+  final String? usuarioId;
+  CartRepository({this.usuarioId});
+
+  String get _cartKey => usuarioId == null
+      ? '@nhac_cart_items'
+      : '@nhac_cart_items:$usuarioId';
+
+  Future<void> salvarCarrinhoLocal(List<CartItemModel> itens) {
+    final jsonString = json.encode(itens.map((i) => i.toMap()).toList());
+    return _gravar(() async {
       final prefs = await SharedPreferences.getInstance();
-      
-      final String jsonString = json.encode(itens.map((i) => i.toMap()).toList());
       await prefs.setString(_cartKey, jsonString);
-      
-    } catch (e) {
-      debugPrint("Erro ao salvar carrinho no cache local: $e");
-    }
+    });
   }
 
   Future<List<CartItemModel>> carregarCarrinhoLocal() async {
+    await _gravacoesPendentes;
     try {
       final prefs = await SharedPreferences.getInstance();
       final String? jsonString = prefs.getString(_cartKey);
@@ -34,8 +44,8 @@ class CartRepository {
     }
   }
 
-  Future<void> limparCarrinho() async {
+  Future<void> limparCarrinho() => _gravar(() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_cartKey);
-  }
+  });
 }

@@ -174,12 +174,12 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider<AppState>(create: (context) => AppState()),
         ChangeNotifierProvider<AuthService>.value(value: authServiceRoteador),
         ChangeNotifierProvider<CadastroController>(
-          create: (context) => CadastroController(),
+          create: (context) => CadastroController(authService: authServiceRoteador),
         ),
         ChangeNotifierProvider<UserProvider>(
           create: (context) => UserProvider(),
         ),
-        ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => CartProvider(authService: authServiceRoteador)),
         ChangeNotifierProvider(create: (_) => EnderecoProvider()),
         ChangeNotifierProvider<ConnectivityService>(
           create: (context) => ConnectivityService(),

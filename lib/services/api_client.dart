@@ -55,13 +55,22 @@ class ApiClient {
           final responseData = e.response?.data;
           final statusCode = e.response?.statusCode;
           final defaultMessage =
-              responseData?['message'] ?? 'Erro desconhecido';
+              responseData is Map && responseData['message'] is String
+                  ? responseData['message'] as String
+                  : 'Não foi possível concluir a solicitação.';
 
           if (statusCode == 401 &&
+              e.requestOptions.headers['Authorization'] == 'Bearer $_cachedToken' &&
               !e.requestOptions.path.contains('/login') &&
               !e.requestOptions.path.contains('/auth/alterar-senha')) {
             _cachedToken = null;
-            await authServiceRoteador.logout();
+            try {
+              await authServiceRoteador.logout();
+            } catch (_) {
+              // A sessão em memória já foi encerrada; ainda conclua a requisição
+              // com erro de autenticação se a limpeza do armazenamento falhar.
+              debugPrint('Não foi possível limpar todo o armazenamento da sessão.');
+            }
             return handler.reject(DioException(
               requestOptions: e.requestOptions,
               response: e.response,
@@ -96,7 +105,7 @@ class ApiClient {
               // Verifica se possui o detalhamento de campos
               if (responseData != null &&
                   responseData is Map &&
-                  responseData.containsKey('details')) {
+                  responseData['details'] is Map<String, dynamic>) {
                 customError = ValidationException(
                     defaultMessage, responseData['details']);
               } else {
@@ -115,6 +124,7 @@ class ApiClient {
             case 404:
               customError = NotFoundException(defaultMessage);
               break;
+            case 402:
             case 422:
               customError = BusinessRuleException(defaultMessage);
               break;
