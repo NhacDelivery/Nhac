@@ -42,6 +42,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
   StreamSubscription<StatusPedido>? _statusSubscription;
   bool _isLoading = true;
   bool _cancelando = false;
+  final _messengerKey = GlobalKey<ScaffoldMessengerState>();
   String _erro = '';
 
   final NumberFormat currencyFormat =
@@ -145,27 +146,34 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
     );
   }
 
+  void _mostrarResultadoCancelamento(String mensagem) {
+    // Aguarda a troca dos Scaffolds de carregamento/erro terminar.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _messengerKey.currentState?.showSnackBar(
+        SnackBar(content: Text(mensagem)),
+      );
+    });
+  }
+
   Future<void> _cancelarPedido() async {
     if (_pedido?.status != StatusPedido.pendente || _cancelando) return;
 
     setState(() => _cancelando = true);
     try {
       await _pedidoRepository.cancelarPedido(widget.pedidoId);
-      await _carregarDados(silencioso: true);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pedido cancelado.')),
-        );
-      }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _cancelando = false);
+      if (!mounted) return;
+      setState(() => _cancelando = false);
+      _mostrarResultadoCancelamento(e.toString());
+      return;
     }
+
+    if (!mounted) return;
+    await _carregarDados(silencioso: true);
+    if (!mounted) return;
+    setState(() => _cancelando = false);
+    _mostrarResultadoCancelamento('Pedido cancelado.');
   }
 
   Future<void> _abrirMensagemRestaurante() async {
@@ -274,6 +282,13 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
 
   @override
   Widget build(BuildContext context) {
+    return ScaffoldMessenger(
+      key: _messengerKey,
+      child: _buildConteudo(context),
+    );
+  }
+
+  Widget _buildConteudo(BuildContext context) {
     if (_isLoading) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),

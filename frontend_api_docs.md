@@ -122,3 +122,12 @@ O cupom é reservado quando o pedido é criado. Um replay com a mesma chave de
 idempotência não o consome novamente. Falhas transacionais de criação/pagamento
 revertem o uso; cancelar o pedido o libera, mantendo a validade original.
 O banco precisa da migração `V1003__cupons_boas_vindas.sql` antes do novo app.
+
+## Sessões e pagamentos
+
+Perfil e endereços são limpos quando muda a conta; respostas de consultas da
+sessão anterior são descartadas. O carrinho local é separado por conta e limpo
+no logout manual ou automático. Senhas são enviadas sem remover espaços.
+A página de formas de pagamento informa as opções disponíveis no checkout;
+o cadastro de cartões salvos pelo perfil continua indisponível e não apresenta
+mais uma ação de cadastro que simula sucesso.
