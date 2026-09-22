@@ -38,7 +38,7 @@ env:
 jobs:
   e2e:
     name: E2E-001 a E2E-004 (3x)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:
       mariadb:
@@ -77,6 +77,17 @@ jobs:
           cache: maven
           cache-dependency-path: backend-nhac/pom.xml
 
+      - name: Capture backend JDK
+        id: backend-java
+        shell: bash
+        run: echo "home=$JAVA_HOME" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java 17 for Android
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -96,10 +107,15 @@ jobs:
           E2E_REPEAT: '3'
           E2E_DEVICE_ID: emulator-5554
           BACKEND_DIR: ${{ github.workspace }}/backend-nhac
+          BACKEND_JAVA_HOME: ${{ steps.backend-java.outputs.home }}
         with:
-          api-level: 35
+          api-level: 34
           arch: x86_64
-          profile: pixel_6
+          profile: pixel_2
+          cores: 2
+          ram-size: 2048M
+          heap-size: 512M
+          disk-size: 4096M
           disable-animations: true
           working-directory: Nhac
           script: ./tool/run_e2e.sh
@@ -109,6 +125,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: e2e-logs-${{ github.run_number }}
-          path: Nhac/build/e2e-logs
+          path: Nhac/e2e-logs
           if-no-files-found: warn
           retention-days: 14
