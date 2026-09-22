@@ -9,6 +9,7 @@ fi
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_DIR="${BACKEND_DIR:-$(cd "$APP_DIR/../backend-nhac" && pwd)}"
 FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
+BACKEND_JAVA_HOME="${BACKEND_JAVA_HOME:-${JAVA_HOME:-}}"
 DEVICE_ID="${E2E_DEVICE_ID:-emulator-5554}"
 REPEAT="${E2E_REPEAT:-1}"
 DB_PORT="${E2E_DB_PORT:-3307}"
@@ -28,6 +29,11 @@ esac
 
 if ! [[ "$REPEAT" =~ ^[1-9][0-9]*$ ]]; then
   echo "E2E_REPEAT deve ser um inteiro positivo." >&2
+  exit 2
+fi
+
+if [[ -z "$BACKEND_JAVA_HOME" || ! -x "$BACKEND_JAVA_HOME/bin/java" ]]; then
+  echo "BACKEND_JAVA_HOME deve apontar para um JDK válido." >&2
   exit 2
 fi
 
@@ -82,6 +88,8 @@ for execution in $(seq 1 "$REPEAT"); do
 
   (
     cd "$BACKEND_DIR"
+    JAVA_HOME="$BACKEND_JAVA_HOME" \
+    PATH="$BACKEND_JAVA_HOME/bin:$PATH" \
     E2E_DB_URL="jdbc:mariadb://127.0.0.1:${DB_PORT}/nhac_e2e?serverTimezone=UTC&rewriteBatchedStatements=true" \
     E2E_DB_USER=nhac_e2e \
     E2E_DB_PASSWORD=nhac_e2e \
