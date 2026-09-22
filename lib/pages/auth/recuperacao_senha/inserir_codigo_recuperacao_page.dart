@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:nhac/components/seta_voltar.dart';
 import 'dart:async';
 import 'package:pin_code_fields/pin_code_fields.dart';
@@ -18,6 +19,11 @@ class InserirCodigoRecuperacaoPage extends StatefulWidget {
 }
 
 class _InserirCodigoRecuperacaoPageState extends State<InserirCodigoRecuperacaoPage> {
+  final _codigoController = TextEditingController();
+  final _codigoFocus = FocusNode();
+  bool _validando = false;
+  bool _reenviando = false;
+  String? _erroCodigo;
   int _tempoRestante = 60;
   bool _podeReenviar = false;
   Timer? _timer;
@@ -29,6 +35,7 @@ class _InserirCodigoRecuperacaoPageState extends State<InserirCodigoRecuperacaoP
   }
 
   void _iniciarTimer() {
+    _timer?.cancel();
     setState(() {
       _tempoRestante = 60;
       _podeReenviar = false;
@@ -52,13 +59,14 @@ class _InserirCodigoRecuperacaoPageState extends State<InserirCodigoRecuperacaoP
   }
 
   Future<void> _reenviarCodigo() async {
+    if (_reenviando || _validando) return;
     final authService = context.read<AuthService>();
+    setState(() => _reenviando = true);
     try {
-      if (widget.metodo == 'email') {
-        await authService.esqueciSenhaEmail(widget.contato);
-      } else {
-        await authService.esqueciSenha(widget.contato);
-      }
+      await authService.esqueciSenhaEmail(widget.contato);
+      if (!mounted) return;
+      _codigoController.clear();
+      setState(() => _erroCodigo = null);
       _iniciarTimer();
       if (mounted) {
         context.showSuccess("Código reenviado com sucesso!");
@@ -67,12 +75,49 @@ class _InserirCodigoRecuperacaoPageState extends State<InserirCodigoRecuperacaoP
       if (mounted) {
         context.showError(e.toString().replaceAll('Exception: ', ''));
       }
+    } finally {
+      if (mounted) setState(() => _reenviando = false);
     }
+  }
+
+  Future<void> _validarCodigo(String codigo) async {
+    if (!mounted || _validando || _reenviando || codigo.length != 6) return;
+    final authService = context.read<AuthService>();
+    setState(() {
+      _validando = true;
+      _erroCodigo = null;
+    });
+    try {
+      await authService.validarCodigoRecuperacaoEmail(widget.contato, codigo);
+    } catch (e) {
+      if (!mounted) return;
+      _codigoController.clear();
+      setState(() {
+        _validando = false;
+        _erroCodigo = e.toString().replaceAll('Exception: ', '');
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _codigoFocus.requestFocus();
+      });
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _validando = false);
+    await context.push('/recuperacao/nova-senha', extra: {
+      'metodo': widget.metodo,
+      'contato': widget.contato,
+      'codigo': codigo,
+    });
+    if (!mounted) return;
+    _codigoController.clear();
+    _codigoFocus.requestFocus();
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _codigoController.dispose();
+    _codigoFocus.dispose();
     super.dispose();
   }
 
@@ -120,6 +165,12 @@ class _InserirCodigoRecuperacaoPageState extends State<InserirCodigoRecuperacaoP
                 const SizedBox(height: 32.0),
                 PinCodeTextField(
                   appContext: context,
+                  controller: _codigoController,
+                  focusNode: _codigoFocus,
+                  autoDisposeControllers: false,
+                  autoDismissKeyboard: false,
+                  enabled: !_validando && !_reenviando,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   length: 6,
                   pinTheme: PinTheme(
                     inactiveFillColor: const Color(0x33C9BCBC),
@@ -138,18 +189,21 @@ class _InserirCodigoRecuperacaoPageState extends State<InserirCodigoRecuperacaoP
                   keyboardType: TextInputType.number,
                   enableActiveFill: true,
                   onChanged: (value) {},
-                  onCompleted: (value) {
-                    context.push('/recuperacao/nova-senha', extra: {
-                      'metodo': widget.metodo,
-                      'contato': widget.contato,
-                      'codigo': value,
-                    });
-                  },
+                  onCompleted: _validarCodigo,
                 ),
+                if (_validando)
+                  const Center(child: CircularProgressIndicator()),
+                if (_erroCodigo != null)
+                  Text(
+                    _erroCodigo!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
                 const SizedBox(height: 24.0),
                 Center(
                   child: TextButton(
-                    onPressed: _podeReenviar ? _reenviarCodigo : null,
+                    onPressed: (_podeReenviar && !_validando && !_reenviando)
+                        ? _reenviarCodigo
+                        : null,
                     style: TextButton.styleFrom(
                       foregroundColor: corAtual,
                       textStyle: const TextStyle(fontSize: 16.0, fontWeight: FontWeight.w600),

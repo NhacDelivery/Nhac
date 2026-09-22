@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:nhac/repositories/cart_repository.dart';
+import 'package:nhac/services/local_cache_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/services/api_client.dart';
@@ -10,6 +12,8 @@ class AuthService with ChangeNotifier {
   final _dio = ApiClient().dio;
   final _sessionStorage = SessionStorageService();
 
+  Future<void>? _logoutPendente;
+  int _sessionGeneration = 0;
   String? _usuarioId;
   String? _nome;
   bool _carregado = false; 
@@ -26,10 +30,16 @@ class AuthService with ChangeNotifier {
   }
 
   Future<void> _carregarSessaoLocal() async {
-    _usuarioId = await _sessionStorage.obterUsuarioId();
-    _nome = await _sessionStorage.obterNome();
-    _isGoogleUser = await _sessionStorage.obterLoginGoogle();
-    _isPhoneUser = await _sessionStorage.obterLoginTelefone();
+    final generation = _sessionGeneration;
+    final usuarioId = await _sessionStorage.obterUsuarioId();
+    final nome = await _sessionStorage.obterNome();
+    final google = await _sessionStorage.obterLoginGoogle();
+    final telefone = await _sessionStorage.obterLoginTelefone();
+    if (generation != _sessionGeneration) return;
+    _usuarioId = usuarioId;
+    _nome = nome;
+    _isGoogleUser = google;
+    _isPhoneUser = telefone;
     _carregado = true;
     notifyListeners();
   }
@@ -122,6 +132,7 @@ class AuthService with ChangeNotifier {
   }
 
   Future<void> _salvarSessaoDaResposta(Map<String, dynamic> data, {bool viaGoogle = false, bool viaTelefone = false}) async {
+    await _logoutPendente;
     final token = data['token'] as String;
     final usuarioId = data['usuarioId'] as String;
     final nome = data['nome'] as String;
@@ -136,44 +147,33 @@ class AuthService with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> logout() async {
-    await _sessionStorage.limparSessao();
+  Future<void> logout() {
+    return _logoutPendente ??= _encerrarSessao().whenComplete(() {
+      _logoutPendente = null;
+    });
+  }
+
+  Future<void> _encerrarSessao() async {
+    final usuarioAnterior = _usuarioId;
+    _sessionGeneration++;
     ApiClient().atualizarTokenCache(null);
     _usuarioId = null;
     _nome = null;
     _isGoogleUser = false;
     _isPhoneUser = false;
+    _carregado = true;
     notifyListeners();
+    // Os providers limpam a memória ao receber a mudança da sessão.
+    // O mesmo caminho atende ao logout manual e à expiração por HTTP 401.
+    await Future.wait([
+      _sessionStorage.limparSessao(),
+      CartRepository(usuarioId: usuarioAnterior).limparCarrinho(),
+      CartRepository().limparCarrinho(),
+      LocalCacheService.limparTudo(),
+    ]);
   }
 
- 
   Future<void> signOut() => logout();
-
-  Future<void> esqueciSenha(String telefone, {CancelToken? cancelToken}) async {
-    try {
-      await _dio.post(
-        '/auth/esqueci-senha', 
-        data: {
-          'telefone': formatarTelefoneE164(telefone),
-        },
-        cancelToken: cancelToken,
-      );
-    } catch (e) {
-      throw mapException(e);
-    }
-  }
-
-  Future<void> redefinirSenha(String telefone, String codigo, String novaSenha) async {
-    try {
-      await _dio.post('/auth/redefinir-senha', data: {
-        'telefone': formatarTelefoneE164(telefone),
-        'codigo': codigo,
-        'novaSenha': novaSenha,
-      });
-    } catch (e) {
-      throw mapException(e);
-    }
-  }
 
   Future<void> esqueciSenhaEmail(String email, {CancelToken? cancelToken}) async {
     try {
@@ -184,6 +184,17 @@ class AuthService with ChangeNotifier {
         },
         cancelToken: cancelToken,
       );
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<void> validarCodigoRecuperacaoEmail(String email, String codigo) async {
+    try {
+      await _dio.post('/auth/validar-codigo-redefinicao/email', data: {
+        'email': email.trim(),
+        'codigo': codigo.trim(),
+      });
     } catch (e) {
       throw mapException(e);
     }

@@ -13,6 +13,7 @@ import 'package:nhac/pages/carrinho_page.dart';
 import 'package:nhac/pages/feed_page.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -124,6 +125,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return FlyToCartOverlay(
+      key: E2EKeys.homeReady,
       cartIconKey: _cartIconKey,
       onLanded: () {
         _cartBounceController.forward(from: 0.0);
@@ -274,6 +276,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         child: Consumer<CartProvider>(
                           builder: (context, cart, _) => _buildCartTotalBar(
                             cart.valorTotal,
+                            key: _selectedIndex == 1
+                                ? E2EKeys.cartCheckout
+                                : null,
                             onPressed: () {
                               if (_selectedIndex == 1) {
                                 context.push('/checkout');
@@ -437,6 +442,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       label: label,
       selected: isSelected,
       child: GestureDetector(
+        key: index == 1 ? E2EKeys.cartOpen : null,
         onTap: () {
         final oldIndex = _selectedIndex;
         setState(() {
@@ -537,8 +543,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildCartTotalBar(double total, {required VoidCallback onPressed}) {
+  Widget _buildCartTotalBar(double total,
+      {Key? key, required VoidCallback onPressed}) {
     return Container(
+      key: key,
       padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
       decoration: BoxDecoration(
         color: Colors.white,

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/repositories/produto_repository.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
+import 'package:nhac/models/pedido/status_pedido.dart';
 import 'package:nhac/pages/no_internet_page.dart';
 import 'package:nhac/controllers/cadastro_controller.dart';
 import 'package:nhac/controllers/cart_provider.dart';
@@ -16,16 +17,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nowa_runtime/nowa_runtime.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/globals/app_state.dart';
+import 'package:nhac/globals/app_constants.dart';
 import 'package:nhac/globals/router.dart';
 import 'package:firebase_core/firebase_core.dart';
+
 import './firebase_options.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:nhac/services/push_notification_service.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:nhac/e2e/e2e_bootstrap.dart';
 
 import 'package:nhac/services/live_notification_service.dart';
 
@@ -33,22 +37,17 @@ import 'package:nhac/services/live_notification_service.dart';
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   debugPrint("Notificação em background recebida!");
-  
-  if (message.data.containsKey('pedidoId') && message.data.containsKey('status')) {
-    final status = message.data['status']?.toString().toUpperCase() ?? '';
+
+  if (message.data.containsKey('pedidoId') &&
+      message.data.containsKey('status')) {
+    final status = StatusPedido.fromApi(message.data['status']?.toString());
     final nomeProduto = message.data['nomeProduto']?.toString() ?? 'Seu pedido';
-    
-    int stageIndex = 0;
-    if (status == 'AGUARDANDO_PAGAMENTO' || status == 'PENDENTE') stageIndex = 0;
-    else if (status == 'PAGO' || status == 'CONFIRMADO' || status == 'APROVADO') stageIndex = 1;
-    else if (status == 'EM_PREPARO' || status == 'PREPARANDO') stageIndex = 2;
-    else if (status == 'SAIU_PARA_ENTREGA') stageIndex = 3;
-    else if (status == 'ENTREGUE') stageIndex = 4;
+    final stageIndex = status.stage;
 
     LiveNotificationService.updateLiveNotification(
       pedidoId: message.data['pedidoId'].toString(),
       nomeProduto: nomeProduto,
-      status: message.data['statusTexto'] ?? status,
+      status: message.data['statusTexto'] ?? status.label,
       tempoEstimado: message.data['tempoEstimado'] ?? '',
       progresso: stageIndex,
     );
@@ -62,18 +61,14 @@ late final SharedPreferences sharedPrefs;
 main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Carrega o .env cedo, só para pegar o SENTRY_DSN e já inicializar o
-  // Sentry antes de qualquer outra coisa. Assim, se Stripe/Firebase/FCM
-  // falharem logo em seguida, o erro é reportado em vez de travar a tela
-  // branca do splash silenciosamente (o que antes acontecia porque essas
-  // chamadas ficavam FORA do runZonedGuarded do SentryFlutter.init).
-  String sentryDsn = '';
-  try {
-    await dotenv.load(fileName: ".env");
-    sentryDsn = dotenv.env['SENTRY_DSN'] ?? '';
-  } catch (e, s) {
-    debugPrint('Falha ao carregar .env: $e\n$s');
+  if (AppConstants.e2eMode) {
+    await E2EBootstrap.prepare();
+    sharedPrefs = await SharedPreferences.getInstance();
+    E2EBootstrap.runIsolated(const MyApp());
+    return;
   }
+
+  final sentryDsn = AppConstants.sentryDsn;
 
   await SentryFlutter.init(
     (options) {
@@ -87,25 +82,31 @@ main() async {
     },
     appRunner: () async {
       try {
-        Stripe.publishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? '';
-        await Stripe.instance.applySettings();
+        final stripeKey = AppConstants.stripePublishableKey;
+        if (stripeKey.isNotEmpty) {
+          Stripe.publishableKey = stripeKey;
+          await Stripe.instance.applySettings();
+        }
 
         await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform,
         );
 
-        await FirebaseAppCheck.instance.activate(
-          // ignore: deprecated_member_use
-          androidProvider: kDebugMode
-              ? AndroidProvider.debug
-              : AndroidProvider.playIntegrity,
-        );
+        if (!AppConstants.e2eMode) {
+          await FirebaseAppCheck.instance.activate(
+            // ignore: deprecated_member_use
+            androidProvider: kDebugMode
+                ? AndroidProvider.debug
+                : AndroidProvider.playIntegrity,
+          );
 
-        FirebaseMessaging.onBackgroundMessage(
-            _firebaseMessagingBackgroundHandler);
+          FirebaseMessaging.onBackgroundMessage(
+            _firebaseMessagingBackgroundHandler,
+          );
 
-        final pushService = PushNotificationService(authServiceRoteador);
-        await pushService.initialize();
+          final pushService = PushNotificationService(authServiceRoteador);
+          await pushService.initialize();
+        }
 
         sharedPrefs = await SharedPreferences.getInstance();
 
@@ -173,13 +174,16 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider<AppState>(create: (context) => AppState()),
         ChangeNotifierProvider<AuthService>.value(value: authServiceRoteador),
         ChangeNotifierProvider<CadastroController>(
-            create: (context) => CadastroController()),
+          create: (context) => CadastroController(authService: authServiceRoteador),
+        ),
         ChangeNotifierProvider<UserProvider>(
-            create: (context) => UserProvider()),
-        ChangeNotifierProvider(create: (_) => CartProvider()),
+          create: (context) => UserProvider(),
+        ),
+        ChangeNotifierProvider(create: (_) => CartProvider(authService: authServiceRoteador)),
         ChangeNotifierProvider(create: (_) => EnderecoProvider()),
         ChangeNotifierProvider<ConnectivityService>(
-            create: (context) => ConnectivityService()),
+          create: (context) => ConnectivityService(),
+        ),
         Provider<LojaRepository>(create: (_) => LojaRepository()),
         Provider<ProdutoRepository>(create: (_) => ProdutoRepository()),
         Provider<PedidoRepository>(create: (_) => PedidoRepository()),
@@ -188,8 +192,7 @@ class MyApp extends StatelessWidget {
         return Consumer<ConnectivityService>(
           builder: (context, connectivity, child) {
             return ScreenUtilInit(
-              designSize:
-                  const Size(390, 844), 
+              designSize: const Size(390, 844),
               minTextAdapt: true,
               splitScreenMode: true,
               builder: (context, child) {

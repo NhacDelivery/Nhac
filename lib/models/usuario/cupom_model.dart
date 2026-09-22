@@ -9,9 +9,11 @@ class CupomModel {
   final String tipo; 
   final double usoMinimo;
   final String? dataValidade;
+  final double descontoAplicado;
   final String status; 
 
   CupomModel({
+    this.descontoAplicado = 0,
     required this.id,
     required this.titulo,
     required this.descricao,
@@ -25,6 +27,7 @@ class CupomModel {
 
   factory CupomModel.fromMap(Map<String, dynamic> map) {
     return CupomModel(
+      descontoAplicado: safeDouble(map['descontoAplicado']),
       id: map['id']?.toString() ?? '',
       titulo: map['titulo'] ?? '',
       descricao: map['descricao'] ?? '',
@@ -39,6 +42,7 @@ class CupomModel {
 
   Map<String, dynamic> toMap() {
     return {
+      'descontoAplicado': descontoAplicado,
       'titulo': titulo,
       'descricao': descricao,
       'codigo': codigo,
@@ -62,6 +66,7 @@ class CupomModel {
     String? status,
   }) {
     return CupomModel(
+      descontoAplicado: descontoAplicado,
       id: id ?? this.id,
       titulo: titulo ?? this.titulo,
       descricao: descricao ?? this.descricao,

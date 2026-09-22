@@ -15,6 +15,7 @@ import 'package:nhac/repositories/produto_repository.dart';
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/repositories/avaliacao_repository.dart';
 import 'package:nhac/models/produto/avaliacoes.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
 
 class ProdutoDetalhesPage extends StatefulWidget {
   final ProdutosModel produto;
@@ -490,6 +491,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                         final lojaFechada =
                             aindaCarregando || loja == null || !loja.isAberto;
                         return ElevatedButton(
+                          key: E2EKeys.productAdd,
                       onPressed: aindaCarregando
                           ? null
                           : lojaFechada
@@ -681,7 +683,9 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               return Column(
                 children: snapshot.data!.take(3).map((avaliacao) {
                   return _buildReviewItem(
-                    name: avaliacao.userId.isNotEmpty ? 'Usuário' : 'Anônimo',
+                    name: avaliacao.nomeUsuario.trim().isNotEmpty
+                        ? avaliacao.nomeUsuario
+                        : 'Anônimo',
                     avatarColor: Colors.brown.shade200,
                     avatarIcon: Icons.person,
                     review: avaliacao.comentario,

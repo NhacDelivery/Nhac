@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nhac/globals/app_constants.dart';
 
 class BannerItem {
   const BannerItem({
@@ -127,7 +128,9 @@ class _BannerCard extends StatelessWidget {
       margin: EdgeInsets.symmetric(horizontal: 4.w),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20.r),
-        child: CachedNetworkImage(
+        child: AppConstants.e2eMode
+            ? Container(color: Colors.grey.shade200)
+            : CachedNetworkImage(
           imageUrl: banner.imageUrl,
           fit: BoxFit.cover,
           width: double.infinity,

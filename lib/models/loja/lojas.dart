@@ -1,17 +1,17 @@
 import 'package:nhac/utils/safe_parse_helpers.dart';
 
 class LojasModel {
-  final String id; 
+  final String id;
   final String nome;
   final String categoria;
   final String descricao;
   final String imagemUrl;
-  
-  final bool _isAbertoFlag; 
+
+  final bool _isAbertoFlag;
 
   final DadosOperacionais? dadosOperacionais;
   final EnderecoLoja? endereco;
-  final HorariosLoja? horarios; 
+  final HorariosLoja? horarios;
 
   LojasModel({
     required this.id,
@@ -25,48 +25,8 @@ class LojasModel {
     this.horarios,
   }) : _isAbertoFlag = isAberto;
 
-  bool get isAberto {
-    if (!_isAbertoFlag) return false;
-    if (horarios == null) return true;
-
-    final now = DateTime.now();
-    final weekDay = now.weekday; // 1 = Monday
-    String horarioHoje = 'Fechado';
-    switch (weekDay) {
-      case 1: horarioHoje = horarios!.segunda; break;
-      case 2: horarioHoje = horarios!.terca; break;
-      case 3: horarioHoje = horarios!.quarta; break;
-      case 4: horarioHoje = horarios!.quinta; break;
-      case 5: horarioHoje = horarios!.sexta; break;
-      case 6: horarioHoje = horarios!.sabado; break;
-      case 7: horarioHoje = horarios!.domingo; break;
-    }
-
-    if (horarioHoje.toLowerCase() == 'fechado') return false;
-
-    final parts = horarioHoje.split('-');
-    if (parts.length != 2) return true;
-
-    final startParts = parts[0].trim().split(':');
-    final endParts = parts[1].trim().split(':');
-
-    if (startParts.length != 2 || endParts.length != 2) return true;
-
-    final startHour = int.tryParse(startParts[0]) ?? 0;
-    final startMin = int.tryParse(startParts[1]) ?? 0;
-    final endHour = int.tryParse(endParts[0]) ?? 0;
-    final endMin = int.tryParse(endParts[1]) ?? 0;
-
-    final start = startHour * 60 + startMin;
-    final end = endHour * 60 + endMin;
-    final current = now.hour * 60 + now.minute;
-
-    if (start <= end) {
-      return current >= start && current <= end;
-    } else {
-      return current >= start || current <= end;
-    }
-  }
+  // A API e o checkout usam o status operacional definido pelo lojista.
+  bool get isAberto => _isAbertoFlag;
 
   factory LojasModel.fromMap(Map<String, dynamic> map) {
     return LojasModel(
@@ -75,16 +35,15 @@ class LojasModel {
       categoria: map['categoria']?.toString() ?? '',
       descricao: map['descricao']?.toString() ?? '',
       imagemUrl: map['imagemUrl']?.toString() ?? '',
-      isAberto: safeBool(map['isAberto'], fallback: true), 
-      
-      dadosOperacionais: map['dadosOperacionais'] != null 
-          ? DadosOperacionais.fromMap(map['dadosOperacionais']) 
+      isAberto: safeBool(map['isAberto'], fallback: true),
+      dadosOperacionais: map['dadosOperacionais'] != null
+          ? DadosOperacionais.fromMap(map['dadosOperacionais'])
           : null,
-      endereco: map['endereco'] != null 
-          ? EnderecoLoja.fromMap(map['endereco']) 
+      endereco: map['endereco'] != null
+          ? EnderecoLoja.fromMap(map['endereco'])
           : null,
-      horarios: map['horarios'] != null 
-          ? HorariosLoja.fromMap(map['horarios']) 
+      horarios: map['horarios'] != null
+          ? HorariosLoja.fromMap(map['horarios'])
           : null,
     );
   }
@@ -107,8 +66,12 @@ class DadosOperacionais {
 
   factory DadosOperacionais.fromMap(Map<String, dynamic> map) {
     return DadosOperacionais(
-      avaliacaoMedia: num.tryParse(map['avaliacaoMedia']?.toString() ?? '0')?.toDouble() ?? 0.0,
-      taxaEntregaBase: num.tryParse(map['taxaEntregaBase']?.toString() ?? '0')?.toDouble() ?? 0.0,
+      avaliacaoMedia:
+          num.tryParse(map['avaliacaoMedia']?.toString() ?? '0')?.toDouble() ??
+              0.0,
+      taxaEntregaBase:
+          num.tryParse(map['taxaEntregaBase']?.toString() ?? '0')?.toDouble() ??
+              0.0,
       tempoEntregaMin: safeInt(map['tempoEntregaMin']),
       tempoEntregaMax: safeInt(map['tempoEntregaMax']),
       totalAvaliacoes: safeInt(map['totalAvaliacoes']),

@@ -9,6 +9,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/components/seta_voltar.dart';
 import 'package:nhac/globals/ui_utils.dart';
@@ -27,6 +28,7 @@ class VerificarEmailCadastro extends StatefulWidget {
 
 class _VerificarEmailCadastroState extends State<VerificarEmailCadastro> {
   final TextEditingController _codigoController = TextEditingController();
+  final FocusNode _codigoFocus = FocusNode();
 
   int _tempoRestante = 60;
   bool _podeReenviar = false;
@@ -63,6 +65,7 @@ class _VerificarEmailCadastroState extends State<VerificarEmailCadastro> {
     final authService = context.read<AuthService>();
     try {
       await authService.enviarCodigoCadastro(widget.email);
+      if (!mounted) return;
       _iniciarTimer();
       if (mounted) context.showSuccess('Código reenviado com sucesso!');
     } catch (e) {
@@ -88,7 +91,14 @@ class _VerificarEmailCadastroState extends State<VerificarEmailCadastro> {
       _codigoController.clear();
       localContext.showError(e.toString().replaceAll('Exception: ', ''));
     } finally {
-      if (mounted) setState(() => _validando = false);
+      if (mounted) {
+        setState(() => _validando = false);
+        if (_codigoController.text.isEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _codigoFocus.requestFocus();
+          });
+        }
+      }
     }
   }
 
@@ -96,6 +106,7 @@ class _VerificarEmailCadastroState extends State<VerificarEmailCadastro> {
   void dispose() {
     _timer?.cancel();
     _codigoController.dispose();
+    _codigoFocus.dispose();
     super.dispose();
   }
 
@@ -156,6 +167,11 @@ class _VerificarEmailCadastroState extends State<VerificarEmailCadastro> {
                 PinCodeTextField(
                   appContext: context,
                   controller: _codigoController,
+                  focusNode: _codigoFocus,
+                  // O State é o único responsável pelo descarte.
+                  autoDisposeControllers: false,
+                  autoDismissKeyboard: false,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                   length: 6,
                   autoFocus: true,
                   enabled: !_validando,

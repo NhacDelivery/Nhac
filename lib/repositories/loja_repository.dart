@@ -3,10 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/models/loja/lojas.dart';
 import 'package:nhac/services/api_client.dart';
+import 'package:nhac/models/entrega/frete_model.dart';
 import 'package:nhac/utils/safe_parse_helpers.dart';
 
 class LojaRepository {
-  final _dio = ApiClient().dio;
+  final Dio _dio;
+
+  LojaRepository({Dio? dio}) : _dio = dio ?? ApiClient().dio;
 
   Future<List<LojasModel>> buscarLojas({int page = 0, int size = 10}) async {
     try {
@@ -28,7 +31,8 @@ class LojaRepository {
       return LojasModel.fromMap(response.data);
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
-        debugPrint("Loja $lojaId não encontrada (404) — tratando como fechada.");
+        debugPrint(
+            "Loja $lojaId não encontrada (404) — tratando como fechada.");
         return null;
       }
       debugPrint("Erro de rede ao buscar loja $lojaId: $e");
@@ -38,7 +42,6 @@ class LojaRepository {
       rethrow;
     }
   }
-
 
   Future<List<LojasModel>> buscarLojasPorNome(String termo) async {
     final termoBusca = termo.trim();
@@ -56,7 +59,6 @@ class LojaRepository {
       throw mapException(e);
     }
   }
-
 
   Future<void> seguirLoja(String usuarioId, String lojaId) async {
     try {
@@ -98,7 +100,8 @@ class LojaRepository {
     }
   }
 
-  Future<List<LojasModel>> listarLojasFavoritas({int page = 0, int size = 10}) async {
+  Future<List<LojasModel>> listarLojasFavoritas(
+      {int page = 0, int size = 10}) async {
     try {
       final response = await _dio.get(
         '/favoritos',
@@ -111,7 +114,7 @@ class LojaRepository {
             id: map['lojaId'] ?? '',
             nome: map['lojaNome'] ?? '',
             imagemUrl: map['lojaImagemUrl'] ?? '',
-            descricao: '', 
+            descricao: '',
             categoria: '',
             dadosOperacionais: null,
             horarios: null,
@@ -120,6 +123,24 @@ class LojaRepository {
         }).toList();
       }
       return [];
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<FreteModel> calcularFrete(
+    String lojaId, {
+    required double lat,
+    required double lng,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/lojas/$lojaId/calcular-frete',
+        data: {'lat': lat, 'lng': lng},
+      );
+      return FreteModel.fromMap(
+        Map<String, dynamic>.from(response.data as Map),
+      );
     } catch (e) {
       throw mapException(e);
     }

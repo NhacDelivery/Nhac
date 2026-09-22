@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart'; 
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:nhac/components/product_card.dart';
 import 'package:nhac/models/produto/produtos.dart';
 import 'package:nhac/pages/produto_detalhes_page.dart';
@@ -18,6 +18,7 @@ class HomeProductSection extends StatelessWidget {
   final List<ProdutosModel> products;
   final VoidCallback? onSeeAll;
   final Map<String, bool> lojaAberta;
+
   /// Callback para animação fly-to-cart.
   final void Function(Offset origin, String imageUrl)? onFlyToCart;
 
@@ -80,52 +81,35 @@ class HomeProductSection extends StatelessWidget {
                             Navigator.push(
                               context,
                               PageRouteBuilder(
-                                pageBuilder: (context, animation, secondaryAnimation) => 
-                                    ProdutoDetalhesPage(produto: item),
-                                transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                                pageBuilder:
+                                    (context, animation, secondaryAnimation) =>
+                                        ProdutoDetalhesPage(produto: item),
+                                transitionsBuilder: (context, animation,
+                                    secondaryAnimation, child) {
                                   const begin = Offset(0.0, 1.0);
                                   const end = Offset.zero;
                                   const curve = Curves.easeOutCubic;
 
-                                  var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                                  var tween = Tween(begin: begin, end: end)
+                                      .chain(CurveTween(curve: curve));
 
                                   return SlideTransition(
                                     position: animation.drive(tween),
                                     child: child,
                                   );
                                 },
-                                transitionDuration: const Duration(milliseconds: 300),
+                                transitionDuration:
+                                    const Duration(milliseconds: 300),
                               ),
                             );
                           },
                           child: ProductCard(
-                              produto: item,
-                              lojaFechada: (lojaAberta[item.lojaId] ?? false) == false,
-                              onFlyToCart: onFlyToCart,
+                            produto: item,
+                            lojaFechada:
+                                (lojaAberta[item.lojaId] ?? false) == false,
+                            onFlyToCart: onFlyToCart,
                           ),
                         ),
-                          Positioned(
-                            top: 8.h,
-                            left: 8.w,
-                            child: Container(
-                              padding: EdgeInsets.symmetric(
-                                horizontal: 8.w,
-                                vertical: 3.h,
-                              ),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFF6961),
-                                borderRadius: BorderRadius.circular(50.r),
-                              ),
-                              child: Text(
-                                '${item.percentualDesconto}%',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 10.sp,
-                                ),
-                              ),
-                            ),
-                          ),
                       ],
                     );
                   },

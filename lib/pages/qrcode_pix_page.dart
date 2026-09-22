@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
@@ -7,7 +8,9 @@ import 'package:flutter/services.dart';
 
 import 'package:nhac/components/botoes/botao_largo_nhac.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
+import 'package:nhac/models/pedido/status_pedido.dart';
 import 'package:nhac/globals/ui_utils.dart';
+import 'package:nhac/services/pedido_status_socket_service.dart';
 
 class QrCodePixPage extends StatefulWidget {
   final String pixQrCode;
@@ -29,47 +32,56 @@ class QrCodePixPage extends StatefulWidget {
 
 class _QrCodePixPageState extends State<QrCodePixPage> {
   final PedidoRepository _pedidoRepository = PedidoRepository();
+  final PedidoStatusSocketService _statusSocket = PedidoStatusSocketService();
 
   Timer? _pollingTimer;
-  String _statusPedido = 'AGUARDANDO_PAGAMENTO';
+  StreamSubscription<StatusPedido>? _statusSubscription;
+  StatusPedido _statusPedido = StatusPedido.pendente;
+  bool _timeout = false;
   bool _pagamentoConfirmado = false;
   int _tentativas = 0;
   static const int _maxTentativas = 60; // 60 x 5s = 5 minutos
   static const Duration _intervaloPolling = Duration(seconds: 5);
 
-  // Status que indicam que o pagamento foi processado com sucesso
-  static const _statusSucesso = {
-    'PAGO',
-    'CONFIRMADO',
-    'APROVADO',
-    'EM_PREPARO',
-    'PREPARANDO',
-    'SAIU_PARA_ENTREGA',
-    'ENTREGUE',
-  };
-
-  // Status que indicam falha/cancelamento
-  static const _statusFalha = {
-    'CANCELADO',
-    'RECUSADO',
-    'EXPIRADO',
-    'FALHOU',
-  };
-
   @override
   void initState() {
     super.initState();
     _iniciarPolling();
+    _conectarStatus();
   }
 
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _statusSubscription?.cancel();
+    _statusSocket.dispose();
     super.dispose();
   }
 
+  Future<void> _conectarStatus() async {
+    _statusSubscription = _statusSocket.status.listen(_aplicarStatus);
+    await _statusSocket.conectar(widget.paymentId);
+  }
+
+  Future<void> _aplicarStatus(StatusPedido status) async {
+    if (!mounted || _pagamentoConfirmado) return;
+
+    setState(() => _statusPedido = status);
+
+    if (status.pagamentoConfirmado) {
+      _pollingTimer?.cancel();
+      setState(() => _pagamentoConfirmado = true);
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted) _navegarParaRastreio(sucesso: true);
+    } else if (status == StatusPedido.cancelado) {
+      _pollingTimer?.cancel();
+      if (mounted) context.showError('Pedido cancelado.');
+    }
+  }
+
   void _iniciarPolling() {
-    _pollingTimer = Timer.periodic(_intervaloPolling, (_) => _verificarStatus());
+    _pollingTimer =
+        Timer.periodic(_intervaloPolling, (_) => _verificarStatus());
   }
 
   bool _mostrarBotaoVerificarManual = false;
@@ -80,39 +92,23 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
     if (!manual) _tentativas++;
 
     try {
-      final pedido = await _pedidoRepository.buscarPedidoPorId(widget.paymentId);
+      final pedido =
+          await _pedidoRepository.buscarPedidoPorId(widget.paymentId);
       if (!mounted) return;
 
-      final status = pedido.status?.toUpperCase() ?? '';
+      final status = pedido.status;
 
       setState(() {
-        if (!status.startsWith('DESCONHECIDO_')) {
-          _statusPedido = status;
-        }
         if (_tentativas >= 6) {
           _mostrarBotaoVerificarManual = true;
         }
       });
 
-      if (_statusSucesso.contains(status)) {
-        _pollingTimer?.cancel();
-        setState(() => _pagamentoConfirmado = true);
+      await _aplicarStatus(status);
 
-        // Aguarda 2s para o usuario ver o feedback visual antes de navegar
-        await Future.delayed(const Duration(seconds: 2));
-        if (!mounted) return;
-        _navegarParaHome(sucesso: true);
-      } else if (_statusFalha.contains(status)) {
-        _pollingTimer?.cancel();
-        if (!mounted) return;
-        context.showError('Pagamento $status. Entre em contato com o suporte.');
-      } else if (status != 'AGUARDANDO_PAGAMENTO' && status != 'PENDENTE' && status.isNotEmpty) {
-        _pollingTimer?.cancel();
+      if (status == StatusPedido.desconhecido) {
         if (mounted) {
-           setState(() {
-             _statusPedido = 'DESCONHECIDO_$status';
-             _mostrarBotaoVerificarManual = true;
-           });
+          setState(() => _mostrarBotaoVerificarManual = true);
         }
       }
     } catch (e) {
@@ -124,16 +120,17 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
       _pollingTimer?.cancel();
       if (!mounted) return;
       setState(() {
-        _statusPedido = 'TIMEOUT';
+        _timeout = true;
       });
     }
   }
 
-  void _navegarParaHome({bool sucesso = false}) {
+  void _navegarParaRastreio({bool sucesso = false}) {
     if (sucesso) {
-      context.showSuccess('Pagamento PIX confirmado! Seu pedido esta sendo preparado.');
+      context.showSuccess(
+          'Pagamento PIX confirmado! Seu pedido está sendo preparado.');
     }
-    context.go('/home-page');
+    context.go('/rastreio?pedidoId=${widget.paymentId}');
   }
 
   Widget _buildStatusIndicator() {
@@ -163,7 +160,7 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
       );
     }
 
-    if (_statusPedido == 'TIMEOUT') {
+    if (_timeout) {
       return Container(
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
         decoration: BoxDecoration(
@@ -176,7 +173,8 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.timer_off, color: Colors.orange.shade700, size: 24.r),
+                Icon(Icons.timer_off,
+                    color: Colors.orange.shade700, size: 24.r),
                 SizedBox(width: 8.w),
                 Text(
                   'Tempo de verificacao esgotado',
@@ -199,7 +197,7 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
       );
     }
 
-    if (_statusFalha.contains(_statusPedido)) {
+    if (_statusPedido == StatusPedido.cancelado) {
       return Container(
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
         decoration: BoxDecoration(
@@ -213,7 +211,7 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
             Icon(Icons.error_outline, color: Colors.red.shade700, size: 24.r),
             SizedBox(width: 8.w),
             Text(
-              'Pagamento $_statusPedido',
+              _statusPedido.label,
               style: TextStyle(
                 fontSize: 14.sp,
                 fontWeight: FontWeight.bold,
@@ -225,8 +223,8 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
       );
     }
 
-    if (_statusPedido.startsWith('DESCONHECIDO_')) {
-      final realStatus = _statusPedido.replaceFirst('DESCONHECIDO_', '');
+    if (_statusPedido == StatusPedido.desconhecido) {
+      const realStatus = 'DESCONHECIDO';
       return Container(
         padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
         decoration: BoxDecoration(
@@ -239,7 +237,8 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.info_outline, color: Colors.blue.shade700, size: 24.r),
+                Icon(Icons.info_outline,
+                    color: Colors.blue.shade700, size: 24.r),
                 SizedBox(width: 8.w),
                 Text(
                   'Status: $realStatus',
@@ -297,11 +296,16 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
         if (_mostrarBotaoVerificarManual) ...[
           SizedBox(height: 16.h),
           TextButton.icon(
-            onPressed: () => _verificarStatus(manual: true),
-            icon: Icon(Icons.refresh, color: const Color(0xFFFF6961), size: 20.r),
+            onPressed: () {
+              setState(() => _timeout = false);
+              _verificarStatus(manual: true);
+            },
+            icon:
+                Icon(Icons.refresh, color: const Color(0xFFFF6961), size: 20.r),
             label: Text(
               'Já paguei, verificar pedido',
-              style: TextStyle(color: const Color(0xFFFF6961), fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  color: const Color(0xFFFF6961), fontWeight: FontWeight.bold),
             ),
           ),
         ],
@@ -409,16 +413,13 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
               if (_pagamentoConfirmado)
                 BotaoLargoNhac(
                   texto: 'Voltar ao Inicio',
-                  onPressed: () => _navegarParaHome(sucesso: true),
+                  onPressed: () => _navegarParaRastreio(sucesso: true),
                 )
               else
                 BotaoLargoNhac(
-                  texto: _statusPedido == 'TIMEOUT'
-                      ? 'Voltar ao Inicio'
-                      : 'Aguardando pagamento...',
-                  onPressed: _statusPedido == 'TIMEOUT'
-                      ? () => _navegarParaHome()
-                      : null, // Desabilitado enquanto aguarda
+                  texto:
+                      _timeout ? 'Voltar ao Inicio' : 'Aguardando pagamento...',
+                  onPressed: _timeout ? () => _navegarParaRastreio() : null,
                 ),
               SizedBox(height: 16.h),
               OutlinedButton(
@@ -437,14 +438,15 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
                 ),
               ),
               SizedBox(height: 16.h),
-              TextButton(
-                onPressed: () {
-                  _pollingTimer?.cancel();
-                  setState(() => _pagamentoConfirmado = true);
-                  _navegarParaHome(sucesso: true);
-                },
-                child: const Text('Simular Pagamento (Dev)'),
-              ),
+              if (kDebugMode)
+                TextButton(
+                  onPressed: () {
+                    _pollingTimer?.cancel();
+                    setState(() => _pagamentoConfirmado = true);
+                    _navegarParaRastreio(sucesso: true);
+                  },
+                  child: const Text('Simular Pagamento (Dev)'),
+                ),
             ],
           ),
         ),

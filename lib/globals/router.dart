@@ -293,7 +293,7 @@ final GoRouter appRouter = GoRouter(
       path: '/cupons',
       pageBuilder: (context, state) => _buildSlideRightToLeftPage(
         key: state.pageKey,
-        child: const CuponsPage(),
+        child: CuponsPage(subtotal: (state.extra as num?)?.toDouble()),
       ),
     ),
     GoRoute(

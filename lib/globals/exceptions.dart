@@ -30,7 +30,8 @@ class CustomCheckoutException extends AppException {
     required this.title,
     this.produtoId,
     this.suggestions,
-  }) : super(message);
+    String? code,
+  }) : super(message, code: code);
 }
 
 Exception mapException(Object error) {
@@ -42,20 +43,23 @@ Exception mapException(Object error) {
     if (error.response?.data != null && error.response!.data is Map) {
       final data = error.response!.data as Map;
       if (data.containsKey('message')) {
-        return AppException(data['message'].toString());
+        return AppException(
+          data['message'].toString(),
+          code: data['error']?.toString(),
+        );
       }
     }
-    
+
     if (error.response?.statusCode == 401) {
       return AuthException('Sessão expirada. Faça login novamente.');
     }
-    
-    if (error.type == DioExceptionType.connectionTimeout || 
+
+    if (error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.receiveTimeout ||
         error.type == DioExceptionType.connectionError) {
       return NetworkException('Sem conexão com a internet.');
     }
-    
+
     if (error.type == DioExceptionType.cancel) {
       return NetworkException('Tempo esgotado. Tente novamente.');
     }
@@ -68,16 +72,26 @@ Exception mapException(Object error) {
 
   if (error is FirebaseAuthException) {
     switch (error.code) {
-      case 'user-not-found': return AuthException('Usuário não encontrado.');
-      case 'wrong-password': return AuthException('Senha incorreta.');
-      case 'email-already-in-use': return AuthException('Este e-mail já está em uso por outra conta.');
-      case 'invalid-email': return AuthException('E-mail inválido.');
-      case 'weak-password': return AuthException('A senha deve ter no mínimo 6 caracteres.');
-      case 'user-disabled': return AuthException('Esta conta foi desativada.');
-      case 'operation-not-allowed': return AuthException('Operação não permitida pelo servidor.');
-      case 'account-exists-with-different-credential': return AuthException('Este e-mail já está associado a outra conta.');
-      case 'invalid-credential': return AuthException('Credenciais inválidas. Tente novamente.');
-      default: return AuthException(error.message ?? 'Erro de autenticação.');
+      case 'user-not-found':
+        return AuthException('Usuário não encontrado.');
+      case 'wrong-password':
+        return AuthException('Senha incorreta.');
+      case 'email-already-in-use':
+        return AuthException('Este e-mail já está em uso por outra conta.');
+      case 'invalid-email':
+        return AuthException('E-mail inválido.');
+      case 'weak-password':
+        return AuthException('A senha deve ter no mínimo 6 caracteres.');
+      case 'user-disabled':
+        return AuthException('Esta conta foi desativada.');
+      case 'operation-not-allowed':
+        return AuthException('Operação não permitida pelo servidor.');
+      case 'account-exists-with-different-credential':
+        return AuthException('Este e-mail já está associado a outra conta.');
+      case 'invalid-credential':
+        return AuthException('Credenciais inválidas. Tente novamente.');
+      default:
+        return AuthException(error.message ?? 'Erro de autenticação.');
     }
   }
 

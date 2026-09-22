@@ -1,6 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:nhac/services/auth_service.dart';
 
 class CadastroController extends ChangeNotifier {
+  final AuthService? _authService;
+  String? _sessionUserId;
+
+  CadastroController({AuthService? authService}) : _authService = authService {
+    _sessionUserId = authService?.usuarioId;
+    authService?.addListener(_onSessionChanged);
+  }
+
+  void _onSessionChanged() {
+    if (_sessionUserId == _authService?.usuarioId) return;
+    _sessionUserId = _authService?.usuarioId;
+    limparDados();
+  }
+
+  @override
+  void dispose() {
+    _authService?.removeListener(_onSessionChanged);
+    super.dispose();
+  }
+
   String _email = '';
   String _nome = '';
   String _telefone = '';

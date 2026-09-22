@@ -14,7 +14,30 @@ class UserProvider with ChangeNotifier {
 
   UserProvider({AuthService? authService, UserRepository? repository})
       : _authService = authService ?? authServiceRoteador,
-        _userRepository = repository ?? UserRepository();
+        _userRepository = repository ?? UserRepository() {
+    _sessionUserId = _authService.usuarioId;
+    _authService.addListener(_onSessionChanged);
+  }
+
+  String? _sessionUserId;
+  int _sessionVersion = 0;
+  bool _disposed = false;
+
+  void _onSessionChanged() {
+    if (_sessionUserId == _authService.usuarioId) return;
+    _sessionUserId = _authService.usuarioId;
+    _sessionVersion++;
+    _usuario = null;
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _authService.removeListener(_onSessionChanged);
+    super.dispose();
+  }
 
   UsuarioModel? _usuario;
   bool _isLoading = false;
@@ -31,16 +54,21 @@ class UserProvider with ChangeNotifier {
     final usuarioId = _authService.usuarioId;
     if (usuarioId == null) return;
 
+    final sessionVersion = _sessionVersion;
     try {
       _isLoading = true;
       notifyListeners();
 
-      _usuario = await _userRepository.buscarUsuario(usuarioId);
+      final resultado = await _userRepository.buscarUsuario(usuarioId);
+      if (_disposed || sessionVersion != _sessionVersion) return;
+      _usuario = resultado;
     } catch (e) {
       debugPrint("Erro ao carregar dados do utilizador: $e");
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!_disposed && sessionVersion == _sessionVersion) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 

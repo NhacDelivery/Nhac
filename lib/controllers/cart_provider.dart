@@ -1,12 +1,40 @@
 import 'package:flutter/material.dart';
+import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/models/usuario/carrinho_model.dart';
 import 'package:nhac/repositories/cart_repository.dart';
 
 class CartProvider extends ChangeNotifier {
-  final CartRepository _cartRepository;
+  final CartRepository? _repositoryOverride;
+  final AuthService? _authService;
+  String? _sessionUserId;
+  int _sessionVersion = 0;
+  bool _disposed = false;
 
-  CartProvider({CartRepository? repository})
-      : _cartRepository = repository ?? CartRepository();
+  CartRepository get _cartRepository => _repositoryOverride ??
+      CartRepository(usuarioId: _sessionUserId);
+
+  CartProvider({CartRepository? repository, AuthService? authService})
+      : _repositoryOverride = repository, _authService = authService {
+    _sessionUserId = authService?.usuarioId;
+    authService?.addListener(_onSessionChanged);
+  }
+
+  void _onSessionChanged() {
+    if (_sessionUserId == _authService?.usuarioId) return;
+    _sessionUserId = _authService?.usuarioId;
+    _sessionVersion++;
+    _itens = {};
+    _observacao = '';
+    _lojaIdAtual = '';
+    _recalcularTotais();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _authService?.removeListener(_onSessionChanged);
+    super.dispose();
+  }
 
   Map<String, CartItemModel> _itens = {};
   double _valorTotal = 0.0;
@@ -22,8 +50,11 @@ class CartProvider extends ChangeNotifier {
   String get lojaId => _lojaIdAtual;   
 
   Future<void> carregarCarrinhoLocal() async {
+    final sessionVersion = _sessionVersion;
     final listaSalva = await _cartRepository.carregarCarrinhoLocal();
+    if (_disposed || sessionVersion != _sessionVersion) return;
     _itens = {for (var item in listaSalva) item.produtoId: item};
+    _lojaIdAtual = '';
     if (_itens.isNotEmpty) {
       _lojaIdAtual = _itens.values.first.lojaId;  
     }
