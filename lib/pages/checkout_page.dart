@@ -430,30 +430,102 @@ class _CheckoutPageState extends State<CheckoutPage> {
               ),
             ],
             SizedBox(height: 24.h),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.local_offer_outlined),
-              title: Text(_cupom == null ? 'Adicionar cupom' : _cupom!.titulo),
-              subtitle: _cupom == null ? null : Text(
-                _subtotalValidado == subtotal
-                    ? 'Desconto de ${currencyFormat.format(desconto)}'
-                    : 'Carrinho alterado. Selecione o cupom novamente.',
-              ),
-              onTap: _isSubmitting ? null : () async {
-                final cupom = await context.push<CupomModel>('/cupons', extra: subtotal);
-                if (!mounted || cupom == null) return;
-                setState(() {
-                  _cupom = cupom;
-                  _subtotalValidado = subtotal;
-                });
-              },
-              trailing: _cupom == null ? const Icon(Icons.chevron_right) : IconButton(
-                tooltip: 'Remover cupom',
-                onPressed: _isSubmitting ? null : () => setState(() {
-                  _cupom = null;
-                  _subtotalValidado = null;
-                }),
-                icon: const Icon(Icons.close),
+            InkWell(
+              onTap: _isSubmitting
+                  ? null
+                  : () async {
+                      final cupom = await context.push<CupomModel>(
+                        '/cupons',
+                        extra: subtotal,
+                      );
+                      if (!mounted || cupom == null) return;
+                      setState(() {
+                        _cupom = cupom;
+                        _subtotalValidado = subtotal;
+                      });
+                    },
+              borderRadius: BorderRadius.circular(18.r),
+              child: Container(
+                padding: EdgeInsets.all(16.w),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18.r),
+                  border: Border.all(
+                    color: const Color(0xFFFF6961).withValues(alpha: 0.14),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF5D201C).withValues(alpha: 0.05),
+                      blurRadius: 16,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44.r,
+                      height: 44.r,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6961).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14.r),
+                      ),
+                      child: Icon(
+                        Icons.local_offer_rounded,
+                        color: const Color(0xFFFF6961),
+                        size: 22.r,
+                      ),
+                    ),
+                    SizedBox(width: 12.w),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _cupom == null ? 'Adicionar cupom' : _cupom!.titulo,
+                            style: TextStyle(
+                              fontSize: 15.sp,
+                              fontWeight: FontWeight.w800,
+                              color: const Color(0xFF5D201C),
+                            ),
+                          ),
+                          SizedBox(height: 4.h),
+                          Text(
+                            _cupom == null
+                                ? 'Veja seus cupons e economize neste pedido'
+                                : (_subtotalValidado == subtotal
+                                    ? 'Desconto de ${currencyFormat.format(desconto)} aplicado'
+                                    : 'Carrinho alterado. Selecione o cupom novamente.'),
+                            style: TextStyle(
+                              fontSize: 12.sp,
+                              color: const Color(0xFF5D201C)
+                                  .withValues(alpha: 0.58),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (_cupom == null)
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: const Color(0xFF5D201C).withValues(alpha: 0.45),
+                      )
+                    else
+                      IconButton(
+                        tooltip: 'Remover cupom',
+                        onPressed: _isSubmitting
+                            ? null
+                            : () => setState(() {
+                                  _cupom = null;
+                                  _subtotalValidado = null;
+                                }),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Color(0xFFFF6961),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
             SizedBox(height: 16.h),
