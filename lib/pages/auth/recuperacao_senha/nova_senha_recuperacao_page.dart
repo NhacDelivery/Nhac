@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/components/botoes/botao_largo_nhac.dart';
 import 'package:nhac/components/seta_voltar.dart';
@@ -92,19 +93,36 @@ class _NovaSenhaRecuperacaoPageState extends State<NovaSenhaRecuperacaoPage> {
       controller: controller,
       obscureText: !visivel,
       style: const TextStyle(
-        fontSize: 18.0,
+        fontSize: 16.0,
         color: Color(0xFF5D201C),
-        fontWeight: FontWeight.w500,
-        letterSpacing: 2.0,
+        fontWeight: FontWeight.w800,
       ),
       decoration: InputDecoration(
         labelText: label,
+        labelStyle: const TextStyle(color: Color(0x995D201C)),
+        prefixIcon: const Icon(Icons.lock_outline_rounded, color: Color(0xFFFF6961)),
         suffixIcon: IconButton(
-          icon: Icon(visivel ? Icons.visibility : Icons.visibility_off, color: const Color(0xFFFF6961)),
+          icon: Icon(
+            visivel ? Icons.visibility_rounded : Icons.visibility_off_rounded,
+            color: const Color(0xFFFF6961),
+          ),
           onPressed: toggle,
         ),
-        enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.grey)),
-        focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Color(0xFFFF6961), width: 2)),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: const Color(0xFFFF6961).withValues(alpha: 0.12)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFFFF6961), width: 1.6),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Colors.redAccent),
+        ),
       ),
     );
   }
@@ -129,7 +147,7 @@ class _NovaSenhaRecuperacaoPageState extends State<NovaSenhaRecuperacaoPage> {
                       const SetaVoltar(),
                       const SizedBox(height: 24.0),
                       const Text(
-                        'Nova Senha',
+                        'Nova senha',
                         style: TextStyle(
                           fontSize: 28.0,
                           color: Color(0xFF5D201C),
@@ -139,17 +157,17 @@ class _NovaSenhaRecuperacaoPageState extends State<NovaSenhaRecuperacaoPage> {
                       ),
                       const SizedBox(height: 8.0),
                       const Text(
-                        'Crie uma nova senha segura para sua conta.',
+                        'Proteja sua conta com uma senha nova e segura.',
                         style: TextStyle(
                           fontSize: 16.0,
-                          color: Color(0xFFC9BCBC),
+                          color: Color(0x995D201C),
                           fontFamily: 'Roboto',
                         ),
                       ),
                       const SizedBox(height: 32.0),
                       _buildPasswordField('Nova Senha', _senhaController, _senhaVisivel, () => setState(() => _senhaVisivel = !_senhaVisivel)),
                       const SizedBox(height: 16.0),
-                      _buildPasswordField('Confirmar Nova Senha', _confirmaController, _confirmaVisivel, () => setState(() => _confirmaVisivel = !_confirmaVisivel)),
+                      _buildPasswordField('Confirmar nova senha', _confirmaController, _confirmaVisivel, () => setState(() => _confirmaVisivel = !_confirmaVisivel)),
                       if (_erro != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 16.0),
@@ -160,7 +178,7 @@ class _NovaSenhaRecuperacaoPageState extends State<NovaSenhaRecuperacaoPage> {
                 ),
               ),
               BotaoLargoNhac(
-                texto: 'Redefinir Senha',
+                texto: 'Redefinir senha',
                 onPressed: _valido ? _redefinirSenha : null,
                 carregando: _isLoading,
               ),

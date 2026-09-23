@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:nhac/components/seta_voltar.dart';
@@ -87,19 +88,53 @@ class _CuponsPageState extends State<CuponsPage> {
     return Scaffold(
       backgroundColor: const Color(0xFFFFE7E5),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(24),
+        child: RefreshIndicator(
+          color: const Color(0xFFFF6961),
+          onRefresh: _carregar,
+          child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+          padding: EdgeInsets.fromLTRB(20.w, 16.h, 20.w, 32.h),
           children: [
             const Align(alignment: Alignment.centerLeft, child: SetaVoltar()),
             const SizedBox(height: 24),
-            const Text('Meus cupons', style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+            const Text('Meus cupons', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Color(0xFF5D201C))),
             const SizedBox(height: 12),
-            const Text('Receba seu cupom de boas-vindas uma vez por conta e aplique no checkout. O desconto vale para os produtos, sem incluir a entrega.'),
+            Text(
+              widget.subtotal == null
+                  ? 'Confira seus benefícios e use um cupom na próxima compra.'
+                  : 'Escolha um cupom disponível para aplicar neste pedido.',
+              style: const TextStyle(color: Color(0x995D201C), height: 1.45),
+            ),
             const SizedBox(height: 16),
             if (!_carregando && _erro == null && _cupons.isEmpty)
-              ElevatedButton(
-                onPressed: _ocupado ? null : _ganhar,
-                child: Text(_ocupado ? 'Resgatando...' : 'Ganhar cupom de boas-vindas'),
+              Container(
+                padding: EdgeInsets.all(20.w),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20.r),
+                  border: Border.all(color: const Color(0xFFFF6961).withValues(alpha: 0.12)),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.local_offer_outlined, size: 36.r, color: const Color(0xFFFF6961)),
+                    SizedBox(height: 10.h),
+                    const Text('Nenhum cupom por aqui', style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF5D201C))),
+                    SizedBox(height: 14.h),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: _ocupado ? null : _ganhar,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFFF6961),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
+                        ),
+                        child: Text(_ocupado ? 'Resgatando...' : 'Ganhar cupom de boas-vindas'),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             if (_carregando) const Center(child: CircularProgressIndicator()),
             if (_erro != null) ...[
@@ -107,26 +142,55 @@ class _CuponsPageState extends State<CuponsPage> {
               TextButton(onPressed: _carregar, child: const Text('Tentar novamente')),
             ],
             for (final cupom in _cupons)
-              Card(
+              Container(
+                margin: EdgeInsets.only(bottom: 14.h),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20.r),
+                  border: Border.all(color: const Color(0xFFFF6961).withValues(alpha: 0.14)),
+                  boxShadow: [BoxShadow(color: const Color(0xFF5D201C).withValues(alpha: 0.05), blurRadius: 16, offset: const Offset(0, 8))],
+                ),
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(18.w),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(cupom.titulo, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      Row(
+                        children: [
+                          Container(
+                            width: 42.r,
+                            height: 42.r,
+                            decoration: BoxDecoration(color: const Color(0xFFFF6961).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(13.r)),
+                            child: Icon(Icons.local_offer_rounded, color: const Color(0xFFFF6961), size: 22.r),
+                          ),
+                          SizedBox(width: 12.w),
+                          Expanded(child: Text(cupom.titulo, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF5D201C)))),
+                        ],
+                      ),
+                      SizedBox(height: 12.h),
                       Text('${_moeda.format(cupom.desconto)} de desconto em produtos a partir de ${_moeda.format(cupom.usoMinimo)}'),
                       Text(_validade(cupom)),
                       Text(cupom.status == 'USADO' ? 'Usado' : cupom.status == 'EXPIRADO' ? 'Expirado' : 'Disponível'),
                       if (cupom.status == 'DISPONIVEL')
-                        TextButton(
-                          onPressed: _ocupado ? null : () => _usar(cupom),
-                          child: Text(widget.subtotal == null ? 'Como usar' : 'Aplicar cupom'),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: _ocupado ? null : () => _usar(cupom),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFFF6961),
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14.r)),
+                            ),
+                            child: Text(widget.subtotal == null ? 'Como usar' : 'Aplicar cupom'),
+                          ),
                         ),
                     ],
                   ),
                 ),
               ),
           ],
+        ),
         ),
       ),
     );

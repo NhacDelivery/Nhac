@@ -28,6 +28,25 @@ class ChatSocketService {
   final _mensagensController = StreamController<MensagemChat>.broadcast();
   final _errosController = StreamController<String>.broadcast();
   final _conectadoController = StreamController<bool>.broadcast();
+  bool _disposed = false;
+
+  void _emitMensagem(MensagemChat mensagem) {
+    if (!_disposed && !_mensagensController.isClosed) {
+      _mensagensController.add(mensagem);
+    }
+  }
+
+  void _emitErro(String erro) {
+    if (!_disposed && !_errosController.isClosed) {
+      _errosController.add(erro);
+    }
+  }
+
+  void _emitConectado(bool conectado) {
+    if (!_disposed && !_conectadoController.isClosed) {
+      _conectadoController.add(conectado);
+    }
+  }
 
   /// Mensagens novas da conversa assinada.
   Stream<MensagemChat> get mensagens => _mensagensController.stream;
@@ -49,12 +68,12 @@ class ChatSocketService {
   }
 
   Future<void> conectar(String conversaId) async {
-    if (_client != null) return;
+    if (_disposed || _client != null) return;
     _conversaId = conversaId;
 
     final token = await SessionStorageService().obterToken();
     if (token == null || token.isEmpty) {
-      _errosController.add('Sessão expirada. Entre novamente para conversar.');
+      _emitErro('Sessão expirada. Entre novamente para conversar.');
       return;
     }
 
@@ -74,16 +93,16 @@ class ChatSocketService {
         onConnect: _aoConectar,
         onWebSocketError: (dynamic erro) {
           debugPrint('💬 [CHAT WS] erro: $erro');
-          _conectadoController.add(false);
+          _emitConectado(false);
         },
         onStompError: (StompFrame frame) {
           debugPrint('💬 [CHAT STOMP] erro: ${frame.body}');
-          _errosController.add(
+          _emitErro(
             frame.body?.isNotEmpty == true
                 ? frame.body!
                 : 'Não foi possível conectar ao chat.',
           );
-          _conectadoController.add(false);
+          _emitConectado(false);
         },
         onDisconnect: (_) => _conectadoController.add(false),
       ),
@@ -96,7 +115,7 @@ class ChatSocketService {
     final conversaId = _conversaId;
     if (conversaId == null) return;
 
-    _conectadoController.add(true);
+    _emitConectado(true);
 
     _client!.subscribe(
       destination: '/topic/conversas/$conversaId',
@@ -104,7 +123,7 @@ class ChatSocketService {
         if (mensagem.body == null || mensagem.body!.isEmpty) return;
         try {
           final mapa = jsonDecode(mensagem.body!) as Map<String, dynamic>;
-          _mensagensController.add(MensagemChat.fromMap(mapa));
+          _emitMensagem(MensagemChat.fromMap(mapa));
         } catch (e) {
           debugPrint('💬 [CHAT WS] payload inválido: $e');
         }
@@ -117,10 +136,10 @@ class ChatSocketService {
         if (erro.body == null) return;
         try {
           final mapa = jsonDecode(erro.body!) as Map<String, dynamic>;
-          _errosController.add(
+          _emitErro(
               (mapa['erro'] ?? 'Não foi possível enviar a mensagem.').toString());
         } catch (_) {
-          _errosController.add('Não foi possível enviar a mensagem.');
+          _emitErro('Não foi possível enviar a mensagem.');
         }
       },
     );
@@ -142,13 +161,21 @@ class ChatSocketService {
   }
 
   Future<void> desconectar() async {
-    _client?.deactivate();
+    final client = _client;
     _client = null;
     _conversaId = null;
+    client?.deactivate();
   }
 
   void dispose() {
-    desconectar();
+    if (_disposed) return;
+    _disposed = true;
+
+    final client = _client;
+    _client = null;
+    _conversaId = null;
+    client?.deactivate();
+
     _mensagensController.close();
     _errosController.close();
     _conectadoController.close();

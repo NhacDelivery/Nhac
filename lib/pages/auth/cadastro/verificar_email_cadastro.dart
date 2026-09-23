@@ -88,8 +88,12 @@ class _VerificarEmailCadastroState extends State<VerificarEmailCadastro> {
       localContext.push('/cadastro/nome');
     } catch (e) {
       if (!localContext.mounted) return;
+      final mensagem = e.toString().replaceAll('Exception: ', '');
+      localContext.showError(mensagem);
       _codigoController.clear();
-      localContext.showError(e.toString().replaceAll('Exception: ', ''));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _codigoFocus.requestFocus();
+      });
     } finally {
       if (mounted) {
         setState(() => _validando = false);
