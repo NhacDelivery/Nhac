@@ -110,6 +110,9 @@ jobs:
         working-directory: Nhac
         run: flutter pub get
 
+      - name: Habilitar aceleracao do emulador
+        run: sudo chmod 666 /dev/kvm
+
       - name: Executar E2E Android isolado
         uses: ReactiveCircus/android-emulator-runner@v2
         env:
