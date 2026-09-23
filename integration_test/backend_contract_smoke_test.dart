@@ -12,7 +12,7 @@ void main() {
   const e2eToken = String.fromEnvironment('E2E_TOKEN', defaultValue: '');
 
   testWidgets('backend responde catálogo no contrato /api/v1/lojas', (_) async {
-    E2EConfig.validate();
+    await E2EConfig.validate();
     final dio = Dio(BaseOptions(baseUrl: AppConstants.apiBaseUrl));
     final response = await dio.get(
       '/lojas',
@@ -27,7 +27,7 @@ void main() {
   testWidgets(
     'token E2E acessa histórico pelo contrato canônico GET /pedidos',
     (_) async {
-      E2EConfig.validate();
+      await E2EConfig.validate();
       final dio = Dio(
         BaseOptions(
           baseUrl: AppConstants.apiBaseUrl,
