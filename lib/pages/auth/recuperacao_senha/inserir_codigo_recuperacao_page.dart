@@ -91,10 +91,12 @@ class _InserirCodigoRecuperacaoPageState extends State<InserirCodigoRecuperacaoP
       await authService.validarCodigoRecuperacaoEmail(widget.contato, codigo);
     } catch (e) {
       if (!mounted) return;
+      final mensagem = e.toString().replaceAll('Exception: ', '');
+      context.showError(mensagem);
       _codigoController.clear();
       setState(() {
         _validando = false;
-        _erroCodigo = e.toString().replaceAll('Exception: ', '');
+        _erroCodigo = null;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _codigoFocus.requestFocus();
