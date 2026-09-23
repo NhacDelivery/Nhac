@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:nhac/components/seta_voltar.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:nhac/components/botoes/botao_nhac.dart';
 
 class FeedPostDetailPage extends StatefulWidget {
   final FeedPostModel post;
@@ -109,11 +110,11 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
           type: MaterialType.transparency,
           child: Container(
             color: Colors.white,
-            child: Column(
+            child: Stack(
               children: [
-          // Scrollable content
-          Expanded(
-            child: CustomScrollView(
+                // Scrollable content
+                Positioned.fill(
+                  child: CustomScrollView(
               slivers: [
                 // ── AppBar ─────────────────────────────────
                 SliverAppBar(
@@ -137,7 +138,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15.sp,
-                                color: const Color(0xFF1A1A1A),
+                                color: const Color(0xFF5D201C),
                               ),
                             ),
                             if (post.badge != null)
@@ -195,6 +196,8 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildRichText(post.conteudo, post.hashTags),
+                        if (post.mentionedStore != null)
+                          _buildMentionedStore(post.mentionedStore!),
                         SizedBox(height: 16.h),
 
                         // Actions row (like, comment, share)
@@ -298,69 +301,98 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                   ),
                 ),
 
-                SliverToBoxAdapter(child: SizedBox(height: 24.h)),
+                SliverToBoxAdapter(child: SizedBox(height: 100.h + bottomPadding)),
               ],
             ),
           ),
 
-          // ── Bottom Comment Input ───────────────────────
-          Container(
-            padding: EdgeInsets.fromLTRB(
-                16.w, 10.h, 16.w, 10.h + bottomPadding),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                top: BorderSide(color: Colors.grey.shade200, width: 0.5),
-              ),
-            ),
+          // ── Bottom Floating Bar ───────────────────────
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              padding: EdgeInsets.fromLTRB(16.w, 10.h, 16.w, 10.h + bottomPadding),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                // Left Pill (Input)
                 Expanded(
                   child: Container(
+                    height: 52.h,
                     padding: EdgeInsets.symmetric(horizontal: 16.w),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF5F5F5),
-                      borderRadius: BorderRadius.circular(24.r),
-                    ),
-                    child: TextField(
-                      controller: _commentController,
-                      focusNode: _commentFocus,
-                      style: TextStyle(fontSize: 14.sp),
-                      decoration: InputDecoration(
-                        hintText: 'Escreva um comentário...',
-                        hintStyle: TextStyle(
-                          color: Colors.grey.shade400,
-                          fontSize: 14.sp,
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(26.r),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2),
                         ),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 10.h),
-                      ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_outlined, size: 20.r, color: const Color(0xFFFF6961)),
+                        SizedBox(width: 8.w),
+                        Expanded(
+                          child: TextField(
+                            controller: _commentController,
+                            focusNode: _commentFocus,
+                            style: TextStyle(fontSize: 14.sp),
+                            decoration: InputDecoration(
+                              hintText: 'Escreva...',
+                              hintStyle: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 14.sp,
+                              ),
+                              border: InputBorder.none,
+                            ),
+                            onSubmitted: (_) {
+                              if (_commentController.text.trim().isNotEmpty) {
+                                _commentController.clear();
+                                _commentFocus.unfocus();
+                              }
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                SizedBox(width: 10.w),
-                GestureDetector(
-                  onTap: () {
-                    if (_commentController.text.trim().isNotEmpty) {
-                      _commentController.clear();
-                      _commentFocus.unfocus();
-                    }
-                  },
-                  child: Container(
-                    padding: EdgeInsets.all(10.w),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFF6961),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.send_rounded,
-                      color: Colors.white,
-                      size: 20.r,
-                    ),
+                SizedBox(width: 12.w),
+                // Right Pill (Actions)
+                Container(
+                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(26.r),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _buildFloatingAction(Icons.chat_bubble_outline, _formatCount(post.comentarios)),
+                      SizedBox(width: 16.w),
+                      _buildFloatingAction(Icons.thumb_up_alt_outlined, _formatCount(post.curtidas)),
+                      SizedBox(width: 16.w),
+                      _buildFloatingAction(Icons.star_border_rounded, '42'),
+                      SizedBox(width: 16.w),
+                      _buildFloatingAction(Icons.share_outlined, '36'),
+                    ],
                   ),
                 ),
               ],
             ),
+          ),
           ),
         ],
       ),
@@ -430,7 +462,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 13.sp,
-                        color: const Color(0xFF1A1A1A),
+                        color: const Color(0xFF5D201C),
                       ),
                     ),
                     if (comment.isAuthor) ...[
@@ -529,7 +561,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
       spans.add(TextSpan(
         text: '$word ',
         style: TextStyle(
-          color: isHash ? const Color(0xFFFF6961) : const Color(0xFF1A1A1A),
+          color: isHash ? const Color(0xFFFF6961) : const Color(0xFF5D201C),
           fontWeight: isHash ? FontWeight.w600 : FontWeight.normal,
           fontSize: 15.sp,
           height: 1.6,
@@ -538,6 +570,124 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     }
 
     return RichText(text: TextSpan(children: spans));
+  }
+
+  Widget _buildMentionedStore(MentionedStoreModel store) {
+    return Container(
+      margin: EdgeInsets.only(top: 16.h),
+      padding: EdgeInsets.all(12.w),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFA),
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: Colors.grey.shade200, width: 1),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8.r),
+                child: CachedNetworkImage(
+                  imageUrl: store.imageUrl,
+                  width: 48.w,
+                  height: 48.w,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(color: Colors.grey.shade300),
+                  errorWidget: (_, __, ___) => Container(color: Colors.grey.shade300, child: const Icon(Icons.store)),
+                ),
+              ),
+              SizedBox(width: 10.w),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFE7E5),
+                            borderRadius: BorderRadius.circular(4.r),
+                            border: Border.all(color: const Color(0xFFFF6961)),
+                          ),
+                          child: Text(
+                            'Loja',
+                            style: TextStyle(fontSize: 10.sp, color: const Color(0xFFFF6961), fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        SizedBox(width: 6.w),
+                        Expanded(
+                          child: Text(
+                            store.nome,
+                            style: TextStyle(fontSize: 14.sp, fontWeight: FontWeight.bold, color: const Color(0xFF5D201C)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 6.h),
+                    Row(
+                      children: [
+                        Icon(Icons.local_fire_department_rounded, size: 14.r, color: Colors.orange),
+                        SizedBox(width: 4.w),
+                        Text(
+                          store.avaliacoes,
+                          style: TextStyle(fontSize: 11.sp, color: Colors.grey.shade600),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    store.rating.toStringAsFixed(1),
+                    style: TextStyle(fontSize: 18.sp, fontWeight: FontWeight.bold, color: const Color(0xFF5D201C)),
+                  ),
+                  Row(
+                    children: List.generate(5, (index) {
+                      return Icon(
+                        index < store.rating.floor() ? Icons.star_rounded : Icons.star_border_rounded,
+                        size: 12.r,
+                        color: Colors.amber,
+                      );
+                    }),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          SizedBox(height: 12.h),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () {},
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFFFF6961),
+                    side: const BorderSide(color: Color(0xFFFF6961)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.r)),
+                    padding: EdgeInsets.symmetric(vertical: 8.h),
+                  ),
+                  child: Text('Seguir', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600)),
+                ),
+              ),
+              SizedBox(width: 12.w),
+              Expanded(
+                child: BotaoNhac(
+                  label: 'Fazer Pedido',
+                  fontSize: 13.0,
+                  onPressed: () {},
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildActionChip({required IconData icon, required String label}) {
@@ -552,6 +702,21 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
             style: TextStyle(fontSize: 14.sp, color: Colors.grey.shade600),
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildFloatingAction(IconData icon, String count) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 22.r, color: const Color(0xFFFF6961)),
+        SizedBox(height: 2.h),
+        Text(
+          count,
+          style: TextStyle(fontSize: 10.sp, color: const Color(0xFF5D201C)),
+        ),
       ],
     );
   }

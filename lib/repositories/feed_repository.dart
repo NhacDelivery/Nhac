@@ -38,6 +38,12 @@ class FeedRepository {
         conteudo: 'Poderia mandar o link da loja?',
         curtidas: 15,
       ),
+      mentionedStore: MentionedStoreModel(
+        nome: 'Poke do Chef',
+        imageUrl: 'https://images.unsplash.com/photo-1548811579-017fb2a8f883?w=150&q=80',
+        rating: 9.2,
+        avaliacoes: '8.7 mil discussões',
+      ),
     ),
     FeedPostModel(
       id: '2',

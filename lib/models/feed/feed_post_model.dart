@@ -10,6 +10,20 @@ class TopCommentModel {
   });
 }
 
+class MentionedStoreModel {
+  final String nome;
+  final String imageUrl;
+  final double rating;
+  final String avaliacoes;
+
+  const MentionedStoreModel({
+    required this.nome,
+    required this.imageUrl,
+    required this.rating,
+    required this.avaliacoes,
+  });
+}
+
 class FeedPostModel {
   final String id;
   final String nomeUsuario;
@@ -24,6 +38,7 @@ class FeedPostModel {
   final bool isPatrocinado;
   final String? sponsorLabel;
   final TopCommentModel? topComment;
+  final MentionedStoreModel? mentionedStore;
 
   const FeedPostModel({
     required this.id,
@@ -39,5 +54,6 @@ class FeedPostModel {
     this.isPatrocinado = false,
     this.sponsorLabel,
     this.topComment,
+    this.mentionedStore,
   });
 }

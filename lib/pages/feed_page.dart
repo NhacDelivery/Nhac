@@ -306,7 +306,7 @@ class _FeedPageState extends State<FeedPage>
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14.sp,
-                            color: const Color(0xFF1A1A1A),
+                            color: const Color(0xFF5D201C),
                           ),
                         ),
                         if (post.badge != null) ...[
@@ -434,7 +434,7 @@ class _FeedPageState extends State<FeedPage>
                   TextSpan(
                     text: comment.conteudo,
                     style: TextStyle(
-                      color: const Color(0xFF1A1A1A),
+                      color: const Color(0xFF5D201C),
                       fontSize: 13.sp,
                       height: 1.4,
                     ),
@@ -509,7 +509,7 @@ class _FeedPageState extends State<FeedPage>
         style: TextStyle(
           color: isHash
               ? const Color(0xFFFF6961)
-              : const Color(0xFF1A1A1A),
+              : const Color(0xFF5D201C),
           fontWeight:
               isHash ? FontWeight.w600 : FontWeight.normal,
           fontSize: 14.sp,
