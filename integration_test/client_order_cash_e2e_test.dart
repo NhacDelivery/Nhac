@@ -17,7 +17,7 @@ void main() {
   testWidgets(
     'E2E-001..004 cliente cria pedido em dinheiro e abre o rastreio',
     (tester) async {
-      E2EConfig.validate();
+      await E2EConfig.validate();
       await app.main();
       await loginAsFixtureUser(tester);
 
