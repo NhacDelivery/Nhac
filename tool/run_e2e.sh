@@ -117,12 +117,12 @@ for execution in $(seq 1 "$REPEAT"); do
 
   {
     echo "Execução E2E $execution/$REPEAT"
-    "$FLUTTER_BIN" test integration_test/client_login_e2e_test.dart \
+    timeout --signal=INT --kill-after=30s 25m "$FLUTTER_BIN" test integration_test/client_login_e2e_test.dart \
       --device-id "$DEVICE_ID" \
       --dart-define=RUN_E2E=true \
       --dart-define=E2E_MODE=true \
       --dart-define="API_BASE_URL=$API_BASE_URL"
-    "$FLUTTER_BIN" test integration_test/client_order_cash_e2e_test.dart \
+    timeout --signal=INT --kill-after=30s 25m "$FLUTTER_BIN" test integration_test/client_order_cash_e2e_test.dart \
       --device-id "$DEVICE_ID" \
       --dart-define=RUN_E2E=true \
       --dart-define=E2E_MODE=true \
