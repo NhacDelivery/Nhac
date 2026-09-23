@@ -21,7 +21,17 @@ void main() {
       await app.main();
       await loginAsFixtureUser(tester);
 
-      await waitFor(tester, E2EFinders.store, step: 'carregar loja fixture');
+      // A lista de restaurantes fica abaixo da primeira tela e o SliverList
+      // só monta seus cards quando a rolagem chega até ela.
+      await tester.scrollUntilVisible(
+        E2EFinders.store,
+        350,
+        scrollable: find.descendant(
+          of: find.byType(CustomScrollView).first,
+          matching: find.byType(Scrollable),
+        ).first,
+        maxScrolls: 20,
+      );
       await tapE2E(tester, E2EFinders.store, step: 'abrir loja fixture');
       await waitFor(
         tester,
