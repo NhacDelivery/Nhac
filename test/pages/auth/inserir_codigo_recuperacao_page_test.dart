@@ -39,7 +39,7 @@ void main() {
   Future<void> abrirPagina(WidgetTester tester) async {
     await tester.pumpWidget(ScreenUtilInit(
       designSize: const Size(375, 812),
-      builder: (_, __) => Provider<AuthService>.value(
+      builder: (_, __) => ChangeNotifierProvider<AuthService>.value(
         value: auth,
         child: MaterialApp.router(routerConfig: router),
       ),
