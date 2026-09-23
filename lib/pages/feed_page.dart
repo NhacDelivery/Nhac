@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:go_router/go_router.dart';
 import 'package:lottie/lottie.dart';
 import 'package:nhac/components/home/home_banner_carousel.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
@@ -265,11 +266,17 @@ class _FeedPageState extends State<FeedPage>
   // ─── Post Card ────────────────────────────────────────────────────────────
 
   Widget _buildPostCard(FeedPostModel post) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 12.h),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20.r),
+    return GestureDetector(
+      onTap: () => context.push('/feed-post', extra: post),
+      child: Hero(
+        tag: 'post_hero_${post.id}',
+        child: Material(
+          type: MaterialType.transparency,
+          child: Container(
+            margin: EdgeInsets.only(bottom: 12.h),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20.r),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF5D201C).withValues(alpha: 0.05),
@@ -364,21 +371,30 @@ class _FeedPageState extends State<FeedPage>
               padding:
                   EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  _buildFooterAction(
-                    icon: Icons.thumb_up_alt_outlined,
-                    label: _formatCount(post.curtidas),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: _buildFooterAction(
+                        icon: Icons.thumb_up_alt_outlined,
+                        label: _formatCount(post.curtidas),
+                      ),
+                    ),
                   ),
-                  SizedBox(width: 32.w),
+                  SizedBox(width: 56.w),
                   _buildFooterAction(
                     icon: Icons.chat_bubble_outline,
                     label: _formatCount(post.comentarios),
                   ),
-                  SizedBox(width: 32.w),
-                  _buildFooterAction(
-                    icon: Icons.share_outlined,
-                    label: '',
+                  SizedBox(width: 56.w),
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _buildFooterAction(
+                        icon: Icons.share_outlined,
+                        label: '',
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -386,60 +402,67 @@ class _FeedPageState extends State<FeedPage>
           ],
         ),
       ),
+          ),
+        ),
+      ),
     );
   }
 
   Widget _buildTopComment(TopCommentModel comment) {
     return Container(
+      width: double.infinity,
       margin: EdgeInsets.fromLTRB(14.w, 10.h, 14.w, 0),
-      padding: EdgeInsets.all(12.w),
       decoration: BoxDecoration(
         color: const Color(0xFFF7F7F7),
         borderRadius: BorderRadius.circular(8.r),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 3.h),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFF6961),
-              borderRadius: BorderRadius.only(
-                topLeft: Radius.circular(4.r),
-                topRight: Radius.circular(4.r),
-                bottomRight: Radius.circular(4.r),
-              ),
-            ),
-            child: Text(
-              '${comment.curtidas} curtidas',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 10.sp,
-                fontWeight: FontWeight.bold,
+          Padding(
+            padding: EdgeInsets.only(left: 12.w, right: 12.w, top: 28.h, bottom: 12.h),
+            child: RichText(
+              text: TextSpan(
+                children: [
+                  TextSpan(
+                    text: '${comment.nomeUsuario}: ',
+                    style: TextStyle(
+                      color: const Color(0xFFFF6961),
+                      fontSize: 13.sp,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  TextSpan(
+                    text: comment.conteudo,
+                    style: TextStyle(
+                      color: const Color(0xFF1A1A1A),
+                      fontSize: 13.sp,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          SizedBox(height: 6.h),
-          RichText(
-            text: TextSpan(
-              children: [
-                TextSpan(
-                  text: '${comment.nomeUsuario}: ',
-                  style: TextStyle(
-                    color: const Color(0xFFFF6961),
-                    fontSize: 13.sp,
-                    fontWeight: FontWeight.w600,
-                  ),
+          Positioned(
+            top: 0,
+            left: 0,
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFF6961),
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(8.r),
+                  bottomRight: Radius.circular(8.r),
                 ),
-                TextSpan(
-                  text: comment.conteudo,
-                  style: TextStyle(
-                    color: const Color(0xFF1A1A1A),
-                    fontSize: 13.sp,
-                    height: 1.4,
-                  ),
+              ),
+              child: Text(
+                '${comment.curtidas} curtidas',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10.sp,
+                  fontWeight: FontWeight.bold,
                 ),
-              ],
+              ),
             ),
           ),
         ],
@@ -500,25 +523,37 @@ class _FeedPageState extends State<FeedPage>
 
   Widget _buildImagesGrid(List<String> imagens) {
     if (imagens.length == 1) {
-      return _buildNetworkImage(imagens[0],
-          height: 220.h, width: double.infinity);
+      return Padding(
+        padding: EdgeInsets.symmetric(horizontal: 14.w),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12.r),
+          child: _buildNetworkImage(imagens[0],
+              height: 220.h, width: double.infinity),
+        ),
+      );
     }
 
-    return SizedBox(
-      height: 190.h,
-      child: Row(
-        children: List.generate(imagens.take(2).length, (i) {
-          return Expanded(
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: i == 0 ? 0 : 2.w,
-                right: i == imagens.take(2).length - 1 ? 0 : 2.w,
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: 14.w),
+      child: SizedBox(
+        height: 190.h,
+        child: Row(
+          children: List.generate(imagens.take(2).length, (i) {
+            return Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: i == 0 ? 0 : 2.w,
+                  right: i == imagens.take(2).length - 1 ? 0 : 2.w,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12.r),
+                  child: _buildNetworkImage(imagens[i],
+                      height: 190.h, width: double.infinity),
+                ),
               ),
-              child: _buildNetworkImage(imagens[i],
-                  height: 190.h, width: double.infinity),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }
@@ -613,13 +648,22 @@ class _FeedPageState extends State<FeedPage>
             ),
             SizedBox(height: 12.h),
             Row(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(width: 50.w, height: 14.h, color: Colors.white),
+                  ),
+                ),
+                SizedBox(width: 56.w),
                 Container(width: 50.w, height: 14.h, color: Colors.white),
-                SizedBox(width: 32.w),
-                Container(width: 50.w, height: 14.h, color: Colors.white),
-                SizedBox(width: 32.w),
-                Container(width: 20.w, height: 14.h, color: Colors.white),
+                SizedBox(width: 56.w),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Container(width: 20.w, height: 14.h, color: Colors.white),
+                  ),
+                ),
               ],
             ),
           ],

@@ -30,6 +30,8 @@ import 'package:nhac/pages/search_page.dart';
 import 'package:nhac/pages/auth/recuperacao_senha/recuperacao_input_page.dart';
 import 'package:nhac/pages/auth/recuperacao_senha/inserir_codigo_recuperacao_page.dart';
 import 'package:nhac/pages/auth/recuperacao_senha/nova_senha_recuperacao_page.dart';
+import 'package:nhac/pages/feed_post_detail_page.dart';
+import 'package:nhac/models/feed/feed_post_model.dart';
 
 class _SlideRightToLeftPageRoute<T> extends PageRoute<T>
     with MaterialRouteTransitionMixin<T> {
@@ -377,6 +379,30 @@ final GoRouter appRouter = GoRouter(
             lojaId: (dados['lojaId'] ?? '').toString(),
             lojaNome: (dados['lojaNome'] ?? 'Loja').toString(),
           ),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/feed-post',
+      pageBuilder: (context, state) {
+        if (state.extra is! FeedPostModel) {
+          // Fallback para caso ocorra hot reload na tela e o extra seja perdido
+          return _buildSlideRightToLeftPage(
+            key: state.pageKey,
+            child: const Scaffold(
+              body: Center(child: Text('Post não encontrado')),
+            ),
+          );
+        }
+        
+        final post = state.extra as FeedPostModel;
+        return CustomTransitionPage(
+          key: state.pageKey,
+          child: FeedPostDetailPage(post: post),
+          transitionDuration: const Duration(milliseconds: 900),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
         );
       },
     ),
