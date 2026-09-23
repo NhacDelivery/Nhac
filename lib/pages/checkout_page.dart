@@ -894,20 +894,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (_cupom != null) {
       try {
         final validado = await CupomRepository().validarCupom(_cupom!.id, cartProvider.valorTotal);
-        if (!mounted) return;
+        if (!context.mounted) return;
         setState(() {
           _cupom = validado;
           _subtotalValidado = cartProvider.valorTotal;
         });
         total = cartProvider.valorTotal + _taxaFrete - validado.descontoAplicado;
       } catch (e) {
-        if (!mounted) return;
+        if (!context.mounted) return;
         setState(() => _isSubmitting = false);
         context.showError(e.toString());
         return;
       }
     }
 
+    if (!context.mounted) return;
     if (_formaPagamento == 'Cartão de crédito' &&
         !AppConstants.stripeConfigurado) {
       setState(() => _isSubmitting = false);
