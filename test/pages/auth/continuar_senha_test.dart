@@ -21,7 +21,7 @@ void main() {
       designSize: const Size(375, 812),
       builder: (_, __) => MultiProvider(
         providers: [
-          Provider<AuthService>.value(value: auth),
+          ChangeNotifierProvider<AuthService>.value(value: auth),
           ChangeNotifierProvider<CadastroController>.value(value: cadastro),
         ],
         child: const MaterialApp(home: ContinuarSenha()),
