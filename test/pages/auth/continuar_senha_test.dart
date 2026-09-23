@@ -28,6 +28,7 @@ void main() {
       ),
     ));
     await tester.enterText(find.byType(TextFormField), ' Senha123 ');
+    await tester.pump();
     await tester.tap(find.text('Continuar'));
     await tester.pump();
     verify(() => auth.login(email: 'cliente@teste.com', senha: ' Senha123 ')).called(1);
