@@ -72,6 +72,7 @@ class ChatSocketService {
     _conversaId = conversaId;
 
     final token = await SessionStorageService().obterToken();
+    if (_disposed || _client != null) return;
     if (token == null || token.isEmpty) {
       _emitErro('Sessão expirada. Entre novamente para conversar.');
       return;
@@ -104,7 +105,7 @@ class ChatSocketService {
           );
           _emitConectado(false);
         },
-        onDisconnect: (_) => _conectadoController.add(false),
+        onDisconnect: (_) => _emitConectado(false),
       ),
     );
 
@@ -112,6 +113,7 @@ class ChatSocketService {
   }
 
   void _aoConectar(StompFrame frame) {
+    if (_disposed || _client == null) return;
     final conversaId = _conversaId;
     if (conversaId == null) return;
 

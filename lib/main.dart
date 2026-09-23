@@ -83,7 +83,7 @@ main() async {
     appRunner: () async {
       try {
         final stripeKey = AppConstants.stripePublishableKey;
-        if (stripeKey.isNotEmpty) {
+        if (AppConstants.stripeConfigurado) {
           Stripe.publishableKey = stripeKey;
           await Stripe.instance.applySettings();
         }

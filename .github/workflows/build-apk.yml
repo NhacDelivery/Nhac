@@ -135,7 +135,9 @@ jobs:
         run: flutter pub get
 
       - name: Build Debug APK
-        run: flutter build apk --debug
+        run: |
+          python3 -c 'import json; lines = (line.strip() for line in open(".env")); json.dump(dict(line.split("=", 1) for line in lines if line and not line.startswith("#") and "=" in line), open(".dart-defines.json", "w"))'
+          flutter build apk --debug --dart-define-from-file=.dart-defines.json
 
       - name: Upload Debug APK as artifact
         uses: actions/upload-artifact@v4
@@ -203,7 +205,9 @@ jobs:
         run: flutter pub get
 
       - name: Build Release APK
-        run: flutter build apk --release
+        run: |
+          python3 -c 'import json; lines = (line.strip() for line in open(".env")); json.dump(dict(line.split("=", 1) for line in lines if line and not line.startswith("#") and "=" in line), open(".dart-defines.json", "w"))'
+          flutter build apk --release --dart-define-from-file=.dart-defines.json
         env:
           CM_BUILD_DIR: ${{ github.workspace }}
           CM_KEYSTORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}

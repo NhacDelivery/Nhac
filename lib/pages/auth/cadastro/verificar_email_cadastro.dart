@@ -90,9 +90,10 @@ class _VerificarEmailCadastroState extends State<VerificarEmailCadastro> {
       if (!localContext.mounted) return;
       final mensagem = e.toString().replaceAll('Exception: ', '');
       localContext.showError(mensagem);
-      _codigoController.clear();
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _codigoFocus.requestFocus();
+        if (!mounted) return;
+        _codigoController.clear();
+        _codigoFocus.requestFocus();
       });
     } finally {
       if (mounted) {

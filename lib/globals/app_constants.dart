@@ -30,6 +30,11 @@ class AppConstants {
     defaultValue: '',
   );
 
+  static bool get stripeConfigurado =>
+      (stripePublishableKey.startsWith('pk_test_') ||
+          stripePublishableKey.startsWith('pk_live_')) &&
+      stripePublishableKey.length >= 30;
+
   static const String sentryDsn = String.fromEnvironment(
     'SENTRY_DSN',
     defaultValue: '',

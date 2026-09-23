@@ -908,6 +908,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
       }
     }
 
+    if (_formaPagamento == 'Cartão de crédito' &&
+        !AppConstants.stripeConfigurado) {
+      setState(() => _isSubmitting = false);
+      context.showError(
+        'Pagamento com cartão indisponível no momento. Escolha outra forma de pagamento.',
+      );
+      return;
+    }
+
     final pedido = CriarPedidoRequest(
       lojaId: cartProvider.lojaId,
       cupomId: _cupom?.id,
@@ -1012,7 +1021,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
             );
             context.go('/rastreio?pedidoId=$idGerado');
           }
-        } on StripeException {
+        } catch (e) {
+          // A configuração do SDK também pode lançar StripeConfigException,
+          // além de falhas de plataforma. O pedido já existe no backend.
+          debugPrint('Falha ao abrir pagamento com cartão: $e');
           await cartProvider.esvaziarCarrinho();
           _checkoutIdempotencyKey = null;
           if (!context.mounted) return;

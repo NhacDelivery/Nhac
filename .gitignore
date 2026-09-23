@@ -1,6 +1,7 @@
 build/
 .dart_tool/
 .env
+.dart-defines.json
 *.iml
 .idea/
 android/app/google-services.json

@@ -66,7 +66,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: NhacDelivery/backend-nhac
-          ref: ${{ github.head_ref || github.ref_name }}
+          ref: main
           path: backend-nhac
 
       - name: Setup Java 25
