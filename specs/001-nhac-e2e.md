@@ -234,7 +234,7 @@ Fluxo esperado:
 5. executar Flutter integration tests com:
    - `RUN_E2E=true`
    - `E2E_MODE=true`
-   - `API_BASE_URL=http://10.0.2.2:8080/api/v1`
+   - `API_BASE_URL=http://127.0.0.1:8080/api/v1` com `adb reverse tcp:8080 tcp:8080`
 6. coletar logs e encerrar serviços.
 
 Criar script reproduzível, por exemplo `tool/run_e2e.sh`, sem assumir serviços de produção.

@@ -14,7 +14,7 @@ DEVICE_ID="${E2E_DEVICE_ID:-emulator-5554}"
 REPEAT="${E2E_REPEAT:-1}"
 DB_PORT="${E2E_DB_PORT:-3307}"
 BACKEND_PORT="${E2E_BACKEND_PORT:-8080}"
-API_BASE_URL="${E2E_API_BASE_URL:-http://10.0.2.2:${BACKEND_PORT}/api/v1}"
+API_BASE_URL="${E2E_API_BASE_URL:-http://127.0.0.1:${BACKEND_PORT}/api/v1}"
 LOG_DIR="${E2E_LOG_DIR:-$APP_DIR/e2e-logs}"
 DB_CONTAINER="nhac-e2e-db-${GITHUB_RUN_ID:-local}-$$"
 BACKEND_PID=""
@@ -114,6 +114,8 @@ for execution in $(seq 1 "$REPEAT"); do
     echo "Backend E2E não ficou saudável na execução $execution." >&2
     exit 1
   fi
+
+  adb -s "$DEVICE_ID" reverse "tcp:${BACKEND_PORT}" "tcp:${BACKEND_PORT}"
 
   {
     echo "Execução E2E $execution/$REPEAT"
