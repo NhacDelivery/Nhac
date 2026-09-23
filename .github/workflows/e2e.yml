@@ -5,6 +5,8 @@ on:
   pull_request:
     paths:
       - 'integration_test/**'
+      - 'test/**'
+      - '.github/workflows/build-apk.yml'
       - 'lib/components/home/**'
       - 'lib/controllers/cart_provider.dart'
       - 'lib/e2e/**'
