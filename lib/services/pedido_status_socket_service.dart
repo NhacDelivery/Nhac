@@ -9,12 +9,25 @@ import 'package:stomp_dart_client/stomp_dart_client.dart';
 class PedidoStatusSocketService {
   StompClient? _client;
   String? _pedidoId;
+  bool _disposed = false;
 
   final _statusController = StreamController<StatusPedido>.broadcast();
   final _conectadoController = StreamController<bool>.broadcast();
 
   Stream<StatusPedido> get status => _statusController.stream;
   Stream<bool> get conectado => _conectadoController.stream;
+
+  void _emitStatus(StatusPedido valor) {
+    if (!_disposed && !_statusController.isClosed) {
+      _statusController.add(valor);
+    }
+  }
+
+  void _emitConectado(bool valor) {
+    if (!_disposed && !_conectadoController.isClosed) {
+      _conectadoController.add(valor);
+    }
+  }
 
   static String _urlWebSocket() {
     final uri = Uri.parse(AppConstants.apiBaseUrl);
@@ -23,10 +36,11 @@ class PedidoStatusSocketService {
   }
 
   Future<void> conectar(String pedidoId) async {
-    if (_client != null) return;
+    if (_disposed || _client != null) return;
     _pedidoId = pedidoId;
 
     final token = await SessionStorageService().obterToken();
+    if (_disposed || _client != null) return;
     if (token == null || token.isEmpty) return;
 
     final headers = {'Authorization': 'Bearer $token'};
@@ -39,28 +53,31 @@ class PedidoStatusSocketService {
         heartbeatIncoming: const Duration(seconds: 10),
         heartbeatOutgoing: const Duration(seconds: 10),
         onConnect: (_) {
-          _conectadoController.add(true);
+          if (_disposed) return;
+          _emitConectado(true);
           final id = _pedidoId;
-          if (id == null) return;
-          _client!.subscribe(
+          final client = _client;
+          if (id == null || client == null) return;
+          client.subscribe(
             destination: '/topic/pedidos/$id/status',
             callback: (frame) {
+              if (_disposed) return;
               final raw = frame.body?.replaceAll('"', '').trim();
               final parsed = StatusPedido.fromApi(raw);
               if (parsed != StatusPedido.desconhecido) {
-                _statusController.add(parsed);
+                _emitStatus(parsed);
               }
             },
           );
         },
-        onDisconnect: (_) => _conectadoController.add(false),
+        onDisconnect: (_) => _emitConectado(false),
         onWebSocketError: (error) {
           debugPrint('[PEDIDO WS] erro: $error');
-          _conectadoController.add(false);
+          _emitConectado(false);
         },
         onStompError: (frame) {
           debugPrint('[PEDIDO STOMP] erro: ${frame.body ?? ''}');
-          _conectadoController.add(false);
+          _emitConectado(false);
         },
       ),
     );
@@ -74,6 +91,8 @@ class PedidoStatusSocketService {
   }
 
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
     desconectar();
     _statusController.close();
     _conectadoController.close();
