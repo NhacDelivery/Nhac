@@ -95,12 +95,11 @@ void main() {
         step: 'selecionar dinheiro',
       );
 
-      await waitFor(
+      await tapE2E(
         tester,
         E2EFinders.checkoutConfirm,
-        step: 'habilitar confirmação',
+        step: 'confirmar pedido',
       );
-      await tester.tap(E2EFinders.checkoutConfirm, warnIfMissed: false);
       await tester.tap(E2EFinders.checkoutConfirm, warnIfMissed: false);
 
       await waitFor(
