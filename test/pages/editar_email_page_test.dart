@@ -44,8 +44,7 @@ class MockUserProvider extends ChangeNotifier implements UserProvider {
   Future<void> carregarDadosUsuario() async {}
 
   @override
-  // TODO: implement isPhoneUser
-  bool get isPhoneUser => throw UnimplementedError();
+  bool get isPhoneUser => false;
 }
 
 class MockAuthService extends ChangeNotifier implements AuthService {
@@ -103,13 +102,11 @@ class MockAuthService extends ChangeNotifier implements AuthService {
 
   @override
   Future<void> alterarSenha(String senhaAtual, String novaSenha) {
-    // TODO: implement alterarSenha
     throw UnimplementedError();
   }
 
   @override
   Future<void> esqueciSenhaEmail(String email, {CancelToken? cancelToken}) {
-    // TODO: implement esqueciSenhaEmail
     throw UnimplementedError();
   }
 
@@ -118,23 +115,19 @@ class MockAuthService extends ChangeNotifier implements AuthService {
 
   @override
   Future<void> redefinirSenhaEmail(String email, String codigo, String novaSenha) {
-    // TODO: implement redefinirSenhaEmail
     throw UnimplementedError();
   }
 
   @override
-  // TODO: implement isPhoneUser
-  bool get isPhoneUser => throw UnimplementedError();
+  bool get isPhoneUser => false;
 
   @override
   Future<void> confirmarEmailCadastro(String email, String codigo) {
-    // TODO: implement confirmarEmailCadastro
     throw UnimplementedError();
   }
 
   @override
   Future<void> enviarCodigoCadastro(String email) {
-    // TODO: implement enviarCodigoCadastro
     throw UnimplementedError();
   }
 }
