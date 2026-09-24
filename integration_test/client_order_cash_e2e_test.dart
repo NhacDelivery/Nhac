@@ -42,14 +42,18 @@ void main() {
       await waitFor(tester, E2EFinders.productAdd, step: 'abrir produto');
       await tapE2E(tester, E2EFinders.productAdd, step: 'adicionar produto');
 
-      // Simula o botão Voltar do Android. O aviso de item adicionado cobre
-      // temporariamente o controle de retorno desenhado na tela.
-      await tester.binding.handlePopRoute();
+      // As duas telas são abertas por Navigator.push. O aviso de item
+      // adicionado pode cobrir os botões de voltar durante a transição.
+      Navigator.of(tester.element(E2EFinders.productAdd)).pop();
       await tester.pump(const Duration(milliseconds: 500));
       await waitFor(tester, E2EFinders.product, step: 'voltar para loja');
-      await tester.binding.handlePopRoute();
+      Navigator.of(tester.element(E2EFinders.product)).pop();
       await tester.pump(const Duration(milliseconds: 500));
-      await waitFor(tester, E2EFinders.cartOpen, step: 'voltar para home');
+      await waitFor(
+        tester,
+        E2EFinders.cartOpen.hitTestable(),
+        step: 'voltar para home',
+      );
 
       await tapE2E(tester, E2EFinders.cartOpen, step: 'abrir carrinho');
       await waitFor(
