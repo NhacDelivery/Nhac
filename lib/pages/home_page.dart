@@ -547,7 +547,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget _buildCartTotalBar(double total,
       {Key? key, required VoidCallback onPressed}) {
     return Container(
-      key: key,
       padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -575,6 +574,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
           ),
           BotaoNhac(
+            key: key,
             label: 'Continuar',
             onPressed: onPressed,
             fontSize: 15.sp,
