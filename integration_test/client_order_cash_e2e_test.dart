@@ -1,7 +1,8 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:nhac/controllers/cart_provider.dart';
+import 'package:nhac/components/seta_voltar.dart';
 import 'package:nhac/main.dart' as app;
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:provider/provider.dart';
@@ -42,9 +43,15 @@ void main() {
       await waitFor(tester, E2EFinders.productAdd, step: 'abrir produto');
       await tapE2E(tester, E2EFinders.productAdd, step: 'adicionar produto');
 
-      await tester.pageBack();
+      // pageBack procura o botão padrão do AppBar, mas estas telas têm
+      // controles de retorno próprios.
+      await tapE2E(
+        tester,
+        find.widgetWithIcon(IconButton, Icons.arrow_back_ios_new),
+        step: 'voltar do produto',
+      );
       await tester.pump(const Duration(milliseconds: 500));
-      await tester.pageBack();
+      await tapE2E(tester, find.byType(SetaVoltar), step: 'voltar da loja');
       await tester.pump(const Duration(milliseconds: 500));
 
       await tapE2E(tester, E2EFinders.cartOpen, step: 'abrir carrinho');
