@@ -1,8 +1,7 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:nhac/controllers/cart_provider.dart';
-import 'package:nhac/components/seta_voltar.dart';
 import 'package:nhac/main.dart' as app;
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:provider/provider.dart';
@@ -43,16 +42,14 @@ void main() {
       await waitFor(tester, E2EFinders.productAdd, step: 'abrir produto');
       await tapE2E(tester, E2EFinders.productAdd, step: 'adicionar produto');
 
-      // pageBack procura o botão padrão do AppBar, mas estas telas têm
-      // controles de retorno próprios.
-      await tapE2E(
-        tester,
-        find.widgetWithIcon(IconButton, Icons.arrow_back_ios_new),
-        step: 'voltar do produto',
-      );
+      // Simula o botão Voltar do Android. O aviso de item adicionado cobre
+      // temporariamente o controle de retorno desenhado na tela.
+      await tester.binding.handlePopRoute();
       await tester.pump(const Duration(milliseconds: 500));
-      await tapE2E(tester, find.byType(SetaVoltar), step: 'voltar da loja');
+      await waitFor(tester, E2EFinders.product, step: 'voltar para loja');
+      await tester.binding.handlePopRoute();
       await tester.pump(const Duration(milliseconds: 500));
+      await waitFor(tester, E2EFinders.cartOpen, step: 'voltar para home');
 
       await tapE2E(tester, E2EFinders.cartOpen, step: 'abrir carrinho');
       await waitFor(
