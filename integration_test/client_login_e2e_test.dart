@@ -12,7 +12,7 @@ void main() {
   testWidgets('E2E-001 Login autentica o cliente fixture e abre a home', (
     tester,
   ) async {
-    E2EConfig.validate();
+    await E2EConfig.validate();
     await app.main();
 
     await loginAsFixtureUser(tester);

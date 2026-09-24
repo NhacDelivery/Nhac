@@ -39,7 +39,7 @@ void main() {
   Future<void> abrirPagina(WidgetTester tester) async {
     await tester.pumpWidget(ScreenUtilInit(
       designSize: const Size(375, 812),
-      builder: (_, __) => Provider<AuthService>.value(
+      builder: (_, __) => ChangeNotifierProvider<AuthService>.value(
         value: auth,
         child: MaterialApp.router(routerConfig: router),
       ),
@@ -65,6 +65,7 @@ void main() {
     await tester.enterText(find.byType(TextField), '1');
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, '1');
     await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 4));
     expect(tester.takeException(), isNull);
   });
 

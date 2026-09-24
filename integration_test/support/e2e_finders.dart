@@ -9,6 +9,7 @@ abstract final class E2EFinders {
   static final loginPassword = key('e2e.login.password');
   static final loginSubmit = key('e2e.login.submit');
   static final homeReady = key('e2e.home.ready');
+  static final homeScrollTop = key('e2e.home.scroll-top');
   static final store = key('e2e.home.store.e2e-loja-001');
   static final product = key('e2e.store.product.e2e-produto-001');
   static final productAdd = key('e2e.product.add');

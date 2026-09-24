@@ -21,7 +21,7 @@ void main() {
     await tester.pumpWidget(
       ScreenUtilInit(
         designSize: const Size(375, 812),
-        builder: (_, __) => Provider<AuthService>.value(
+        builder: (_, __) => ChangeNotifierProvider<AuthService>.value(
           value: auth,
           child: const MaterialApp(
             home: VerificarEmailCadastro(email: 'cliente@exemplo.com'),

@@ -6,6 +6,7 @@ abstract final class E2EKeys {
   static const loginPassword = Key('e2e.login.password');
   static const loginSubmit = Key('e2e.login.submit');
   static const homeReady = Key('e2e.home.ready');
+  static const homeScrollTop = Key('e2e.home.scroll-top');
   static const productAdd = Key('e2e.product.add');
   static const cartOpen = Key('e2e.cart.open');
   static const cartCheckout = Key('e2e.cart.checkout');

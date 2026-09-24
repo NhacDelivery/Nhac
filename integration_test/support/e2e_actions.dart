@@ -11,7 +11,10 @@ Future<void> tapE2E(
   await waitFor(tester, finder, step: step);
   await tester.ensureVisible(finder);
   await tester.pump(const Duration(milliseconds: 100));
-  await tester.tap(finder);
+  // Uma rota em transição mantém widgets visíveis na árvore enquanto o
+  // Navigator ainda bloqueia seus toques. Aguarde o alvo receber hit test.
+  await waitFor(tester, finder.hitTestable(), step: '$step (tocável)');
+  await tester.tap(finder.hitTestable());
   await tester.pump(const Duration(milliseconds: 100));
 }
 

@@ -21,13 +21,14 @@ void main() {
       designSize: const Size(375, 812),
       builder: (_, __) => MultiProvider(
         providers: [
-          Provider<AuthService>.value(value: auth),
+          ChangeNotifierProvider<AuthService>.value(value: auth),
           ChangeNotifierProvider<CadastroController>.value(value: cadastro),
         ],
         child: const MaterialApp(home: ContinuarSenha()),
       ),
     ));
     await tester.enterText(find.byType(TextFormField), ' Senha123 ');
+    await tester.pump();
     await tester.tap(find.text('Continuar'));
     await tester.pump();
     verify(() => auth.login(email: 'cliente@teste.com', senha: ' Senha123 ')).called(1);
