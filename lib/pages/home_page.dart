@@ -226,6 +226,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     button: true,
                     label: 'Voltar ao topo da página',
                     child: GestureDetector(
+                  key: E2EKeys.homeScrollTop,
                   onTap: (_isScrolledDown && _selectedIndex == 0) ? _scrollToTop : null,
                   child: Container(
                     width: 50.w,

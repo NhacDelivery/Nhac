@@ -49,6 +49,10 @@ void main() {
       await waitFor(tester, E2EFinders.product, step: 'voltar para loja');
       Navigator.of(tester.element(E2EFinders.product)).pop();
       await tester.pump(const Duration(milliseconds: 500));
+      if (E2EFinders.cartOpen.hitTestable().evaluate().isEmpty) {
+        await tapE2E(tester, E2EFinders.homeScrollTop, step: 'expandir barra da home');
+        await tester.pump(const Duration(milliseconds: 800));
+      }
       await waitFor(
         tester,
         E2EFinders.cartOpen.hitTestable(),
