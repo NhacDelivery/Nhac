@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:nhac/controllers/cart_provider.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
 import 'package:nhac/main.dart' as app;
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:provider/provider.dart';
@@ -79,7 +80,12 @@ void main() {
       expect(E2EFinders.checkoutAddress, findsOneWidget);
       await waitFor(
         tester,
-        E2EFinders.checkoutTotal,
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics &&
+              widget.key == E2EKeys.checkoutTotal &&
+              widget.properties.value == '30.00',
+        ),
         step: 'calcular total com frete',
       );
       expect(_semanticsValue(tester, E2EFinders.checkoutTotal), '30.00');
