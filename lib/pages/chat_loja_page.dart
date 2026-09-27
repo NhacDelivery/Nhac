@@ -11,6 +11,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:uuid/uuid.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/models/chat/mensagem_chat.dart';
 import 'package:nhac/repositories/chat_repository.dart';
@@ -39,10 +40,17 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
   bool _carregando = true;
   bool _conectado = false;
   String? _erroFatal;
+  String? _pendenteId;
+  String? _pendenteTexto;
+  bool _envioIncerto = false;
+  Timer? _prazoConfirmacao;
 
   @override
   void initState() {
     super.initState();
+    _campoController.addListener(() {
+      if (mounted) setState(() {});
+    });
     _iniciar();
   }
 
@@ -65,9 +73,13 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
       _inscricoes.add(_socket.mensagens.listen(_aoReceberMensagem));
       _inscricoes.add(_socket.conectado.listen((valor) {
         if (mounted) setState(() => _conectado = valor);
+        if (valor) _atualizarHistorico(conversaId);
       }));
       _inscricoes.add(_socket.erros.listen((mensagem) {
-        if (mounted) context.showError(mensagem);
+        if (mounted) {
+          if (_pendenteId != null) setState(() => _envioIncerto = true);
+          context.showError(mensagem);
+        }
       }));
 
       await _socket.conectar(conversaId);
@@ -83,6 +95,7 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
 
   void _aoReceberMensagem(MensagemChat mensagem) {
     if (!mounted) return;
+    _confirmarSePendente(mensagem);
     // O id vem do backend, então dá pra deduplicar se o socket reconectar e
     // reentregar algo que já está na lista.
     if (_mensagens.any((m) => m.id == mensagem.id)) return;
@@ -91,6 +104,36 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
       _repository.marcarComoLida(_conversaId!);
     }
     _irParaOFim();
+  }
+
+  void _confirmarSePendente(MensagemChat mensagem) {
+    if (_pendenteId == null || mensagem.id != 'msg_$_pendenteId') return;
+    _prazoConfirmacao?.cancel();
+    _campoController.clear();
+    setState(() {
+      _pendenteId = null;
+      _pendenteTexto = null;
+      _envioIncerto = false;
+    });
+  }
+
+  Future<void> _atualizarHistorico(String conversaId) async {
+    try {
+      final historico = await _repository.historico(conversaId);
+      if (!mounted || _conversaId != conversaId) return;
+      for (final mensagem in historico) {
+        _confirmarSePendente(mensagem);
+      }
+      final ids = _mensagens.map((m) => m.id).toSet();
+      setState(() {
+        for (final mensagem in historico) {
+          if (ids.add(mensagem.id)) _mensagens.add(mensagem);
+        }
+        _mensagens.sort((a, b) => a.enviadaEm.compareTo(b.enviadaEm));
+      });
+    } catch (_) {
+      // O histórico já mostrado continua disponível; a conexão tentará de novo.
+    }
   }
 
   void _irParaOFim() {
@@ -107,16 +150,27 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
   void _enviar() {
     final texto = _campoController.text.trim();
     if (texto.isEmpty) return;
-    final enviou = _socket.enviar(texto);
+    if (_pendenteId != null && !_envioIncerto) return;
+    final id = _pendenteId ?? const Uuid().v4();
+    final enviou = _socket.enviar(_pendenteTexto ?? texto, id);
     if (!enviou) {
-      context.showError('Sem conexão com o chat. Tentando reconectar...');
+      context.showError('Sem conexão com o chat. Tente novamente quando conectar.');
       return;
     }
-    _campoController.clear();
+    setState(() {
+      _pendenteId = id;
+      _pendenteTexto = texto;
+      _envioIncerto = false;
+    });
+    _prazoConfirmacao?.cancel();
+    _prazoConfirmacao = Timer(const Duration(seconds: 15), () {
+      if (mounted && _pendenteId == id) setState(() => _envioIncerto = true);
+    });
   }
 
   @override
   void dispose() {
+    _prazoConfirmacao?.cancel();
     for (final inscricao in _inscricoes) {
       inscricao.cancel();
     }
@@ -291,48 +345,64 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
           BoxShadow(color: Color(0x0F000000), blurRadius: 6.0),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: TextField(
-              controller: _campoController,
-              minLines: 1,
-              maxLines: 4,
-              maxLength: 4000, // mesmo limite do EnviarMensagemDTO
-              textCapitalization: TextCapitalization.sentences,
-              onSubmitted: (_) => _enviar(),
-              decoration: InputDecoration(
-                counterText: '',
-                hintText: 'Escreva sua mensagem...',
-                hintStyle: const TextStyle(color: Color(0xFFB9ADAD)),
-                filled: true,
-                fillColor: const Color(0x33C9BCBC),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16.0, vertical: 12.0),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24.0),
-                  borderSide: BorderSide.none,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _campoController,
+                  readOnly: _pendenteId != null,
+                  minLines: 1,
+                  maxLines: 4,
+                  maxLength: 4000,
+                  textCapitalization: TextCapitalization.sentences,
+                  onSubmitted: (_) => _enviar(),
+                  decoration: InputDecoration(
+                    counterText: '',
+                    hintText: 'Escreva sua mensagem...',
+                    hintStyle: const TextStyle(color: Color(0xFFB9ADAD)),
+                    filled: true,
+                    fillColor: const Color(0x33C9BCBC),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 12.0),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(24.0),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8.0),
+              Material(
+                color: const Color(0xFFFF6961),
+                shape: const CircleBorder(),
+                child: IconButton(
+                  tooltip: _envioIncerto ? 'Reenviar mensagem' : 'Enviar mensagem',
+                  onPressed: _pendenteId != null && !_envioIncerto ? null : _enviar,
+                  icon: Icon(_envioIncerto ? Icons.refresh : Icons.send_rounded,
+                      color: Colors.white, size: 22),
+                ),
+              ),
+            ],
+          ),
+          if (_pendenteId != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  _envioIncerto
+                      ? 'Sem confirmação. Confira a conversa ou toque em enviar para reenviar.'
+                      : 'Aguardando confirmação da mensagem...',
+                  style: const TextStyle(color: Color(0xFF5D201C), fontSize: 12),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 8.0),
-          Material(
-            color: const Color(0xFFFF6961),
-            shape: const CircleBorder(),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: _enviar,
-              child: const Padding(
-                padding: EdgeInsets.all(12.0),
-                child: Icon(Icons.send_rounded, color: Colors.white, size: 22.0),
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
 }
-
