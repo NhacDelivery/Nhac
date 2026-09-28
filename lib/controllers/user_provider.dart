@@ -1,8 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:nhac/globals/router.dart';
 import 'package:nhac/models/usuario/usuario_model.dart';
 import 'package:nhac/repositories/user_repository.dart';
@@ -83,28 +80,7 @@ class UserProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      // Upload para Firebase Storage (mesmo padrão de editar_foto_page.dart).
-      // O login do app usa JWT próprio da API, mas o Firebase Storage depende
-      // de uma sessão do Firebase Auth para as Security Rules. Login anônimo
-      // resolve sem exigir conta Firebase do utilizador.
-      final storage = FirebaseStorage.instanceFor(app: Firebase.app());
-
-      if (FirebaseAuth.instance.currentUser == null) {
-        await FirebaseAuth.instance.signInAnonymously();
-      }
-
-      final ref = storage
-          .ref()
-          .child('usuarios_fotos')
-          .child(usuarioId)
-          .child('perfil.jpg');
-
-      await ref.putFile(
-        imagem,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-
-      final url = await ref.getDownloadURL();
+      final url = await _userRepository.enviarFotoPerfil(imagem);
 
       // Persiste a URL da imagem no backend via PUT /usuarios/{id}
       await _userRepository.atualizarDadosUsuario(usuarioId, {
@@ -126,4 +102,3 @@ class UserProvider with ChangeNotifier {
     notifyListeners();
   }
 }
-
