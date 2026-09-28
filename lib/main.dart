@@ -52,7 +52,7 @@ Future<void> _firebaseMessagingBackgroundHandler(
 
     final stageIndex = status.stage;
 
-    LiveNotificationService.updateLiveNotification(
+    await LiveNotificationService.updateLiveNotification(
       pedidoId: message.data['pedidoId'].toString(),
       nomeProduto: nomeProduto,
       status: message.data['statusTexto'] ?? status.label,
@@ -128,7 +128,11 @@ Future<void> main() async {
           final pushService =
               PushNotificationService(authServiceRoteador);
 
-          await pushService.initialize();
+          try {
+            await pushService.initialize();
+          } catch (e) {
+            debugPrint('Notificações indisponíveis neste dispositivo: $e');
+          }
         }
 
         sharedPrefs = await SharedPreferences.getInstance();

@@ -7,6 +7,8 @@ import 'package:nhac/services/api_client.dart';
 import 'package:nhac/services/session_storage_service.dart';
 import 'package:uuid/uuid.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:nhac/globals/app_constants.dart';
 
 class AuthService with ChangeNotifier {
   final _dio = ApiClient().dio;
@@ -155,6 +157,22 @@ class AuthService with ChangeNotifier {
 
   Future<void> _encerrarSessao() async {
     final usuarioAnterior = _usuarioId;
+    if (usuarioAnterior != null && !AppConstants.e2eMode) {
+      try {
+        final tokenPush = await FirebaseMessaging.instance.getToken();
+        if (tokenPush != null) {
+          await _dio.delete('/usuarios/$usuarioAnterior/push-token',
+            data: {'token': tokenPush},
+          ).timeout(const Duration(seconds: 3));
+        }
+      } catch (_) {
+        // A sessão pode já estar expirada; invalidar o token local ainda
+        // impede que este dispositivo continue recebendo novos pushes.
+      }
+      try {
+        await FirebaseMessaging.instance.deleteToken();
+      } catch (_) {}
+    }
     _sessionGeneration++;
     ApiClient().atualizarTokenCache(null);
     _usuarioId = null;
@@ -298,19 +316,9 @@ Future<void> updateUserName({required String userName}) async {
     }
 
     try {
-      final response = await _dio.put('/usuarios/$_usuarioId', data: {
-        'fcmToken': fcmToken.trim(),
+      await _dio.put('/usuarios/$_usuarioId/push-token', data: {
+        'token': fcmToken.trim(),
       });
-      final tokenFresquinho = response.data['token'] as String?;
-      if (tokenFresquinho != null && tokenFresquinho.isNotEmpty) {
-        await _sessionStorage.salvarSessao(
-          token: tokenFresquinho,
-          usuarioId: _usuarioId!,
-          nome: _nome ?? 'Usuário',
-        );
-        ApiClient().atualizarTokenCache(tokenFresquinho);
-        notifyListeners();
-      }
     } catch (e) {
       throw mapException(e);
     }

@@ -62,7 +62,8 @@ class ApiClient {
           if (statusCode == 401 &&
               e.requestOptions.headers['Authorization'] == 'Bearer $_cachedToken' &&
               !e.requestOptions.path.contains('/login') &&
-              !e.requestOptions.path.contains('/auth/alterar-senha')) {
+              !e.requestOptions.path.contains('/auth/alterar-senha') &&
+              !e.requestOptions.path.contains('/push-token')) {
             _cachedToken = null;
             try {
               await authServiceRoteador.logout();
