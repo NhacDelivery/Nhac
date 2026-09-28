@@ -7,7 +7,7 @@
 //     SockJS, pensado pro painel web)
 //   - autenticação no frame CONNECT, header "Authorization: Bearer <token>"
 //   - assinar   /topic/conversas/{conversaId}     para receber
-//   - publicar  /app/conversas/{conversaId}/enviar  para enviar {"conteudo": "..."}
+//   - publicar  /app/conversas/{conversaId}/enviar  com conteudo e clientMessageId
 //   - erros de negócio chegam em /user/queue/erros
 //
 // Requer a dependência stomp_dart_client no pubspec.yaml.
@@ -149,17 +149,22 @@ class ChatSocketService {
 
   /// Publica a mensagem. Ela volta pelo /topic — não adicionamos na lista
   /// localmente pra não duplicar nem mostrar mensagem que o backend recusou.
-  bool enviar(String conteudo) {
+  bool enviar(String conteudo, String clientMessageId) {
     final conversaId = _conversaId;
     final texto = conteudo.trim();
     if (conversaId == null || texto.isEmpty) return false;
     if (!(_client?.connected ?? false)) return false;
 
-    _client!.send(
-      destination: '/app/conversas/$conversaId/enviar',
-      body: jsonEncode({'conteudo': texto}),
-    );
-    return true;
+    try {
+      _client!.send(
+        destination: '/app/conversas/$conversaId/enviar',
+        body: jsonEncode({'conteudo': texto, 'clientMessageId': clientMessageId}),
+      );
+      return true;
+    } catch (e) {
+      _emitErro('Não foi possível enviar a mensagem. Tente novamente.');
+      return false;
+    }
   }
 
   Future<void> desconectar() async {
