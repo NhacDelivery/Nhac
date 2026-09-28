@@ -54,7 +54,11 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
   PedidoModel? _pedido;
   LojasModel? _loja;
   RotaEntregaModel? _rota;
+  LatLng? _motoboyLocation;
   StreamSubscription<StatusPedido>? _statusSubscription;
+  Timer? _refreshTimer;
+  bool _refreshing = false;
+  String? _rotaErro;
   bool _isLoading = true;
   bool _cancelando = false;
   final _messengerKey = GlobalKey<ScaffoldMessengerState>();
@@ -85,11 +89,13 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
     }
     _carregarDados(silencioso: cached != null);
     _conectarStatus();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 12), (_) => _carregarDados(silencioso: true));
   }
 
   @override
   void dispose() {
     _statusSubscription?.cancel();
+    _refreshTimer?.cancel();
     _statusSocket.dispose();
     _mapController?.dispose();
     super.dispose();
@@ -105,6 +111,8 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
   }
 
   Future<void> _carregarDados({bool silencioso = false}) async {
+    if (_refreshing) return;
+    _refreshing = true;
     if (!silencioso && mounted) {
       setState(() {
         _isLoading = true;
@@ -116,6 +124,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
       final pedido = await _pedidoRepository.buscarPedidoPorId(widget.pedidoId);
       LojasModel? loja = _loja;
       RotaEntregaModel? rota = _rota;
+      String? rotaErro;
 
       try {
         loja = await _lojaRepository.buscarLoja(pedido.lojaId);
@@ -123,15 +132,22 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
 
       try {
         rota = await _entregaRepository.buscarRota(widget.pedidoId);
-      } catch (_) {
-        // O pedido continua acessível mesmo se a rota ainda não estiver disponível.
+      } catch (e) {
+        rotaErro = 'Não foi possível carregar a rota: $e';
       }
+      LatLng? motoboyLocation;
+      try {
+        final ponto = await _entregaRepository.buscarLocalizacaoEntregador(widget.pedidoId);
+        if (ponto != null) motoboyLocation = LatLng(ponto.latitude, ponto.longitude);
+      } catch (_) { /* A posição volta a ser consultada na próxima atualização. */ }
 
       if (!mounted) return;
       setState(() {
         _pedido = pedido;
         _loja = loja;
         _rota = rota;
+        _rotaErro = rotaErro;
+        _motoboyLocation = motoboyLocation;
         _isLoading = false;
         _erro = '';
       });
@@ -154,6 +170,8 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
         _erro = 'Erro ao carregar dados do pedido: $e';
         _isLoading = false;
       });
+    } finally {
+      _refreshing = false;
     }
   }
 
@@ -249,7 +267,11 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
       return Container(
         color: Colors.grey.shade200,
         alignment: Alignment.center,
-        child: const Text('Rota ainda indisponível'),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Text(_rotaErro ?? 'Rota ainda indisponível. Confira as coordenadas da loja e do endereço de entrega.',
+              textAlign: TextAlign.center),
+          TextButton(onPressed: () => _carregarDados(), child: const Text('Tentar novamente')),
+        ]),
       );
     }
 
@@ -300,6 +322,13 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
           infoWindow: const InfoWindow(title: 'Endereço de entrega'),
         ),
+        if (_motoboyLocation != null)
+          Marker(
+            markerId: const MarkerId('motoboy'),
+            position: _motoboyLocation!,
+            icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+            infoWindow: const InfoWindow(title: 'Entregador'),
+          ),
       },
       polylines: {
         Polyline(

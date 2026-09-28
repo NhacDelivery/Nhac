@@ -15,6 +15,7 @@ import 'package:nhac/services/biometric_service.dart';
 import 'package:provider/provider.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
+import 'package:nhac/services/notificacao_historico_service.dart';
 
 class ProfileContent extends StatefulWidget {
   const ProfileContent({super.key});
@@ -61,6 +62,7 @@ class _ProfileContentState extends State<ProfileContent> {
   }
 
   void _abrirNotificacoes(BuildContext context) {
+    final usuarioId = context.read<AuthService>().usuarioId;
     Navigator.push(
       context,
       PageRouteBuilder(
@@ -92,23 +94,21 @@ class _ProfileContentState extends State<ProfileContent> {
                           color: const Color(0xFF5D201C)),
                     ),
                     SizedBox(height: 32.h),
-                    Expanded(
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.notifications_off_outlined,
-                                size: 64.r, color: Colors.grey.shade300),
-                            SizedBox(height: 16.h),
-                            Text(
-                              'Você não tem novas notificações.',
-                              style: TextStyle(
-                                  color: Colors.grey.shade600, fontSize: 16.sp),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
+                    Expanded(child: usuarioId == null
+                      ? const Center(child: Text('Entre na sua conta para ver os avisos.'))
+                      : FutureBuilder<List<NotificacaoRegistrada>>(
+                          future: NotificacaoHistoricoService.listar(usuarioId),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasError) return const Center(child: Text('Não foi possível abrir os avisos deste aparelho. Tente novamente.'));
+                            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                            final avisos = snapshot.data!;
+                            if (avisos.isEmpty) return const Center(child: Text('Nenhum aviso registrado neste aparelho.'));
+                            return ListView.builder(itemCount: avisos.length, itemBuilder: (context, index) {
+                              final aviso = avisos[index];
+                              return ListTile(title: Text(aviso.titulo), subtitle: Text(aviso.corpo));
+                            });
+                          },
+                        )),
                   ],
                 ),
               ),

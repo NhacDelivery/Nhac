@@ -47,6 +47,8 @@ class _HomeContentState extends State<HomeContent> {
   static bool _jaCarregouUmaVez = false;
   late bool _isLoading;
   Timer? _loadingTimer;
+  Timer? _refreshTimer;
+  bool _atualizandoCatalogo = false;
 
   final List<LojasModel> _lojas = [];
   int _currentPageLojas = 0;
@@ -72,6 +74,16 @@ class _HomeContentState extends State<HomeContent> {
     _isLoading = !_jaCarregouUmaVez;
 
     _carregarDadosIniciais();
+    _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (LocalCacheService.cacheHomeVencido && !_atualizandoCatalogo) {
+        _atualizandoCatalogo = true;
+        LocalCacheService.limparCacheHome();
+        _currentPageLojas = 0;
+        _hasMoreLojas = true;
+        _lojas.clear();
+        _carregarDadosIniciais().whenComplete(() => _atualizandoCatalogo = false);
+      }
+    });
     _carregarGpsComCache();
 
     if (_isLoading) {
@@ -89,6 +101,7 @@ class _HomeContentState extends State<HomeContent> {
   @override
   void dispose() {
     _loadingTimer?.cancel();
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
@@ -99,6 +112,7 @@ class _HomeContentState extends State<HomeContent> {
       _fetchLojas(),
     ]);
     _aplicarStatusLojas();
+    LocalCacheService.ultimaAtualizacaoHome = DateTime.now();
 
     if (mounted) {
       _loadingTimer?.cancel();

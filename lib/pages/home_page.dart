@@ -10,7 +10,6 @@ import 'package:nhac/controllers/cart_provider.dart';
 import 'package:nhac/controllers/endereco_provider.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:nhac/pages/carrinho_page.dart';
-import 'package:nhac/pages/feed_page.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
@@ -112,8 +111,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       case 1:
         return Icons.shopping_cart_outlined;
       case 2:
-        return Icons.newspaper_outlined;
-      case 3:
         return Icons.person_outline;
       default:
         return Icons.house_outlined;
@@ -164,7 +161,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 children: [
                   const HomeContent(),
                   CarrinhoPage(isActive: _selectedIndex == 1),
-                  const FeedPage(),
                   const ProfileContent(),
                 ],
               ),
@@ -403,13 +399,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           label: 'Carrinho',
                           index: 1),
                       _buildNavItem(
-                          icon: Icons.newspaper_outlined,
-                          label: 'Feed',
-                          index: 2),
-                      _buildNavItem(
                           icon: Icons.person_outline,
                           label: 'Perfil',
-                          index: 3),
+                          index: 2),
                     ],
                   ),
                 ),

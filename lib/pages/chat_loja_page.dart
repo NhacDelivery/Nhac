@@ -44,6 +44,9 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
   String? _pendenteId;
   String? _pendenteTexto;
   bool _envioIncerto = false;
+  int _paginaHistorico = 0;
+  bool _temMensagensAntigas = true;
+  bool _carregandoAntigas = false;
   Timer? _prazoConfirmacao;
 
   @override
@@ -66,6 +69,8 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
         _mensagens
           ..clear()
           ..addAll(historico);
+        _paginaHistorico = 1;
+        _temMensagensAntigas = historico.length == 30;
         _carregando = false;
       });
 
@@ -134,6 +139,26 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
       });
     } catch (_) {
       // O histórico já mostrado continua disponível; a conexão tentará de novo.
+    }
+  }
+
+  Future<void> _carregarMensagensAntigas() async {
+    final id = _conversaId;
+    if (id == null || !_temMensagensAntigas || _carregandoAntigas) return;
+    setState(() => _carregandoAntigas = true);
+    try {
+      final anteriores = await _repository.historico(id, pagina: _paginaHistorico);
+      if (!mounted || _conversaId != id) return;
+      final ids = _mensagens.map((m) => m.id).toSet();
+      setState(() {
+        _mensagens.insertAll(0, anteriores.where((m) => ids.add(m.id)));
+        _paginaHistorico++;
+        _temMensagensAntigas = anteriores.length == 30;
+      });
+    } catch (_) {
+      if (mounted) context.showError('Não foi possível carregar mensagens antigas. Tente novamente.');
+    } finally {
+      if (mounted) setState(() => _carregandoAntigas = false);
     }
   }
 
@@ -272,9 +297,16 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
                   controller: _scrollController,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16.0, vertical: 12.0),
-                  itemCount: _mensagens.length,
-                  itemBuilder: (context, index) =>
-                      _balao(_mensagens[index]),
+                  itemCount: _mensagens.length + (_temMensagensAntigas ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (_temMensagensAntigas && index == 0) {
+                      return TextButton(
+                        onPressed: _carregandoAntigas ? null : _carregarMensagensAntigas,
+                        child: Text(_carregandoAntigas ? 'Carregando...' : 'Ver mensagens anteriores'),
+                      );
+                    }
+                    return _balao(_mensagens[index - (_temMensagensAntigas ? 1 : 0)]);
+                  },
                 ),
         ),
         _barraDeEnvio(),

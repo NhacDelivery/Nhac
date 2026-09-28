@@ -40,6 +40,7 @@ class CriarPedidoRequest {
   final String? cupomId;
   final String? cpfPagador;
   final EnderecoModel enderecoEntrega;
+  final double? entregaLatitude, entregaLongitude;
   final List<CriarPedidoItemRequest> itens;
 
   const CriarPedidoRequest({
@@ -50,6 +51,8 @@ class CriarPedidoRequest {
     this.cupomId,
     this.cpfPagador,
     required this.enderecoEntrega,
+    this.entregaLatitude,
+    this.entregaLongitude,
     required this.itens,
   });
 
@@ -71,6 +74,8 @@ class CriarPedidoRequest {
           'cep': enderecoEntrega.cep,
           if (enderecoEntrega.complemento?.isNotEmpty == true)
             'complemento': enderecoEntrega.complemento,
+          if (entregaLatitude != null) 'latitude': entregaLatitude,
+          if (entregaLongitude != null) 'longitude': entregaLongitude,
         },
         'itens': itens.map((item) => item.toMap()).toList(),
       };

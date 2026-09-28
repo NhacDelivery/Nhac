@@ -44,6 +44,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
   bool _isSubmitting = false;
 
   double _taxaFrete = 0.0;
+  bool _freteConfirmado = false;
+  double? _entregaLatitude, _entregaLongitude;
+  int _freteVersao = 0;
   int? _tempoEstimadoMinutos;
   String? _checkoutIdempotencyKey;
 
@@ -74,6 +77,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Future<void> _recalcularFrete(EnderecoModel endereco) async {
     final cartProvider = context.read<CartProvider>();
     if (cartProvider.lojaId.isEmpty) return;
+    final versao = ++_freteVersao;
+    setState(() { _freteConfirmado = false; _entregaLatitude = null; _entregaLongitude = null; });
 
     try {
       double latitude;
@@ -91,7 +96,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
           endereco.cep,
         ].where((v) => v.trim().isNotEmpty).join(', ');
         final locais = await locationFromAddress(enderecoCompleto);
-        if (locais.isEmpty) return;
+        if (locais.isEmpty) throw StateError('Endereço não encontrado no mapa.');
         latitude = locais.first.latitude;
         longitude = locais.first.longitude;
       }
@@ -100,15 +105,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
         lat: latitude,
         lng: longitude,
       );
-      if (!mounted) return;
+      if (!mounted || versao != _freteVersao) return;
       setState(() {
         _taxaFrete = resposta.valor;
         _tempoEstimadoMinutos = resposta.tempoEstimadoMinutos;
+        _freteConfirmado = true;
+        _entregaLatitude = latitude;
+        _entregaLongitude = longitude;
       });
     } catch (e) {
       debugPrint('Não foi possível recalcular o frete: $e');
+      if (!mounted || versao != _freteVersao) return;
       final loja = await LojaRepository().buscarLoja(cartProvider.lojaId);
-      if (loja != null && mounted) {
+      if (loja != null && mounted && versao == _freteVersao) {
         setState(() {
           _taxaFrete = loja.dadosOperacionais?.taxaEntregaBase ?? 0.0;
           _tempoEstimadoMinutos = loja.dadosOperacionais?.tempoEntregaMax;
@@ -609,7 +618,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Frete',
+                        Text(_freteConfirmado ? 'Frete confirmado' : 'Frete estimado',
                             style: TextStyle(
                                 color: Colors.grey.shade700, fontSize: 14.sp)),
                         Text(
@@ -623,6 +632,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     ),
                   ),
                   SizedBox(height: 12.h),
+                  if (!_freteConfirmado)
+                    TextButton(
+                      onPressed: enderecoisPadrao == null ? null : () => _recalcularFrete(enderecoisPadrao),
+                      child: const Text('Frete ainda não confirmado para este endereço. Tentar novamente'),
+                    ),
                   MergeSemantics(
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -776,6 +790,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
     await enderecoProvider.buscarEnderecos();
     if (!mounted) return;
+    if (enderecoProvider.enderecos.isEmpty) {
+      _freteVersao++;
+      setState(() { _freteConfirmado = false; _entregaLatitude = null; _entregaLongitude = null; });
+      _mostrarDialogEnderecoVazio(context);
+      return;
+    }
     final atualizado = enderecoProvider.enderecos.firstWhere(
       (e) => e.isPadrao,
       orElse: () => enderecoProvider.enderecos.first,
@@ -853,6 +873,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Future<void> _confirmarPedido(
       BuildContext context, double total, CartProvider cartProvider) async {
     if (_isSubmitting) return;
+    if (!_freteConfirmado || _entregaLatitude == null || _entregaLongitude == null) {
+      context.showError('Confirme o frete para este endereço antes de finalizar.');
+      return;
+    }
     setState(() => _isSubmitting = true);
 
     final enderecoProvider = context.read<EnderecoProvider>();
@@ -924,6 +948,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       cpfPagador: _formaPagamento == 'PIX' ? cpfPagador : null,
       observacao: cartProvider.observacao,
       enderecoEntrega: enderecoisPadrao,
+      entregaLatitude: _entregaLatitude!,
+      entregaLongitude: _entregaLongitude!,
       itens: cartProvider.itens.values
           .map(CriarPedidoItemRequest.fromCartItem)
           .toList(),

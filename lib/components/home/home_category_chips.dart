@@ -9,8 +9,8 @@ class HomeCategoryChips extends StatelessWidget {
   // já que o backend filtra produtos/lojas por valor exato.
   static const _categorias = [
     {'nome': 'Combos', 'icon': Icons.fastfood},
-    {'nome': 'Prato Principal', 'icon': Icons.restaurant},
-    {'nome': 'Acompanhamento', 'icon': Icons.rice_bowl},
+    {'nome': 'Pratos Executivos', 'icon': Icons.restaurant},
+    {'nome': 'Acompanhamentos', 'icon': Icons.rice_bowl},
     {'nome': 'Sobremesas', 'icon': Icons.icecream},
     {'nome': 'Bebidas', 'icon': Icons.local_drink},
   ];
