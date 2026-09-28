@@ -1,15 +1,17 @@
+import 'package:nhac/utils/safe_parse_helpers.dart';
+
 class LojasModel {
-  final String id; 
+  final String id;
   final String nome;
   final String categoria;
   final String descricao;
   final String imagemUrl;
-  
-  final bool isAberto; 
+
+  final bool _isAbertoFlag;
 
   final DadosOperacionais? dadosOperacionais;
   final EnderecoLoja? endereco;
-  final HorariosLoja? horarios; 
+  final HorariosLoja? horarios;
 
   LojasModel({
     required this.id,
@@ -17,11 +19,14 @@ class LojasModel {
     required this.categoria,
     this.descricao = '',
     this.imagemUrl = '',
-    this.isAberto = true,
+    bool isAberto = true,
     this.dadosOperacionais,
     this.endereco,
     this.horarios,
-  });
+  }) : _isAbertoFlag = isAberto;
+
+  // A API e o checkout usam o status operacional definido pelo lojista.
+  bool get isAberto => _isAbertoFlag;
 
   factory LojasModel.fromMap(Map<String, dynamic> map) {
     return LojasModel(
@@ -30,16 +35,15 @@ class LojasModel {
       categoria: map['categoria']?.toString() ?? '',
       descricao: map['descricao']?.toString() ?? '',
       imagemUrl: map['imagemUrl']?.toString() ?? '',
-      isAberto: map['isAberto'] ?? true, 
-      
-      dadosOperacionais: map['dadosOperacionais'] != null 
-          ? DadosOperacionais.fromMap(map['dadosOperacionais']) 
+      isAberto: safeBool(map['isAberto'], fallback: true),
+      dadosOperacionais: map['dadosOperacionais'] != null
+          ? DadosOperacionais.fromMap(map['dadosOperacionais'])
           : null,
-      endereco: map['endereco'] != null 
-          ? EnderecoLoja.fromMap(map['endereco']) 
+      endereco: map['endereco'] != null
+          ? EnderecoLoja.fromMap(map['endereco'])
           : null,
-      horarios: map['horarios'] != null 
-          ? HorariosLoja.fromMap(map['horarios']) 
+      horarios: map['horarios'] != null
+          ? HorariosLoja.fromMap(map['horarios'])
           : null,
     );
   }
@@ -62,11 +66,15 @@ class DadosOperacionais {
 
   factory DadosOperacionais.fromMap(Map<String, dynamic> map) {
     return DadosOperacionais(
-      avaliacaoMedia: num.tryParse(map['avaliacaoMedia']?.toString() ?? '0')?.toDouble() ?? 0.0,
-      taxaEntregaBase: num.tryParse(map['taxaEntregaBase']?.toString() ?? '0')?.toDouble() ?? 0.0,
-      tempoEntregaMin: map['tempoEntregaMin'] ?? 0,
-      tempoEntregaMax: map['tempoEntregaMax'] ?? 0,
-      totalAvaliacoes: map['totalAvaliacoes'] ?? 0,
+      avaliacaoMedia:
+          num.tryParse(map['avaliacaoMedia']?.toString() ?? '0')?.toDouble() ??
+              0.0,
+      taxaEntregaBase:
+          num.tryParse(map['taxaEntregaBase']?.toString() ?? '0')?.toDouble() ??
+              0.0,
+      tempoEntregaMin: safeInt(map['tempoEntregaMin']),
+      tempoEntregaMax: safeInt(map['tempoEntregaMax']),
+      totalAvaliacoes: safeInt(map['totalAvaliacoes']),
     );
   }
 }

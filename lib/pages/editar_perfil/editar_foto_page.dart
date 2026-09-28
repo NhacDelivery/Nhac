@@ -1,15 +1,14 @@
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/repositories/user_repository.dart';
 import 'package:provider/provider.dart';
+import 'package:nhac/globals/ui_utils.dart';
 
 import 'package:nhac/components/botoes/botao_largo_nhac.dart';
 
@@ -41,9 +40,7 @@ class _EditarFotoPageState extends State<EditarFotoPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao selecionar imagem: $e')),
-      );
+      context.showError('Erro ao selecionar imagem: $e');
     }
   }
 
@@ -90,25 +87,7 @@ class _EditarFotoPageState extends State<EditarFotoPage> {
         throw Exception("Usuário não autenticado.");
       }
 
-      final storage = FirebaseStorage.instanceFor(app: Firebase.app());
-
-      // O login do app não usa mais o Firebase Auth (é feito via JWT próprio
-      // da API). O Firebase Storage, porém, ainda depende de uma sessão do
-      // Firebase Auth para liberar leitura/escrita conforme as Security Rules
-      // (request.auth != null). Sem isso, o upload falha com "permission
-      // denied" silenciosamente. Login anônimo resolve sem exigir conta.
-      if (FirebaseAuth.instance.currentUser == null) {
-        await FirebaseAuth.instance.signInAnonymously();
-      }
-
-      final ref = storage.ref().child('usuarios_fotos').child(uid).child('perfil.jpg');
-
-      await ref.putFile(
-        _image!,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-
-      final url = await ref.getDownloadURL();
+      final url = await UserRepository().enviarFotoPerfil(_image!);
 
       if (!mounted) return;
       final userProvider = context.read<UserProvider>();
@@ -121,17 +100,13 @@ class _EditarFotoPageState extends State<EditarFotoPage> {
 
       if (!mounted) return;
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Foto de perfil atualizada com sucesso!')),
-      );
+      context.showSuccess('Foto de perfil atualizada com sucesso!');
 
       context.pop();
     } catch (e) {
       if (!mounted) return;
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao atualizar foto: $e')),
-      );
+      context.showError('Erro ao atualizar foto: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -211,7 +186,7 @@ class _EditarFotoPageState extends State<EditarFotoPage> {
                                               fit: BoxFit.cover,
                                               placeholder: (ctx, url) => Container(
                                                 color: Colors.grey.shade200,
-                                                child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF5D201C))),
+                                                child: const LoadingNhac(telaCheia: false, tamanho: 40),
                                               ),
                                               errorWidget: (ctx, url, err) => Container(
                                                 color: Colors.grey.shade300,

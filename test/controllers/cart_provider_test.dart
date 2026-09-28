@@ -58,19 +58,21 @@ void main() {
       expect(cartProvider.totalDeUnidades, 2);
     });
 
-    test('Adicionar produto de loja diferente retorna false (guarda de loja)', () async {
+    test('Adicionar produto de loja diferente lança Exception (guarda de loja)', () async {
       await cartProvider.adicionarItemComQuantidade(
         idProduto: 'p1', nome: 'Pizza', preco: 30.0,
         imagemUrl: '', lojaId: 'loja-A', quantidade: 1,
       );
 
-      final resultado = await cartProvider.adicionarItemComQuantidade(
-        idProduto: 'p2', nome: 'Hamburguer', preco: 25.0,
-        imagemUrl: '', lojaId: 'loja-B',  
-        quantidade: 1,
+      expect(
+        () async => await cartProvider.adicionarItemComQuantidade(
+          idProduto: 'p2', nome: 'Hamburguer', preco: 25.0,
+          imagemUrl: '', lojaId: 'loja-B',  
+          quantidade: 1,
+        ),
+        throwsA(isA<Exception>()),
       );
 
-      expect(resultado, false);
       expect(cartProvider.itens.length, 1);     
       expect(cartProvider.lojaId, 'loja-A');    
     });

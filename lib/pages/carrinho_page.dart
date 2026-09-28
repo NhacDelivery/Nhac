@@ -3,11 +3,13 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/controllers/cart_provider.dart';
 import 'package:nhac/controllers/endereco_provider.dart';
+import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/models/usuario/carrinho_model.dart';
 import 'package:nhac/models/usuario/endereco_model.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
 
 class CarrinhoPage extends StatefulWidget {
   final bool isActive;
@@ -285,30 +287,33 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
               color: const Color(0xFF5D201C)),
         ),
         SizedBox(height: 12.h),
-        TextField(
-          controller: _observacaoController,
-          maxLines: 3,
-          maxLength: 200,
-          decoration: InputDecoration(
-            hintText:
-                'Ex: Tirar cebola, maionese à parte, troco para R\$ 50...',
-            hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14.sp),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: EdgeInsets.all(16.w),
-            border: OutlineInputBorder(
+        Semantics(
+          label: 'Observações para o restaurante',
+          child: TextField(
+            controller: _observacaoController,
+            maxLines: 3,
+            maxLength: 200,
+            decoration: InputDecoration(
+              hintText:
+                  'Ex: Tirar cebola, maionese à parte, troco para R\$ 50...',
+              hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14.sp),
+              filled: true,
+              fillColor: Colors.white,
+              contentPadding: EdgeInsets.all(16.w),
+              border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16.r),
+                  borderSide: BorderSide.none),
+              enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(16.r),
+                  borderSide: BorderSide(color: Colors.white)),
+              focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(16.r),
-                borderSide: BorderSide.none),
-            enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(16.r),
-                borderSide: BorderSide(color: Colors.white)),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16.r),
-              borderSide:
-                  BorderSide(color: primaryColor.withValues(alpha: 0.5)),
+                borderSide:
+                    BorderSide(color: primaryColor.withValues(alpha: 0.5)),
+              ),
             ),
+            onChanged: (value) => cartProvider.setObservacao(value),
           ),
-          onChanged: (value) => cartProvider.setObservacao(value),
         ),
       ],
     );
@@ -320,6 +325,7 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
     bool isProgrammaticDeleting = false;
 
     return StatefulBuilder(
+      key: E2EKeys.cartItem(item.produtoId),
       builder: (context, setState) {
         return TweenAnimationBuilder<double>(
           duration: Duration(milliseconds: isProgrammaticDeleting ? 500 : 0),
@@ -437,15 +443,22 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                     ),
                                     child: ClipRRect(
                                       borderRadius: BorderRadius.circular(12.r),
-                                      child: Image.network(
-                                        item.imagemUrl,
-                                        fit: BoxFit.cover,
-                                        errorBuilder:
-                                            (context, error, stackTrace) =>
-                                                Icon(Icons.image,
-                                                    color: Colors.grey,
-                                                    size: 24.r),
-                                      ),
+                                      child: item.esgotado
+                                          ? ColorFiltered(
+                                              colorFilter: const ColorFilter.mode(Colors.grey, BlendMode.saturation),
+                                              child: Image.network(
+                                                item.imagemUrl,
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (context, error, stackTrace) =>
+                                                    Icon(Icons.image, color: Colors.grey, size: 24.r),
+                                              ),
+                                            )
+                                          : Image.network(
+                                              item.imagemUrl,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (context, error, stackTrace) =>
+                                                  Icon(Icons.image, color: Colors.grey, size: 24.r),
+                                            ),
                                     ),
                                   ),
                                   SizedBox(width: 16.w),
@@ -470,11 +483,18 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                     style: TextStyle(
                                                         fontWeight:
                                                             FontWeight.bold,
-                                                        fontSize: 14.sp),
+                                                        fontSize: 14.sp,
+                                                        color: item.esgotado ? Colors.grey : Colors.black,
+                                                        decoration: item.esgotado ? TextDecoration.lineThrough : null),
                                                     maxLines: 2,
                                                     overflow:
                                                         TextOverflow.ellipsis,
                                                   ),
+                                                  if (item.esgotado)
+                                                    Text(
+                                                      'Esgotado',
+                                                      style: TextStyle(color: Colors.red, fontSize: 12.sp, fontWeight: FontWeight.bold),
+                                                    ),
                                                   SizedBox(height: 8.h),
                                                   Row(
                                                     children: [
@@ -492,51 +512,76 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                         ),
                                                         child: Row(
                                                           children: [
-                                                            IconButton(
-                                                              padding:
-                                                                  EdgeInsets
-                                                                      .zero,
-                                                              constraints:
-                                                                  const BoxConstraints(
-                                                                      minWidth:
-                                                                          32),
-                                                              icon: Icon(
-                                                                  Icons.remove,
-                                                                  size: 16.r),
-                                                              onPressed: () =>
-                                                                  cartProvider
-                                                                      .removerItem(
-                                                                          item.produtoId),
+                                                            Semantics(
+                                                              button: true,
+                                                              label: 'Diminuir quantidade',
+                                                              child: IconButton(
+                                                                padding:
+                                                                    EdgeInsets
+                                                                        .zero,
+                                                                constraints:
+                                                                    const BoxConstraints(
+                                                                        minWidth:
+                                                                            32),
+                                                                icon: Icon(
+                                                                    Icons.remove,
+                                                                    size: 16.r),
+                                                                onPressed: () async {
+                                                                  try {
+                                                                    await cartProvider.removerItem(item.produtoId);
+                                                                  } catch (e) {
+                                                                    if (context.mounted) context.showError(e.toString());
+                                                                  }
+                                                                },
+                                                              ),
                                                             ),
-                                                            Text(
-                                                              item.quantidade
+                                                            Semantics(
+                                                              key: E2EKeys
+                                                                  .cartItemQuantity(
+                                                                      item.produtoId),
+                                                              value: item
+                                                                  .quantidade
                                                                   .toString(),
-                                                              style: TextStyle(
-                                                                  fontWeight:
-                                                                      FontWeight
-                                                                          .bold,
-                                                                  fontSize:
-                                                                      14.sp),
+                                                              child: Text(
+                                                                item.quantidade
+                                                                    .toString(),
+                                                                style: TextStyle(
+                                                                    fontWeight:
+                                                                        FontWeight
+                                                                            .bold,
+                                                                    fontSize:
+                                                                        14.sp),
+                                                              ),
                                                             ),
-                                                            IconButton(
-                                                              padding:
-                                                                  EdgeInsets
-                                                                      .zero,
-                                                              constraints:
-                                                                  const BoxConstraints(
-                                                                      minWidth:
-                                                                          32),
-                                                              icon: Icon(
-                                                                  Icons.add,
-                                                                  size: 16.r),
-                                                           onPressed: () => cartProvider.adicionarItemComQuantidade(
-  idProduto: item.produtoId, 
-  nome: item.nome,
-  preco: item.preco,
-  imagemUrl: item.imagemUrl,
-  lojaId: item.lojaId,
-  quantidade: 1, 
-),
+                                                            Semantics(
+                                                              button: true,
+                                                              label: 'Aumentar quantidade',
+                                                              child: IconButton(
+                                                                padding:
+                                                                    EdgeInsets
+                                                                        .zero,
+                                                                constraints:
+                                                                    const BoxConstraints(
+                                                                        minWidth:
+                                                                            32),
+                                                                icon: Icon(
+                                                                    Icons.add,
+                                                                    size: 16.r),
+                                                                onPressed: item.esgotado ? null : () async {
+                                                                  try {
+                                                                    await cartProvider.adicionarItemComQuantidade(
+                                                                      idProduto: item.produtoId, 
+                                                                      nome: item.nome,
+                                                                      preco: item.preco,
+                                                                      imagemUrl: item.imagemUrl,
+                                                                      lojaId: item.lojaId,
+                                                                      quantidade: 1, 
+                                                                    );
+                                                                  } catch (e) {
+                                                                    if (context.mounted) context.showError(e.toString());
+                                                                  }
+                                                                },
+                                                              ),
                                                             ),
                                                           ],
                                                         ),
@@ -565,20 +610,36 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.end,
                                               children: [
-                                                Text(
-                                                  currencyFormat
-                                                      .format(item.preco),
-                                                  style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                      fontSize: 14.sp),
-                                                ),
+                                                item.esgotado 
+                                                  ? ColorFiltered(
+                                                      colorFilter: const ColorFilter.mode(Colors.grey, BlendMode.saturation),
+                                                      child: Text(
+                                                        currencyFormat
+                                                            .format(item.preco),
+                                                        style: TextStyle(
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                            fontSize: 14.sp),
+                                                      ),
+                                                    )
+                                                  : Text(
+                                                      currencyFormat
+                                                          .format(item.preco),
+                                                      style: TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                          fontSize: 14.sp),
+                                                    ),
                                                 SizedBox(height: 4.h),
-                                                Text(
-                                                  '${item.quantidade} un',
-                                                  style: TextStyle(
-                                                      color: Colors.grey,
-                                                      fontSize: 12.sp),
+                                                Semantics(
+                                                  key: E2EKeys.cartStoreId,
+                                                  value: item.lojaId,
+                                                  child: Text(
+                                                    '${item.quantidade} un',
+                                                    style: TextStyle(
+                                                        color: Colors.grey,
+                                                        fontSize: 12.sp),
+                                                  ),
                                                 ),
                                               ],
                                             ),

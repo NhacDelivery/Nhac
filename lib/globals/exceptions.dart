@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:nhac/utils/app_exceptions.dart' as app_exc;
 
 class AppException implements Exception {
   final String message;
@@ -19,26 +20,54 @@ class NetworkException extends AppException {
   NetworkException(super.message);
 }
 
-AppException mapException(Object error) {
+class CustomCheckoutException extends AppException {
+  final String title;
+  final String? produtoId;
+  final List<dynamic>? suggestions;
+
+  CustomCheckoutException({
+    required String message,
+    required this.title,
+    this.produtoId,
+    this.suggestions,
+    String? code,
+  }) : super(message, code: code);
+}
+
+Exception mapException(Object error) {
   if (error is DioException) {
+    if (error.error is app_exc.AppException) {
+      return error.error as app_exc.AppException;
+    }
+
     if (error.response?.data != null && error.response!.data is Map) {
-      final data = error.response!.data as Map<String, dynamic>;
+      final data = error.response!.data as Map;
       if (data.containsKey('message')) {
-        return AppException(data['message'].toString());
+        return AppException(
+          data['message'].toString(),
+          code: data['error']?.toString(),
+        );
       }
     }
-    
+
     if (error.response?.statusCode == 401) {
       return AuthException('Sessão expirada. Faça login novamente.');
     }
-    
-    if (error.type == DioExceptionType.connectionTimeout || 
+
+    if (error.type == DioExceptionType.connectionTimeout ||
         error.type == DioExceptionType.receiveTimeout ||
         error.type == DioExceptionType.connectionError) {
       return NetworkException('Sem conexão com a internet.');
     }
-    
-    return AppException('Ocorreu um erro no servidor: ${error.response?.statusCode ?? error.message}');
+
+    if (error.type == DioExceptionType.cancel) {
+      return NetworkException('Tempo esgotado. Tente novamente.');
+    }
+
+    return AppException(
+      'Ocorreu um erro no servidor: ${error.response?.statusCode ?? error.message}',
+      code: error.response?.statusCode?.toString(),
+    );
   }
 
   if (error is FirebaseAuthException) {
@@ -62,7 +91,7 @@ AppException mapException(Object error) {
       case 'invalid-credential':
         return AuthException('Credenciais inválidas. Tente novamente.');
       default:
-        return AuthException(error.message ?? 'Erro na autenticação.');
+        return AuthException(error.message ?? 'Erro de autenticação.');
     }
   }
 

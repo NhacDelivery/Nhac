@@ -1,7 +1,6 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:nhac/services/auth_service.dart';
 
 class PushNotificationService {
@@ -29,8 +28,27 @@ class PushNotificationService {
       String? token = await _fcm.getToken();
       if (token != null) {
         debugPrint('MEU FCM TOKEN: $token');
-        await _guardarTokenNoBancoDeDados(token); 
+        if (_authService.usuarioId != null) {
+          await _guardarTokenNoBancoDeDados(token);
+        }
       }
+
+      // Envia FCM token ao backend quando o usuário faz login
+      // Cria uma variável para guardar o estado anterior do usuário
+      String? lastUserId = _authService.usuarioId;
+      _authService.addListener(() async {
+        final currentUserId = _authService.usuarioId;
+        // Só executa se houver um usuário logado E se ele for diferente do anterior (ou seja, acabou de logar)
+        if (currentUserId != null && currentUserId != lastUserId) {
+          final fcmToken = await _fcm.getToken();
+          if (fcmToken != null) {
+            await _guardarTokenNoBancoDeDados(fcmToken);
+          }
+        }
+        
+        // Atualiza a referência para a próxima checagem
+        lastUserId = currentUserId;
+      });
 
       _fcm.onTokenRefresh.listen((novoToken) {
         _guardarTokenNoBancoDeDados(novoToken);
@@ -77,21 +95,14 @@ class PushNotificationService {
   }
 
   Future<void> _guardarTokenNoBancoDeDados(String token) async {
-    // TODO(backend): expor um endpoint tipo PATCH /usuarios/{id}/fcm-token e migrar esta gravação para a API REST
     String? userId = _authService.usuarioId;
 
     if (userId != null) {
       try {
-        await FirebaseFirestore.instance
-            .collection('usuarios') 
-            .doc(userId)
-            .set({
-              'fcmToken': token,
-            }, SetOptions(merge: true)); 
-
-        debugPrint('✅ FCM Token atualizado no Firestore com sucesso!');
+        await _authService.updateFcmToken(fcmToken: token);
+        debugPrint('✅ FCM Token atualizado na API com sucesso!');
       } catch (e) {
-        debugPrint('❌ Erro ao guardar o token no Firestore: $e');
+        debugPrint('❌ Erro ao guardar o token na API: $e');
       }
     } else {
       debugPrint('Nenhum utilizador logado. O token não foi guardado na base de dados.');

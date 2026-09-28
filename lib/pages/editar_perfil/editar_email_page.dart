@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:nhac/services/auth_service.dart';
@@ -29,6 +30,7 @@ class _EditarEmailPageState extends State<EditarEmailPage> {
 
   @override
   void dispose() {
+    _emailController.removeListener(_validarNovoEmail);
     _emailController.dispose();
     super.dispose();
   }
@@ -37,15 +39,20 @@ class _EditarEmailPageState extends State<EditarEmailPage> {
     if (!mounted) return;
     
     final texto = _emailController.text.trim();
+    final emailAtual = context.read<UserProvider>().usuario?.email.trim() ?? '';
 
-    // TODO fazer um bloqueio para emails repetidos
-    // Pegamos o e-mail atual direto do Provider, sem depender do Firebase!
-    final emailAtual = context.read<UserProvider>().usuario?.email ?? '';
+    if (texto.isEmpty) {
+      setState(() {
+        _erroEmail = null;
+        _emailValido = false;
+      });
+      return;
+    }
 
     String? erroTemp = Validators.validarEmail(texto);
 
-    if (erroTemp == null && texto.toLowerCase() == emailAtual.toLowerCase()) {
-      erroTemp = 'Este já é o seu e-mail atual';
+    if (erroTemp == null && emailAtual.isNotEmpty && texto.toLowerCase() == emailAtual.toLowerCase()) {
+      erroTemp = 'Este e-mail já está sendo utilizado pela sua conta';
     }
 
     setState(() {
@@ -61,20 +68,37 @@ class _EditarEmailPageState extends State<EditarEmailPage> {
       final authService = context.read<AuthService>();
       final userProvider = context.read<UserProvider>();
       
-      // 1. Chama o nosso "PUT insano" lá no Spring Boot
       await authService.updateEmail(novoEmail: _emailController.text.trim());
       
-      // 2. Avisa o Provider para recarregar os dados para a tela de Perfil atualizar
       await userProvider.carregarDadosUsuario();
       
       if (!mounted) return;
       
-      // 3. Volta para a tela anterior com sucesso
       context.showSuccess('E-mail alterado com sucesso!');
       context.pop(); 
       
     } catch (e) {
-      if (mounted) context.showError(e.toString());
+      if (mounted) {
+        final mensagemErro = e.toString();
+        final lower = mensagemErro.toLowerCase();
+        final ehEmailDuplicado = lower.contains('já') ||
+            lower.contains('ja') ||
+            lower.contains('uso') ||
+            lower.contains('existe') ||
+            lower.contains('cadastrado') ||
+            lower.contains('duplicate') ||
+            lower.contains('already');
+
+        if (ehEmailDuplicado) {
+          setState(() {
+            _erroEmail = 'Este e-mail já está em uso';
+            _emailValido = false;
+          });
+        } else {
+        
+          context.showError(mensagemErro);
+        }
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -82,19 +106,16 @@ class _EditarEmailPageState extends State<EditarEmailPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Usamos o seu próprio Provider para saber se é usuário do Google
     final isGoogleUser = context.watch<UserProvider>().isGoogleUser;
 
     if (isGoogleUser) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (context.mounted) {
           context.pop();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Usuários do Google não podem alterar o e-mail por aqui.')),
-          );
+          context.showError('Usuários do Google não podem alterar o e-mail por aqui.');
         }
       });
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const LoadingNhac(telaCheia: true);
     }
 
     return Scaffold(
@@ -141,6 +162,8 @@ class _EditarEmailPageState extends State<EditarEmailPage> {
                       const SizedBox(height: 28.0),
                       NhacInputField(
                         controller: _emailController,
+                        autofocus: true,
+                        onChanged: (value) => _validarNovoEmail(),
                         keyboardType: TextInputType.emailAddress,
                         errorText: _erroEmail,
                         hintText: 'Novo e-mail',

@@ -11,6 +11,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
 
 import 'package:nhac/components/nhac_input_field.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
 
 import 'package:nhac/utils/validators.dart';
 
@@ -105,6 +106,7 @@ class _EmailClienteState extends State<EmailCliente> {
                       ),
                       const SizedBox(height: 22.0),
                       NhacInputField(
+                        key: E2EKeys.loginEmail,
                         controller: _emailController,
                         autofocus: true,
                         keyboardType: TextInputType.emailAddress,
@@ -135,29 +137,20 @@ class _EmailClienteState extends State<EmailCliente> {
                                 width: 1.0,
                               ),
                             ),
-                            onPressed: () async {
-                              try {
-                                setState(() => _isLoading = true);
-
-                                await context.read<AuthService>().updateEmail(
-                                    novoEmail: _emailController.text.trim());
-                                if (context.mounted) {
-                                  await context
-                                      .read<UserProvider>()
-                                      .carregarDadosUsuario();
-                                }
-
-                                if (context.mounted) {
-                                  context.showSuccess(
-                                      'E-mail alterado com sucesso!');
-                                  context.pop();
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  context.showError(e.toString());
-                                }
-                              } finally {
-                                if (mounted) setState(() => _isLoading = false);
+                            onPressed: () {
+                              final textoAtual = _emailController.text.trim();
+                              final indexArroba = textoAtual.indexOf('@');
+                              final prefixo = indexArroba != -1
+                                  ? textoAtual.substring(0, indexArroba)
+                                  : textoAtual;
+                              if (prefixo.isNotEmpty) {
+                                _emailController.text =
+                                    '$prefixo${_dominios[index]}';
+                                _emailController.selection =
+                                    TextSelection.fromPosition(
+                                  TextPosition(
+                                      offset: _emailController.text.length),
+                                );
                               }
                             },
                           ),
@@ -218,8 +211,9 @@ class _EmailClienteState extends State<EmailCliente> {
                               context.showError(e.toString());
                             }
                           } finally {
-                            if (mounted)
+                            if (mounted) {
                               setState(() => _isGoogleLoading = false);
+                            }
                           }
                         },
                       ),
@@ -229,15 +223,8 @@ class _EmailClienteState extends State<EmailCliente> {
                         isSecundario: true,
                         icone: const Icon(Icons.phone,
                             size: 24.0, color: Color(0xFF5D201C)),
-                        // TODO(backend): reabilitar quando existir verificação de
-                        // telefone/SMS integrada à API (o backend atual só autentica
-                        // por e-mail + senha).
                         onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text(
-                                    'Login por telefone estará disponível em breve.')),
-                          );
+                          context.push('/insira_telefone');
                         },
                       ),
                     ],
@@ -245,6 +232,7 @@ class _EmailClienteState extends State<EmailCliente> {
                 ),
               ),
               BotaoLargoNhac(
+                key: E2EKeys.loginSubmit,
                 texto: 'Continuar',
                 carregando: _isLoading,
                 onPressed: _emailValido
@@ -261,18 +249,41 @@ class _EmailClienteState extends State<EmailCliente> {
     );
   }
 
-  //TODO  O backend atual não tem endpoint para verificar se um e-mail já possui
-  // conta (não existe "checarEmail" na API — apenas /auth/login e
-  // /auth/registrar). Por isso sempre seguimos para a tela de senha
-  // (login); quem ainda não tem conta encontra lá o link para cadastro.
   Future<void> redirecionadorEmail() async {
     final localContext = context;
     final cadastroData = localContext.read<CadastroController>();
+    final authService = localContext.read<AuthService>();
 
     final emailDoUsuario = _emailController.text.trim();
 
-    cadastroData.setEmail(emailDoUsuario);
-    if (!localContext.mounted) return;
-    localContext.push('/continuar_senha');
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final existe = await authService.checarEmail(emailDoUsuario);
+
+      if (!localContext.mounted) return;
+      cadastroData.setEmail(emailDoUsuario);
+
+      if (existe) {
+        localContext.push('/continuar_senha');
+      } else {
+        // O backend exige e-mail confirmado por código antes do /auth/registrar.
+        await authService.enviarCodigoCadastro(emailDoUsuario);
+        if (!localContext.mounted) return;
+        localContext.push('/cadastro/verificar-email', extra: emailDoUsuario);
+      }
+    } catch (e) {
+      if (localContext.mounted) {
+        localContext.showError(e.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 }

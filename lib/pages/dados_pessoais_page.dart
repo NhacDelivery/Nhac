@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:provider/provider.dart';
@@ -59,29 +59,35 @@ class DadosPessoaisPage extends StatelessWidget {
             const SizedBox(height: 16.0),
             NhacMenuTile(
               titulo: 'Foto de Perfil',
-              subtitulo: usuario.imagemUrl!.isNotEmpty ? 'Alterar foto' : 'Adicionar foto',
-              onTap: () => context.push('/editar-foto'),
+              subtitulo: (usuario.imagemUrl?.isNotEmpty ?? false) ? 'Alterar foto' : 'Adicionar foto',
+              onTap: () async => context.push('/editar-foto'),
             ),
             NhacMenuTile(
               titulo: 'Nome', 
               subtitulo: usuario.nome, 
-              onTap: () => context.push('/editar-nome-preferencia')
+              onTap: () async {
+                if (GoRouterState.of(context).matchedLocation != '/editar-nome-preferencia') {
+                  await context.push('/editar-nome-preferencia');
+                }
+              }
             ),
-            NhacMenuTile(
-              titulo: 'E-mail',
-              subtitulo: usuario.email.isEmpty ? 'Toque para adicionar' : usuario.email,
-              onTap: isGoogleUser ? () {} : () => context.push('/editar-email'),
-            ),
+            if (usuario.email.isNotEmpty)
+              NhacMenuTile(
+                titulo: 'E-mail',
+                subtitulo: usuario.email,
+                onTap: isGoogleUser ? () async {} : () async => context.push('/editar-email'),
+              ),
             NhacMenuTile(
               titulo: 'Telefone', 
               subtitulo: usuario.telefone, 
-              onTap: () {},
+              onTap: () async {},
             ),
-            NhacMenuTile(
-              titulo: 'Senha', 
-              subtitulo: hasPassword ? '**************' : 'N�o cadastrada', 
-              onTap: () {},
-            ),
+            if (hasPassword)
+              NhacMenuTile(
+                titulo: 'Senha', 
+                subtitulo: '**************', 
+                onTap: () async => context.push('/editar-senha'),
+              ),
           ],
         ),
       ),

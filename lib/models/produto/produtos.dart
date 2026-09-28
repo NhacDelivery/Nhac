@@ -1,3 +1,5 @@
+import 'package:nhac/utils/safe_parse_helpers.dart';
+
 class ProdutosModel {
   final String id;
   final String nome;
@@ -7,6 +9,7 @@ class ProdutosModel {
   final String imagemUrl;   
   final int percentualDesconto;
   final String lojaId;
+  final bool lojaAberta;
 
   ProdutosModel({
     required this.id,
@@ -17,6 +20,7 @@ class ProdutosModel {
     this.imagemUrl = '',
     this.percentualDesconto = 0,
     this.lojaId = '',
+    this.lojaAberta = true,
   });
 
   factory ProdutosModel.fromMap(Map<String, dynamic> map) {
@@ -27,8 +31,9 @@ class ProdutosModel {
       preco: num.tryParse(map['preco']?.toString() ?? '0')?.toDouble() ?? 0.0,
       categoriaMenu: map['categoriaMenu']?.toString() ?? '',
       imagemUrl: map['imagemUrl']?.toString() ?? '',
-      percentualDesconto: map['percentualDesconto'] ?? 0,
+      percentualDesconto: safeInt(map['percentualDesconto']),
       lojaId: map['lojaId']?.toString() ?? '',
+      lojaAberta: safeBool(map['lojaAberta'], fallback: true),
     );
   }
 
@@ -43,6 +48,7 @@ class ProdutosModel {
       'imagemUrl': imagemUrl,
       'percentualDesconto': percentualDesconto,
       'lojaId': lojaId,
+      'lojaAberta': lojaAberta,
     };
   }
 }

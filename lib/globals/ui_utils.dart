@@ -1,46 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:nhac/components/app_notification.dart';
 
 extension AppUiUtils on BuildContext {
   void showError(String message) {
-    ScaffoldMessenger.of(this).clearSnackBars(); 
-    ScaffoldMessenger.of(this).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Colors.redAccent,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 4),
-      ),
+    showAppNotification(
+      this,
+      message: message,
+      type: NotificationType.error,
     );
   }
 
   void showSuccess(String message) {
-    ScaffoldMessenger.of(this).clearSnackBars();
-    ScaffoldMessenger.of(this).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(color: Colors.white),
-        ),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 3),
-      ),
+    showAppNotification(
+      this,
+      message: message,
+      type: NotificationType.success,
     );
   }
 
   void showInfo(String message) {
-    ScaffoldMessenger.of(this).clearSnackBars();
-    ScaffoldMessenger.of(this).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      ),
+    showAppNotification(
+      this,
+      message: message,
+      type: NotificationType.info,
     );
   }
 }

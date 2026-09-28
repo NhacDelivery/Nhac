@@ -1,8 +1,5 @@
 import 'dart:io';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:nhac/globals/router.dart';
 import 'package:nhac/models/usuario/usuario_model.dart';
 import 'package:nhac/repositories/user_repository.dart';
@@ -14,7 +11,30 @@ class UserProvider with ChangeNotifier {
 
   UserProvider({AuthService? authService, UserRepository? repository})
       : _authService = authService ?? authServiceRoteador,
-        _userRepository = repository ?? UserRepository();
+        _userRepository = repository ?? UserRepository() {
+    _sessionUserId = _authService.usuarioId;
+    _authService.addListener(_onSessionChanged);
+  }
+
+  String? _sessionUserId;
+  int _sessionVersion = 0;
+  bool _disposed = false;
+
+  void _onSessionChanged() {
+    if (_sessionUserId == _authService.usuarioId) return;
+    _sessionUserId = _authService.usuarioId;
+    _sessionVersion++;
+    _usuario = null;
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    _authService.removeListener(_onSessionChanged);
+    super.dispose();
+  }
 
   UsuarioModel? _usuario;
   bool _isLoading = false;
@@ -23,23 +43,29 @@ class UserProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
 
   
-  bool get isGoogleUser => false;
-  bool get hasPassword => true;
+  bool get isGoogleUser => _authService.isGoogleUser;
+  bool get isPhoneUser => _authService.isPhoneUser;
+  bool get hasPassword => _authService.hasPassword;
 
   Future<void> carregarDadosUsuario() async {
     final usuarioId = _authService.usuarioId;
     if (usuarioId == null) return;
 
+    final sessionVersion = _sessionVersion;
     try {
       _isLoading = true;
       notifyListeners();
 
-      _usuario = await _userRepository.buscarUsuario(usuarioId);
+      final resultado = await _userRepository.buscarUsuario(usuarioId);
+      if (_disposed || sessionVersion != _sessionVersion) return;
+      _usuario = resultado;
     } catch (e) {
       debugPrint("Erro ao carregar dados do utilizador: $e");
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!_disposed && sessionVersion == _sessionVersion) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -54,23 +80,9 @@ class UserProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      final storage = FirebaseStorage.instanceFor(app: Firebase.app());
+      final url = await _userRepository.enviarFotoPerfil(imagem);
 
-      // Ver comentário equivalente em editar_foto_page.dart: o Storage
-      // exige request.auth != null, mas o app não usa mais Firebase Auth
-      // para login. Login anônimo satisfaz a regra sem exigir conta.
-      if (FirebaseAuth.instance.currentUser == null) {
-        await FirebaseAuth.instance.signInAnonymously();
-      }
-      final ref = storage.ref().child('usuarios_fotos').child(usuarioId).child('perfil.jpg');
-
-      await ref.putFile(
-        imagem,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-
-      final url = await ref.getDownloadURL();
-
+      // Persiste a URL da imagem no backend via PUT /usuarios/{id}
       await _userRepository.atualizarDadosUsuario(usuarioId, {
         'imagemUrl': url,
       });

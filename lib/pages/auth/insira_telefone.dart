@@ -5,7 +5,11 @@ import 'package:nhac/components/seta_voltar.dart';
 import 'package:flutter/material.dart';
 import 'package:mask_text_input_formatter/mask_text_input_formatter.dart';
 import 'package:nowa_runtime/nowa_runtime.dart';
-
+import 'package:nhac/services/auth_service.dart';
+import 'package:nhac/controllers/cadastro_controller.dart';
+import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
+import 'package:nhac/globals/ui_utils.dart';
 
 @NowaGenerated()
 class InsiraTelefone extends StatefulWidget {
@@ -23,13 +27,23 @@ class _InsiraTelefoneState extends State<InsiraTelefone> {
   final TextEditingController _telefoneController = TextEditingController();
 
   bool _numeroValido = false;
-  final bool  _isLoading = false;
+  bool _isLoading = false;
 
   final maskFormatter = MaskTextInputFormatter(
     mask: '(##) #####-####',
     filter: {'#': RegExp('[0-9]')},
     type: MaskAutoCompletionType.lazy,
   );
+
+  @override
+  void initState() {
+    super.initState();
+    // Limpar estado de cadastro anterior para evitar que dados "sujos"
+    // (ex: email de uma tentativa anterior) poluam o fluxo de cadastro por SMS.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CadastroController>().limparDados();
+    });
+  }
 
   @override
   void dispose() {
@@ -127,18 +141,30 @@ class _InsiraTelefoneState extends State<InsiraTelefone> {
                 bottom: 24.0,
                 top: 8.0,
               ),
-              child: BotaoLargoNhac(
+               child: BotaoLargoNhac(
                 texto: 'Continuar', 
                 carregando: _isLoading,
                  onPressed: _numeroValido
-                      ? () {
-                          // Cadastro/login por telefone não é suportado pelo
-                          // backend atual (apenas e-mail + senha).
-                          // TODO(backend): reabilitar quando existir verificação
-                          // de telefone/SMS integrada à API.
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Login por telefone estará disponível em breve.')),
-                          );
+                      ? () async {
+                          setState(() {
+                            _isLoading = true;
+                          });
+                          try {
+                            await context.read<AuthService>().enviarCodigoSms(_telefoneController.text);
+                            if (context.mounted) {
+                              context.push('/verificacao_numero', extra: _telefoneController.text);
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              context.showError(e.toString());
+                            }
+                          } finally {
+                            if (mounted) {
+                              setState(() {
+                                _isLoading = false;
+                              });
+                            }
+                          }
                         }
                       : null,
               ),

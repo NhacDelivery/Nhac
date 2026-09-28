@@ -7,12 +7,14 @@ import 'package:image_picker/image_picker.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nhac/controllers/cart_provider.dart';
 import 'package:nhac/controllers/endereco_provider.dart';
 import 'package:nhac/controllers/user_provider.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/biometric_service.dart';
 import 'package:provider/provider.dart';
+import 'package:nhac/globals/ui_utils.dart';
+import 'package:nhac/repositories/pedido_repository.dart';
 
 class ProfileContent extends StatefulWidget {
   const ProfileContent({super.key});
@@ -23,17 +25,39 @@ class ProfileContent extends StatefulWidget {
 
 class _ProfileContentState extends State<ProfileContent> {
   bool _isUploading = false;
+  Map<String, dynamic> _estatisticas = {
+    'totalPedidos': 0,
+    'lojasFavoritadas': 0,
+    'cuponsResgatados': 0
+  };
+  bool _carregandoEstatisticas = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _carregarEstatisticas();
+  }
+
+  Future<void> _carregarEstatisticas() async {
+    final auth = context.read<AuthService>();
+    if (auth.usuarioId != null) {
+      final repo = PedidoRepository();
+      final stats = await repo.buscarEstatisticas(auth.usuarioId!);
+      if (mounted) {
+        setState(() {
+          _estatisticas = stats;
+          _carregandoEstatisticas = false;
+        });
+      }
+    } else {
+      if (mounted) setState(() => _carregandoEstatisticas = false);
+    }
+  }
 
   void _logoutUsuario(BuildContext context) async {
     final authService = context.read<AuthService>();
-    final userProvider = context.read<UserProvider>();
-    final carrinho = context.read<CartProvider>();
     Navigator.pop(context);
-    userProvider.limparUsuario();
-    carrinho.esvaziarCarrinho();
     await authService.signOut();
-    if (!context.mounted) return;
-    context.go('/bem-vindo');
   }
 
   void _abrirNotificacoes(BuildContext context) {
@@ -325,10 +349,8 @@ class _ProfileContentState extends State<ProfileContent> {
                                         imageUrl: usuario.imagemUrl ?? '',
                                         fit: BoxFit.cover,
                                         placeholder: (context, url) =>
-                                            const Center(
-                                                child:
-                                                    CircularProgressIndicator(
-                                                        strokeWidth: 2)),
+                                          const LoadingNhac(
+                                            telaCheia: false, tamanho: 40),
                                         errorWidget: (context, url, error) =>
                                             Icon(Icons.person,
                                                 size: 48.r,
@@ -358,10 +380,8 @@ class _ProfileContentState extends State<ProfileContent> {
                                           }
                                         } catch (e) {
                                           if (context.mounted) {
-                                            ScaffoldMessenger.of(context)
-                                                .showSnackBar(SnackBar(
-                                                    content: Text(
-                                                        'Erro ao carregar imagem: $e')));
+                                            context.showError(
+                                                'Erro ao carregar imagem: $e');
                                           }
                                         } finally {
                                           if (mounted) {
@@ -433,19 +453,31 @@ class _ProfileContentState extends State<ProfileContent> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildStatItem('3', 'Pedidos'),
+                      _carregandoEstatisticas
+                          ? const LoadingNhac(telaCheia: false, tamanho: 24)
+                          : _buildStatItem(
+                              '${_estatisticas['totalPedidos'] ?? 0}',
+                              'Pedidos'),
                       Container(
                           height: 30.h,
                           width: 1.w,
                           color: Colors.grey.shade300),
-                      _buildStatItem('1', 'Avaliações'),
+                      _carregandoEstatisticas
+                          ? const LoadingNhac(telaCheia: false, tamanho: 24)
+                          : _buildStatItem(
+                              '${_estatisticas['lojasFavoritadas'] ?? 0}',
+                              'Favoritos',
+                            ),
                       Container(
                           height: 30.h,
                           width: 1.w,
                           color: Colors.grey.shade300),
-                      GestureDetector(
-                          onTap: () => context.push('/cupons'),
-                          child: _buildStatItem('67', 'Cupons')),
+                      _carregandoEstatisticas
+                          ? const LoadingNhac(telaCheia: false, tamanho: 24)
+                          : _buildStatItem(
+                              '${_estatisticas['cuponsResgatados'] ?? 0}',
+                              'Cupons',
+                            ),
                     ],
                   ),
                   SizedBox(height: 40.h),
@@ -479,11 +511,12 @@ class _ProfileContentState extends State<ProfileContent> {
                                 await BiometricService.authenticate();
                             if (!context.mounted) return;
 
-                            // TODO esse campo aqui ta liberando se a pessoa não tiver autenticado com a senha ou biometria
                             if (!autenticado) {
-                                context.push('/dados-pessoais');
+                              context.showError(
+                                  'Autenticação biométrica necessária');
+                              return;
                             }
-                            if (autenticado) context.push('/dados-pessoais');
+                            context.push('/dados-pessoais');
                           },
                         ),
                         Divider(

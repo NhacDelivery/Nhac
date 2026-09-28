@@ -93,14 +93,14 @@ class HomeSkeleton extends StatelessWidget {
   }
 
   Widget _buildProductCardSkeleton() {
-    return SizedBox(
-      width: 160.w,
+    return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildBoxSkeleton(width: 160.w, height: 120.h, borderRadius: 20.r),
+          _buildBoxSkeleton(
+              width: double.infinity, height: 120.h, borderRadius: 20.r),
           SizedBox(height: 12.h),
-          _buildBoxSkeleton(width: 120.w, height: 14.h),
+          _buildBoxSkeleton(width: 100.w, height: 14.h),
           SizedBox(height: 6.h),
           _buildBoxSkeleton(width: 60.w, height: 12.h),
           SizedBox(height: 12.h),

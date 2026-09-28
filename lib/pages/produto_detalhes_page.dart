@@ -1,16 +1,22 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:nhac/components/app_notification.dart';
+import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/components/home/home_product_section.dart';
 import 'package:nhac/controllers/cart_provider.dart';
 import 'package:nhac/models/produto/produtos.dart';
 import 'package:nhac/models/loja/lojas.dart';
 import 'package:nhac/pages/loja_page.dart';
-import 'package:provider/provider.dart';
 import 'package:nhac/repositories/produto_repository.dart';
 import 'package:nhac/repositories/loja_repository.dart';
+import 'package:nhac/repositories/avaliacao_repository.dart';
+import 'package:nhac/models/produto/avaliacoes.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
 
 class ProdutoDetalhesPage extends StatefulWidget {
   final ProdutosModel produto;
@@ -30,6 +36,10 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
 
   final _produtoRepository = ProdutoRepository();
   final _lojaRepository = LojaRepository();
+  final _avaliacaoRepository = AvaliacaoRepository();
+
+  late Future<Map<String, dynamic>> _resumoAvaliacoesFuture;
+  late Future<List<AvaliacoesModel>> _avaliacoesFuture;
 
   @override
   void initState() {
@@ -41,6 +51,9 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
         ? _lojaRepository.buscarLoja(widget.produto.lojaId)
         : Future.value(null);
     _produtosDaLojaFuture = null;
+
+    _resumoAvaliacoesFuture = _avaliacaoRepository.buscarResumoAvaliacoes(widget.produto.id);
+    _avaliacoesFuture = _avaliacaoRepository.buscarAvaliacoes(widget.produto.lojaId);
   }
 
   void _incrementarQuantidade() {
@@ -62,7 +75,16 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   void _abrirLojaProfile() async {
     if (_isNavigatingToLoja || _lojaFuture == null) return;
     
-    final loja = await _lojaFuture;
+    dynamic loja;
+    try {
+      loja = await _lojaFuture;
+    } catch (e) {
+      if (mounted) {
+        context.showError('Não foi possível carregar os dados da loja.');
+      }
+      return;
+    }
+    
     if (loja == null) return;
 
     setState(() {
@@ -175,10 +197,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                             placeholder: (context, url) => Container(
                               color: const Color(0xFFF5F5F5),
                               child: const Center(
-                                child: CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Color(0xFFFF6961)),
-                                ),
+                                child: LoadingNhac(telaCheia: false, tamanho: 40),
                               ),
                             ),
                             errorWidget: (context, url, error) => Container(
@@ -457,8 +476,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               ),
               child: Row(
                 children: [
-                  _buildIconAction(Icons.star_border, 'Favoritar', '118'),
-                  SizedBox(width: 16.w),
+
                   _buildIconAction(Icons.chat_bubble_outline, 'Chat', ''),
                   SizedBox(width: 24.w),
                   Expanded(
@@ -471,16 +489,12 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                         final lojaFechada =
                             aindaCarregando || loja == null || !loja.isAberto;
                         return ElevatedButton(
+                          key: E2EKeys.productAdd,
                       onPressed: aindaCarregando
                           ? null
                           : lojaFechada
                           ? () {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Esta loja está fechada no momento.'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                              context.showError('Esta loja está fechada no momento.');
                             }
                           : () async {
                         try {
@@ -494,23 +508,16 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                             quantidade: _quantidade,
                           );
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('$_quantidade x ${widget.produto.nome} adicionado ao carrinho!'),
-                                duration: const Duration(seconds: 2),
-                                backgroundColor: Colors.green,
-                              ),
+                            showAppNotification(
+                              context,
+                              type: NotificationType.success,
+                              imageUrl: widget.produto.imagemUrl,
+                              message: '$_quantidade x ${widget.produto.nome}',
                             );
                           }
                         } catch (e) {
                           if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(e.toString().replaceAll('Exception: ', '')),
-                                duration: const Duration(seconds: 4),
-                                backgroundColor: Colors.red,
-                              ),
-                            );
+                            context.showError(e.toString().replaceAll('Exception: ', ''));
                           }
                         }
                       },
@@ -588,11 +595,11 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
     );
   }
 
-  Widget _buildIconAction(IconData icon, String label, String count) {
+  Widget _buildIconAction(IconData icon, String label, String count, {Color? iconColor}) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 24.r, color: const Color(0xFF666666)),
+        Icon(icon, size: 24.r, color: iconColor ?? const Color(0xFF666666)),
         SizedBox(height: 4.h),
         Text(
           count.isNotEmpty ? count : label,
@@ -614,13 +621,19 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Avaliações do Produto (35)',
-                style: TextStyle(
-                  fontSize: 16.sp,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF5D201C),
-                ),
+              FutureBuilder<Map<String, dynamic>>(
+                future: _resumoAvaliacoesFuture,
+                builder: (context, snapshot) {
+                  final total = snapshot.data?['total'] ?? 0;
+                  return Text(
+                    'Avaliações do Produto ($total)',
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF5D201C),
+                    ),
+                  );
+                }
               ),
               Row(
                 children: [
@@ -636,15 +649,14 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               ),
             ],
           ),
-          FutureBuilder<LojasModel?>(
-            future: _lojaFuture,
+          FutureBuilder<Map<String, dynamic>>(
+            future: _resumoAvaliacoesFuture,
             builder: (context, snapshot) {
-              double rating = 5.0;
-              int total = 120;
+              double rating = 0.0;
+              int total = 0;
               if (snapshot.hasData && snapshot.data != null) {
-                final loja = snapshot.data!;
-                rating = loja.dadosOperacionais?.avaliacaoMedia ?? 5.0;
-                total = loja.dadosOperacionais?.totalAvaliacoes ?? 120;
+                rating = (snapshot.data!['media'] ?? 0).toDouble();
+                total = snapshot.data!['total'] ?? 0;
               }
               return _buildRatingSummary(rating, total);
             }
@@ -654,20 +666,34 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
             children: [
               _buildReviewFilterTag('Tudo', isSelected: true),
               SizedBox(width: 8.w),
-              _buildReviewFilterTag('Com fotos 3'),
+              _buildReviewFilterTag('Com fotos 0'),
               SizedBox(width: 8.w),
-              _buildReviewFilterTag('Positivas 25', icon: Icons.thumb_up_alt),
+              _buildReviewFilterTag('Positivas 0', icon: Icons.thumb_up_alt),
             ],
           ),
           SizedBox(height: 20.h),
-          _buildReviewItem(
-            name: 'Usuário Anônimo',
-            avatarColor: Colors.brown.shade200,
-            avatarIcon: Icons.pets,
-            review: 'Avaliação positiva.\nÓtimo vendedor~',
-            date: '1 mês atrás',
-            location: 'São Paulo',
-            tag: 'Positiva',
+          FutureBuilder<List<AvaliacoesModel>>(
+            future: _avaliacoesFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: LoadingNhac(telaCheia: false, tamanho: 40));
+              if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) return Text('Sem avaliações ainda.', style: TextStyle(color: Colors.grey.shade600));
+
+              return Column(
+                children: snapshot.data!.take(3).map((avaliacao) {
+                  return _buildReviewItem(
+                    name: avaliacao.nomeUsuario.trim().isNotEmpty
+                        ? avaliacao.nomeUsuario
+                        : 'Anônimo',
+                    avatarColor: Colors.brown.shade200,
+                    avatarIcon: Icons.person,
+                    review: avaliacao.comentario,
+                    date: avaliacao.criadoEm ?? '',
+                    location: '',
+                    tag: avaliacao.nota >= 4 ? 'Positiva' : 'Feedback',
+                  );
+                }).toList(),
+              );
+            }
           ),
         ],
       ),

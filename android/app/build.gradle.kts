@@ -8,7 +8,6 @@ plugins {
     // END: FlutterFire Configuration
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
-    
 }
 
 val keystoreProperties = Properties()
@@ -19,28 +18,36 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.feentzs.nhac"
-    compileSdk = flutter.compileSdkVersion
+    // Defina no máximo 35 (Android 15) para garantir compatibilidade completa das bibliotecas
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
         isCoreLibraryDesugaringEnabled = true
-        
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        }
     }
 
     defaultConfig {
         applicationId = "com.feentzs.nhac"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://docs.flutter.dev/deployment/android#reviewing-the-gradle-build-configuration.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        
+        val envFile = rootProject.file("../.env")
+        val envProperties = Properties()
+        if (envFile.exists()) {
+            envProperties.load(FileInputStream(envFile))
+        }
+        val googlePlacesApiKey = envProperties.getProperty("GOOGLE_PLACES_API_KEY") ?: ""
+        manifestPlaceholders["googleMapsApiKey"] = googlePlacesApiKey
     }
 
     signingConfigs {

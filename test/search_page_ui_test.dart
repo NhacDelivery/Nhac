@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nhac/pages/search_page.dart';
 
 void main() {
+  setUpAll(() => dotenv.testLoad(fileInput: 'API_BASE_URL=http://localhost:8080'));
   testWidgets('SearchPage deve renderizar o campo de busca e aceitar input', (WidgetTester tester) async {
     
     await tester.pumpWidget(

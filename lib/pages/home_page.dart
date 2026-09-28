@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nhac/components/fly_to_cart_overlay.dart';
 import 'package:nhac/components/home/home_content.dart';
 import 'package:nhac/components/profile_content.dart';
 import 'package:nhac/components/botoes/botao_nhac.dart';
@@ -9,8 +10,10 @@ import 'package:nhac/controllers/cart_provider.dart';
 import 'package:nhac/controllers/endereco_provider.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:nhac/pages/carrinho_page.dart';
+import 'package:nhac/pages/feed_page.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:nhac/e2e/e2e_keys.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -24,7 +27,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late PageController _pageController;
   final ScrollController _scrollController = ScrollController();
   bool _isScrolledDown = false;
+  late CartProvider _cartProvider;
   late final AnimationController _cartBarController;
+  late final AnimationController _cartBounceController;
+  final GlobalKey _cartIconKey = GlobalKey();
   final NumberFormat currencyFormat =
       NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
@@ -36,6 +42,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 300),
     );
+    _cartBounceController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
 
     if (_selectedIndex == 1) {
       _cartBarController.forward();
@@ -43,14 +53,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final userProvider = context.read<UserProvider>();
-      final cartProvider = context.read<CartProvider>();
+      _cartProvider = context.read<CartProvider>();
       final enderecoProvider = context.read<EnderecoProvider>();
 
       userProvider.carregarDadosUsuario();
-      cartProvider.carregarCarrinhoLocal();
+      _cartProvider.carregarCarrinhoLocal();
       enderecoProvider.buscarEnderecos();
 
-      cartProvider.addListener(_onCartChanged);
+      _cartProvider.addListener(_onCartChanged);
     });
   }
 
@@ -65,6 +75,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           _cartBarController.forward();
         }
       } else {
+        setState(() {
+          _isScrolledDown = false;
+        });
         if (_cartBarController.status != AnimationStatus.reverse &&
             _cartBarController.value != 0.0) {
           _cartBarController.animateBack(0,
@@ -76,12 +89,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    try {
-      context.read<CartProvider>().removeListener(_onCartChanged);
-    } catch (_) {}
+    _cartProvider.removeListener(_onCartChanged);
     _pageController.dispose();
     _scrollController.dispose();
     _cartBarController.dispose();
+    _cartBounceController.dispose();
     super.dispose();
   }
 
@@ -100,7 +112,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       case 1:
         return Icons.shopping_cart_outlined;
       case 2:
-        return Icons.shopping_bag_outlined;
+        return Icons.newspaper_outlined;
       case 3:
         return Icons.person_outline;
       default:
@@ -112,9 +124,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
-    return Scaffold(
-      extendBody: true,
-      backgroundColor: const Color(0xFFFFE7E5),
+    return FlyToCartOverlay(
+      key: E2EKeys.homeReady,
+      cartIconKey: _cartIconKey,
+      onLanded: () {
+        _cartBounceController.forward(from: 0.0);
+      },
+      child: Scaffold(
+        extendBody: true,
+        backgroundColor: const Color(0xFFFFE7E5),
       body: NotificationListener<ScrollNotification>(
         onNotification: (notification) {
           if (notification is ScrollUpdateNotification &&
@@ -146,7 +164,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 children: [
                   const HomeContent(),
                   CarrinhoPage(isActive: _selectedIndex == 1),
-                  _buildPlaceholderContent(2),
+                  const FeedPage(),
                   const ProfileContent(),
                 ],
               ),
@@ -204,7 +222,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   child: AnimatedOpacity(
                     duration: const Duration(milliseconds: 200),
                     opacity: (_isScrolledDown && _selectedIndex == 0) ? 1.0 : 0.0,
+                    child: Semantics(
+                    button: true,
+                    label: 'Voltar ao topo da página',
                     child: GestureDetector(
+                  key: E2EKeys.homeScrollTop,
                   onTap: (_isScrolledDown && _selectedIndex == 0) ? _scrollToTop : null,
                   child: Container(
                     width: 50.w,
@@ -227,6 +249,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     ),
                   ),
                     ),
+                  ),
                   ),
                 ),
               ),
@@ -254,6 +277,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         child: Consumer<CartProvider>(
                           builder: (context, cart, _) => _buildCartTotalBar(
                             cart.valorTotal,
+                            key: _selectedIndex == 1
+                                ? E2EKeys.cartCheckout
+                                : null,
                             onPressed: () {
                               if (_selectedIndex == 1) {
                                 context.push('/checkout');
@@ -296,29 +322,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildPlaceholderContent(int index) {
-    return Stack(
-      children: [
-        Center(
-          child: Text(
-            'tela $index',
-            style: TextStyle(color: const Color(0xFF5D201C), fontSize: 24.sp),
-          ),
-        ),
-        Positioned(
-          top: 257.h,
-          left: 70.w,
-          width: 232.w,
-          height: 200.h,
-          child: const Image(
-            image: AssetImage('assets/construction.gif'),
-            fit: BoxFit.fitHeight,
-          ),
-        ),
-      ],
+    ),
     );
   }
 
@@ -326,13 +330,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     return GestureDetector(
       onTap: () {
         if (_isScrolledDown) {
-          _scrollToTop();
+          if (_selectedIndex == 0) {
+            _scrollToTop();
+          } else {
+            setState(() {
+              _isScrolledDown = false;
+            });
+          }
         }
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
-        height: 75.h,
+        constraints: BoxConstraints(minHeight: 75.h),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(50.r),
@@ -370,15 +380,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 ],
               );
             },
-            firstChild: SizedBox(
-              width: MediaQuery.of(context).size.width - 48.w,
-              height: 75.h,
+            firstChild: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: MediaQuery.of(context).size.width - 48.w,
+                minHeight: 75.h,
+              ),
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 physics: const NeverScrollableScrollPhysics(),
-                child: SizedBox(
-                  width: MediaQuery.of(context).size.width - 48.w,
-                  height: 75.h,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: MediaQuery.of(context).size.width - 48.w,
+                    minHeight: 75.h,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
@@ -389,8 +403,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           label: 'Carrinho',
                           index: 1),
                       _buildNavItem(
-                          icon: Icons.shopping_bag_outlined,
-                          label: 'N sei',
+                          icon: Icons.newspaper_outlined,
+                          label: 'Feed',
                           index: 2),
                       _buildNavItem(
                           icon: Icons.person_outline,
@@ -401,9 +415,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 ),
               ),
             ),
-            secondChild: SizedBox(
-              width: 75.w,
-              height: 75.h,
+            secondChild: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: 75.w,
+                minHeight: 75.h,
+              ),
               child: Center(
                 child: Icon(
                   _getIconForIndex(_selectedIndex),
@@ -422,8 +438,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       {required IconData icon, required String label, required int index}) {
     final isSelected = _selectedIndex == index;
 
-    return GestureDetector(
-      onTap: () {
+    return Semantics(
+      button: true,
+      label: label,
+      selected: isSelected,
+      child: GestureDetector(
+        key: index == 1 ? E2EKeys.cartOpen : null,
+        onTap: () {
         final oldIndex = _selectedIndex;
         setState(() {
           _selectedIndex = index;
@@ -459,22 +480,33 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           mainAxisSize: MainAxisSize.min,
           children: [
             index == 1
-                ? Selector<CartProvider, int>(
-                    selector: (context, provider) => provider.totalDeUnidades,
-                    builder: (context, count, child) {
-                      return Badge(
-                        label: count > 0 ? Text(count.toString()) : null,
-                        isLabelVisible: count > 0,
-                        backgroundColor: const Color(0xFFFF6961),
-                        child: Icon(
-                          icon,
-                          size: 28.sp,
-                          color: isSelected
-                              ? const Color(0xFFFF6961)
-                              : const Color(0xFFA0A0A0),
-                        ),
+                ? AnimatedBuilder(
+                    animation: _cartBounceController,
+                    builder: (context, child) {
+                      final scale = 1.0 + 0.3 * math.sin(_cartBounceController.value * math.pi);
+                      return Transform.scale(
+                        scale: scale,
+                        child: child,
                       );
                     },
+                    child: Selector<CartProvider, int>(
+                      selector: (context, provider) => provider.totalDeUnidades,
+                      builder: (context, count, child) {
+                        return Badge(
+                          key: _cartIconKey,
+                          label: count > 0 ? Text(count.toString()) : null,
+                          isLabelVisible: count > 0,
+                          backgroundColor: const Color(0xFFFF6961),
+                          child: Icon(
+                            icon,
+                            size: 28.sp,
+                            color: isSelected
+                                ? const Color(0xFFFF6961)
+                                : const Color(0xFFA0A0A0),
+                          ),
+                        );
+                      },
+                    ),
                   )
                 : Icon(
                     icon,
@@ -508,10 +540,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ],
         ),
       ),
+    ),
     );
   }
 
-  Widget _buildCartTotalBar(double total, {required VoidCallback onPressed}) {
+  Widget _buildCartTotalBar(double total,
+      {Key? key, required VoidCallback onPressed}) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 12.h),
       decoration: BoxDecoration(
@@ -540,6 +574,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
           ),
           BotaoNhac(
+            key: key,
             label: 'Continuar',
             onPressed: onPressed,
             fontSize: 15.sp,

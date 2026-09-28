@@ -8,6 +8,7 @@ import 'package:lottie/lottie.dart';
 import 'package:provider/provider.dart';
 import '../../models/usuario/usuario_model.dart';
 import '../../controllers/user_provider.dart';
+import 'package:nhac/globals/ui_utils.dart';
 
 class ProfileHeader extends StatefulWidget {
   final UsuarioModel usuario;
@@ -67,7 +68,7 @@ class _ProfileHeaderState extends State<ProfileHeader> {
                           try {
                             if (context.mounted) await context.read<UserProvider>().atualizarFotoPerfil(File(pickedFile.path));
                           } catch (e) {
-                            if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro ao carregar imagem: $e')));
+                            if (context.mounted) context.showError('Erro ao carregar imagem: $e');
                           } finally {
                             if (mounted) setState(() => _isUploading = false);
                           }

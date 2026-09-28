@@ -1,3 +1,4 @@
+
 class UsuarioModel {
   final String id;
   final String nome;
@@ -34,8 +35,8 @@ class UsuarioModel {
       'nome': nome,
       'email': email,
       'telefone': telefone,
-      'imagemUrl': imagemUrl,
-      'senha': senha,
+      if (imagemUrl != null) 'imagemUrl': imagemUrl,
+      if (senha != null) 'senha': senha,
     };
   }
 }

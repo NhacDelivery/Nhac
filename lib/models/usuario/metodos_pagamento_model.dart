@@ -1,3 +1,5 @@
+import 'package:nhac/utils/safe_parse_helpers.dart';
+
 class MetodosPagamentoModel {
   final String id;
   final String bandeira;
@@ -23,7 +25,7 @@ class MetodosPagamentoModel {
       bandeira: map['bandeira'] ?? '',
       criadoEm: map['criadoEm']?.toString(), 
       nomeCartao: map['nomeCartao'] ?? '',
-      isPadrao: map['isPadrao'] ?? false,
+      isPadrao: safeBool(map['isPadrao']),
       tipo: map['tipo'] ?? '',
       ultimosDigitos: map['ultimosDigitos'] ?? '',
     );
@@ -51,7 +53,7 @@ class MetodosPagamentoModel {
   Map<String, dynamic> toMap() {
     return {
       'bandeira': bandeira,
-      'criadoEm': criadoEm ?? DateTime.now().toIso8601String(),
+      if (criadoEm != null) 'criadoEm': criadoEm,
       'nomeCartao': nomeCartao,
       'isPadrao': isPadrao,
       'tipo': tipo,

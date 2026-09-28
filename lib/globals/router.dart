@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nhac/pages/auth/cadastro/verificar_email_cadastro.dart';
 import 'package:nhac/pages/bem_vindo.dart';
 import 'package:nhac/pages/auth/continuar_senha.dart';
 import 'package:nhac/pages/auth/email_cliente.dart';
 import 'package:nhac/pages/auth/insira_telefone.dart';
 import 'package:nhac/pages/carrinho_page.dart';
+import 'package:nhac/pages/chat_loja_page.dart';
 import 'package:nhac/pages/checkout_page.dart';
+import 'package:nhac/pages/rastreio_pedido_page.dart';
 import 'package:nhac/pages/splash_screen.dart';
 import 'package:nhac/pages/bem_vindo_motoca.dart';
 import 'package:nhac/pages/auth/verificacao_numero.dart';
@@ -16,6 +19,7 @@ import 'package:nhac/pages/dados_pessoais_page.dart';
 import 'package:nhac/pages/editar_perfil/editar_nome_preferencia_page.dart';
 import 'package:nhac/pages/editar_perfil/editar_email_page.dart';
 import 'package:nhac/pages/editar_perfil/editar_foto_page.dart';
+import 'package:nhac/pages/editar_perfil/editar_senha_page.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nowa_runtime/nowa_runtime.dart';
 import 'package:nhac/pages/auth/cadastro/telefone_cadastro.dart';
@@ -23,6 +27,11 @@ import 'package:nhac/pages/enderecos_page.dart';
 import 'package:nhac/pages/formas_pagamento_page.dart';
 import 'package:nhac/pages/cupons_page.dart';
 import 'package:nhac/pages/search_page.dart';
+import 'package:nhac/pages/auth/recuperacao_senha/recuperacao_input_page.dart';
+import 'package:nhac/pages/auth/recuperacao_senha/inserir_codigo_recuperacao_page.dart';
+import 'package:nhac/pages/auth/recuperacao_senha/nova_senha_recuperacao_page.dart';
+import 'package:nhac/pages/feed_post_detail_page.dart';
+import 'package:nhac/models/feed/feed_post_model.dart';
 
 class _SlideRightToLeftPageRoute<T> extends PageRoute<T>
     with MaterialRouteTransitionMixin<T> {
@@ -130,6 +139,7 @@ final GoRouter appRouter = GoRouter(
         state.matchedLocation == '/insira_telefone' ||
         state.matchedLocation == '/verificacao_numero' ||
         state.matchedLocation == '/continuar_senha' ||
+        state.matchedLocation.startsWith('/recuperacao') ||
         state.matchedLocation.startsWith('/cadastro');
 
     final bool noMeioDoCadastro = state.matchedLocation == '/verificacao_numero' || 
@@ -192,6 +202,16 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
     GoRoute(
+      path: '/cadastro/verificar-email',
+      pageBuilder: (context, state) {
+        final email = state.extra as String? ?? '';
+        return _buildSlideRightToLeftPage(
+          key: state.pageKey,
+          child: VerificarEmailCadastro(email: email),
+        );
+      },
+    ),
+    GoRoute(
       path: '/cadastro/telefone',
       builder: (context, state) => const TelefoneCadastro(),
     ),
@@ -249,6 +269,13 @@ final GoRouter appRouter = GoRouter(
         child: const EditarFotoPage(),
       ),
     ),
+    GoRoute(
+      path: '/editar-senha',
+      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+        key: state.pageKey,
+        child: const EditarSenhaPage(),
+      ),
+    ),
 
     GoRoute(
       path: '/enderecos-salvos',
@@ -268,7 +295,7 @@ final GoRouter appRouter = GoRouter(
       path: '/cupons',
       pageBuilder: (context, state) => _buildSlideRightToLeftPage(
         key: state.pageKey,
-        child: const CuponsPage(),
+        child: CuponsPage(subtotal: (state.extra as num?)?.toDouble()),
       ),
     ),
     GoRoute(
@@ -295,5 +322,101 @@ final GoRouter appRouter = GoRouter(
       );
     },
   ),
+  GoRoute(
+    path: '/recuperacao/input',
+    pageBuilder: (context, state) {
+      final metodo = state.extra as String? ?? 'email';
+      return _buildSlideRightToLeftPage(
+        key: state.pageKey,
+        child: RecuperacaoInputPage(metodo: metodo),
+      );
+    },
+  ),
+  GoRoute(
+    path: '/recuperacao/codigo',
+    pageBuilder: (context, state) {
+      final data = state.extra as Map<String, dynamic>? ?? {};
+      return _buildSlideRightToLeftPage(
+        key: state.pageKey,
+        child: InserirCodigoRecuperacaoPage(
+          metodo: data['metodo'] ?? 'email',
+          contato: data['contato'] ?? '',
+        ),
+      );
+    },
+  ),
+  GoRoute(
+    path: '/recuperacao/nova-senha',
+    pageBuilder: (context, state) {
+      final data = state.extra as Map<String, dynamic>? ?? {};
+      return _buildSlideRightToLeftPage(
+        key: state.pageKey,
+        child: NovaSenhaRecuperacaoPage(
+          metodo: data['metodo'] ?? 'email',
+          contato: data['contato'] ?? '',
+          codigo: data['codigo'] ?? '',
+        ),
+      );
+    },
+  ),
+  GoRoute(
+    path: '/rastreio',
+    pageBuilder: (context, state) {
+      final pedidoId = state.uri.queryParameters['pedidoId'] ?? '';
+      return CustomTransitionPage(
+        key: state.pageKey,
+        child: RastreioPedidoPage(pedidoId: pedidoId),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(0.0, 1.0);
+          const end = Offset.zero;
+          const curve = Curves.easeOutCubic;
+
+          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 300),
+      );
+    },
+  ),
+      GoRoute(
+      path: '/chat-loja',
+      pageBuilder: (context, state) {
+        final dados = state.extra as Map<String, dynamic>? ?? const {};
+        return _buildSlideRightToLeftPage(
+          key: state.pageKey,
+          child: ChatLojaPage(
+            lojaId: (dados['lojaId'] ?? '').toString(),
+            lojaNome: (dados['lojaNome'] ?? 'Loja').toString(),
+          ),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/feed-post',
+      pageBuilder: (context, state) {
+        if (state.extra is! FeedPostModel) {
+          // Fallback para caso ocorra hot reload na tela e o extra seja perdido
+          return _buildSlideRightToLeftPage(
+            key: state.pageKey,
+            child: const Scaffold(
+              body: Center(child: Text('Post não encontrado')),
+            ),
+          );
+        }
+        
+        final post = state.extra as FeedPostModel;
+        return CustomTransitionPage(
+          key: state.pageKey,
+          child: FeedPostDetailPage(post: post),
+          transitionDuration: const Duration(milliseconds: 400),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        );
+      },
+    ),
   ],
   );

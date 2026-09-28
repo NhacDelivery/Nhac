@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:nhac/components/botoes/botao_largo_nhac.dart';
 import 'package:nhac/services/connectivity_service.dart';
 import 'package:provider/provider.dart';
+import 'package:nhac/globals/ui_utils.dart';
 
 class NoInternetPage extends StatelessWidget {
   const NoInternetPage({super.key});
@@ -44,13 +45,9 @@ class NoInternetPage extends StatelessWidget {
                   await service.checkConnection();
                   if (!context.mounted) return;
                   if (service.isOnline) {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('Conexão restabelecida!'),
-                        backgroundColor: Colors.green));
+                    context.showSuccess('Conexão restabelecida!');
                   } else {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                        content: Text('Ainda sem conexão. Tente novamente.'),
-                        backgroundColor: Color(0xFFFE645C)));
+                    context.showError('Ainda sem conexão. Tente novamente.');
                   }
                 },
               ),

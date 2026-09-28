@@ -1,3 +1,5 @@
+import 'package:nhac/utils/safe_parse_helpers.dart';
+
 class EnderecoModel {
   final String id;
   final String rua;
@@ -55,7 +57,7 @@ class EnderecoModel {
       estado: map['estado']?.toString() ?? '',
       cep: map['cep']?.toString() ?? '',
       complemento: map['complemento']?.toString(),
-      isPadrao: map['isPadrao'] ?? false,
+      isPadrao: safeBool(map['isPadrao']),
     );
   }
 

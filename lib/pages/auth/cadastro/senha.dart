@@ -230,9 +230,24 @@ class _SenhaState extends State<Senha> {
       localContext.showSuccess("Conta criada com sucesso!");
       localContext.go('/home-page');
 
-    } catch (e) {
+        } catch (e) {
       if (!localContext.mounted) return;
-      localContext.showError(e.toString());
+      final mensagem = e.toString().replaceAll('Exception: ', '');
+      // Janela de 30 min do código de cadastro expirou: reenvia e volta pra
+      // tela de código em vez de deixar o usuário travado no fim do fluxo.
+      if (mensagem.toLowerCase().contains('não verificado')) {
+        final email = localContext.read<CadastroController>().email;
+        try {
+          await localContext.read<AuthService>().enviarCodigoCadastro(email);
+          if (!localContext.mounted) return;
+          localContext.showError('Seu código expirou. Enviamos um novo para $email.');
+          localContext.push('/cadastro/verificar-email', extra: email);
+          return;
+        } catch (_) {
+          // cai no showError genérico abaixo
+        }
+      }
+      localContext.showError(mensagem);
     } finally {
       if (localContext.mounted) {
         setState(() => _isLoading = false);

@@ -1,4 +1,6 @@
-class AvaliacoesModel{
+import 'package:nhac/utils/safe_parse_helpers.dart';
+
+class AvaliacoesModel {
   final String comentario;
   final String? criadoEm;
   final String id;
@@ -22,27 +24,28 @@ class AvaliacoesModel{
     String? nomeUsuario,
     double? nota,
     String? userId,
-  }) => AvaliacoesModel(
-    comentario: comentario ?? this.comentario,
-    criadoEm: criadoEm ?? this.criadoEm,
-    id: id ?? this.id,
-    nomeUsuario: nomeUsuario ?? this.nomeUsuario,
-    nota: nota ?? this.nota,
-    userId: userId ?? this.userId,
-  );
+  }) =>
+      AvaliacoesModel(
+        comentario: comentario ?? this.comentario,
+        criadoEm: criadoEm ?? this.criadoEm,
+        id: id ?? this.id,
+        nomeUsuario: nomeUsuario ?? this.nomeUsuario,
+        nota: nota ?? this.nota,
+        userId: userId ?? this.userId,
+      );
 
-  factory AvaliacoesModel.fromMap(Map<String, dynamic> map, String docId){
+  factory AvaliacoesModel.fromMap(Map<String, dynamic> map, String docId) {
     return AvaliacoesModel(
       comentario: map['comentario'] ?? '',
-      criadoEm: map['criadoEm']?.toString(),
+      criadoEm: (map['dataCriacao'] ?? map['criadoEm'])?.toString(),
       id: docId,
       nomeUsuario: map['nomeUsuario'] ?? '',
-      nota: (map['nota'] ?? 0).toDouble(),
+      nota: safeDouble(map['nota']),
       userId: map['userId'] ?? '',
     );
   }
 
-  Map<String, dynamic> toMap(){
+  Map<String, dynamic> toMap() {
     return {
       'comentario': comentario,
       'criadoEm': criadoEm ?? DateTime.now().toIso8601String(),

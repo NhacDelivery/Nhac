@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nhac/globals/app_constants.dart';
 
 class BannerItem {
   const BannerItem({
@@ -34,7 +35,7 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
     // `categoria_menu` do banco (Combos, Sobremesas, Acompanhamento,
     // Prato Principal, Bebidas), senão a busca não retorna nada.
     BannerItem(
-      imageUrl: 'https://scontent-gru1-2.cdninstagram.com/v/t51.82787-15/670924780_17901783585428033_4922530998420665552_n.jpg?stp=dst-jpg_e35_tt6&_nc_cat=100&ig_cache_key=Mzg4ODQ4ODk3NTM4MDEwNDc1Mg%3D%3D.3-ccb7-5&ccb=7-5&_nc_sid=58cdad&efg=eyJ2ZW5jb2RlX3RhZyI6IkNBUk9VU0VMX0lURU0ueHBpZHMuMTIyNC5zZHIucmVndWxhcl9waG90by5DMyJ9&_nc_ohc=i8JzVpFQUFAQ7kNvwF-S-RN&_nc_oc=AdpHGEJWLmKGv24wrEF7Cpn4A-FV2aJEJMMeDkzJz0aV0U1BebBwJyBfunIICr0s1RSykpsvdarGmVAxoTlk1mvk&_nc_ad=z-m&_nc_cid=0&_nc_zt=23&_nc_ht=scontent-gru1-2.cdninstagram.com&_nc_gid=qYcUt4AEiM7d57vg9kf2_Q&_nc_ss=7a22e&oh=00_Af7AP5fnRqXKRPAOWhRue9FnkfAlIBNiX58AU9lZ2V5atg&oe=6A013FCD',
+      imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800', // TODO: substituir por URL permanente (Firebase Storage ou asset local)
       tipoFiltro: 'categoria',
       valorFiltro: 'Prato Principal',
     ),
@@ -127,7 +128,9 @@ class _BannerCard extends StatelessWidget {
       margin: EdgeInsets.symmetric(horizontal: 4.w),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(20.r),
-        child: CachedNetworkImage(
+        child: AppConstants.e2eMode
+            ? Container(color: Colors.grey.shade200)
+            : CachedNetworkImage(
           imageUrl: banner.imageUrl,
           fit: BoxFit.cover,
           width: double.infinity,

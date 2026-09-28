@@ -64,13 +64,18 @@ class BotaoLargoNhac extends StatelessWidget {
                     icone!,
                     SizedBox(width: 8.w),
                   ],
-                  Text(
-                    texto,
-                    style: TextStyle(
-                      color: isSecundario ? corEscura : corTextoClaro,
-                      fontSize: 18.sp,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.1,
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        texto,
+                        style: TextStyle(
+                          color: isSecundario ? corEscura : corTextoClaro,
+                          fontSize: 18.sp,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.1,
+                        ),
+                      ),
                     ),
                   ),
                 ],

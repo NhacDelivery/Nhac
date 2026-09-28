@@ -37,6 +37,9 @@ class MockUserProvider extends ChangeNotifier implements UserProvider {
 
   @override
   Future<void> carregarDadosUsuario() async {}
+
+  @override
+  bool get isPhoneUser => false;
 }
 
 void main() {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/loja/lojas.dart';
@@ -7,6 +8,12 @@ import '../components/product_card.dart';
 import '../components/seta_voltar.dart';
 import '../pages/produto_detalhes_page.dart';
 import '../repositories/produto_repository.dart';
+import '../repositories/loja_repository.dart';
+import '../services/auth_service.dart';
+import 'package:provider/provider.dart';
+import '../globals/ui_utils.dart';
+import '../e2e/e2e_keys.dart';
+import '../globals/app_constants.dart';
 
 class LojaPage extends StatefulWidget {
   final LojasModel loja;
@@ -19,17 +26,71 @@ class LojaPage extends StatefulWidget {
 class _LojaPageState extends State<LojaPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  
+
   late Future<List<ProdutosModel>> _produtosFuture;
-  
+
   final ProdutoRepository _produtoRepository = ProdutoRepository();
+  final LojaRepository _lojaRepository = LojaRepository();
+
+  bool _isSeguindo = false;
+  int _seguidores = 0;
+  bool _carregandoSeguidores = true;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-    
+
     _produtosFuture = _produtoRepository.buscarPorLoja(widget.loja.id);
+    _carregarSeguidores();
+  }
+
+  Future<void> _carregarSeguidores() async {
+    try {
+      final count = await _lojaRepository.contarSeguidores(widget.loja.id);
+      if (mounted) setState(() => _seguidores = count);
+
+      if (!mounted) return;
+
+      final auth = context.read<AuthService>();
+      if (auth.usuarioId != null) {
+        final seguindo =
+            await _lojaRepository.estaSeguindo(auth.usuarioId!, widget.loja.id);
+        if (mounted) setState(() => _isSeguindo = seguindo);
+      }
+    } finally {
+      if (mounted) setState(() => _carregandoSeguidores = false);
+    }
+  }
+
+  Future<void> _toggleSeguir() async {
+    final auth = context.read<AuthService>();
+    if (auth.usuarioId == null) {
+      context.showError('Faça login para seguir a loja.');
+      return;
+    }
+
+    try {
+      if (_isSeguindo) {
+        await _lojaRepository.deixarDeSeguir(auth.usuarioId!, widget.loja.id);
+        if (mounted) {
+          setState(() {
+            _isSeguindo = false;
+            _seguidores = (_seguidores > 0) ? _seguidores - 1 : 0;
+          });
+        }
+      } else {
+        await _lojaRepository.seguirLoja(auth.usuarioId!, widget.loja.id);
+        if (mounted) {
+          setState(() {
+            _isSeguindo = true;
+            _seguidores++;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) context.showError(e.toString());
+    }
   }
 
   @override
@@ -135,7 +196,9 @@ class _LojaPageState extends State<LojaPage>
       child: Stack(
         fit: StackFit.expand,
         children: [
-          CachedNetworkImage(
+          AppConstants.e2eMode
+              ? Container(color: const Color(0xFF42567A))
+              : CachedNetworkImage(
             imageUrl: "https://picsum.photos/seed/picsum/800/400",
             fit: BoxFit.cover,
             errorWidget: (context, url, error) =>
@@ -217,7 +280,9 @@ class _LojaPageState extends State<LojaPage>
                         _buildBadge(
                             widget.loja.categoria, const Color(0xFF5D201C)),
                         Text(
-                          "317 seguidores  452 seguindo",
+                          _carregandoSeguidores
+                              ? "Carregando..."
+                              : "$_seguidores seguidores",
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 10.sp,
@@ -231,17 +296,24 @@ class _LojaPageState extends State<LojaPage>
                 ),
               ),
               ElevatedButton(
-                onPressed: () {},
+                onPressed: _carregandoSeguidores ? null : _toggleSeguir,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFFF6961),
-                  foregroundColor: Colors.white,
+                  backgroundColor:
+                      _isSeguindo ? Colors.white : const Color(0xFFFF6961),
+                  foregroundColor:
+                      _isSeguindo ? const Color(0xFFFF6961) : Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(20)),
                   padding:
                       EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
                 ),
-                child: Text("Seguir",
+                child: Text(
+                    _carregandoSeguidores
+                        ? "..."
+                        : _isSeguindo
+                            ? "Seguindo"
+                            : "Seguir",
                     style: TextStyle(
                         fontWeight: FontWeight.bold, fontSize: 12.sp)),
               ),
@@ -299,12 +371,16 @@ class _LojaPageState extends State<LojaPage>
           children: [
             _buildStatItem(
                 "Avaliação",
-                (widget.loja.dadosOperacionais?.avaliacaoMedia ?? 0.0).toStringAsFixed(1),
+                (widget.loja.dadosOperacionais?.avaliacaoMedia ?? 0.0)
+                    .toStringAsFixed(1),
                 "Excelente",
                 const Color(0xFF5D201C)),
             Container(width: 1, height: 40.h, color: Colors.grey.shade200),
-            _buildStatItem("Avaliações", "${widget.loja.dadosOperacionais?.totalAvaliacoes ?? 0}",
-                "Total", const Color(0xFFFF6961)),
+            _buildStatItem(
+                "Avaliações",
+                "${widget.loja.dadosOperacionais?.totalAvaliacoes ?? 0}",
+                "Total",
+                const Color(0xFFFF6961)),
             Container(width: 1, height: 40.h, color: Colors.grey.shade200),
             _buildStatItem("Produtos", "100%", "Positivo", Colors.black87),
           ],
@@ -357,8 +433,7 @@ class _LojaPageState extends State<LojaPage>
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const SliverToBoxAdapter(
                     child: Center(
-                        child: CircularProgressIndicator(
-                            color: Color(0xFFFF6961))));
+                        child: LoadingNhac(telaCheia: false, tamanho: 40)));
               }
               if (snapshot.hasError ||
                   !snapshot.hasData ||
@@ -373,9 +448,9 @@ class _LojaPageState extends State<LojaPage>
                   ),
                 );
               }
-              
+
               final produtos = snapshot.data!;
-              
+
               return SliverGrid(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                   crossAxisCount: 2,
@@ -390,13 +465,17 @@ class _LojaPageState extends State<LojaPage>
                       onTap: () => Navigator.push(
                         context,
                         PageRouteBuilder(
-                          pageBuilder: (context, animation, secondaryAnimation) => ProdutoDetalhesPage(produto: produto),
-                          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  ProdutoDetalhesPage(produto: produto),
+                          transitionsBuilder:
+                              (context, animation, secondaryAnimation, child) {
                             const begin = Offset(0.0, 1.0);
                             const end = Offset.zero;
                             const curve = Curves.easeOutCubic;
 
-                            var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+                            var tween = Tween(begin: begin, end: end)
+                                .chain(CurveTween(curve: curve));
 
                             return SlideTransition(
                               position: animation.drive(tween),
@@ -407,8 +486,9 @@ class _LojaPageState extends State<LojaPage>
                         ),
                       ),
                       child: ProductCard(
-                       produto: produto,
-                       lojaFechada: !widget.loja.isAberto,
+                        key: E2EKeys.storeProduct(produto.id),
+                        produto: produto,
+                        lojaFechada: !widget.loja.isAberto,
                       ),
                     );
                   },
@@ -465,6 +545,7 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
-    return safeAreaTop != oldDelegate.safeAreaTop || tabBar != oldDelegate.tabBar;
+    return safeAreaTop != oldDelegate.safeAreaTop ||
+        tabBar != oldDelegate.tabBar;
   }
 }

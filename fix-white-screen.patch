@@ -1,0 +1,179 @@
+diff --git a/.github/workflows/build-apk.yml b/.github/workflows/build-apk.yml
+index 7bc975e..9d9325e 100644
+--- a/.github/workflows/build-apk.yml
++++ b/.github/workflows/build-apk.yml
+@@ -117,6 +117,20 @@ jobs:
+       - name: Create google-services.json
+         run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+ 
++      - name: Validate .env and google-services.json
++        run: |
++          if [ ! -s .env ]; then
++            echo "::error::.env está vazio - confira o secret ENV_FILE do repositório"
++            exit 1
++          fi
++          python3 -c "import json; json.load(open('android/app/google-services.json'))" || {
++            echo "::error::google-services.json inválido - confira o secret GOOGLE_SERVICES_JSON"
++            exit 1
++          }
++          for key in SENTRY_DSN STRIPE_PUBLISHABLE_KEY GOOGLE_PLACES_API_KEY; do
++            grep -q "^$key=" .env || echo "::warning::$key não encontrada em .env (pode causar crash no boot do app)"
++          done
++
+       - name: Install dependencies
+         run: flutter pub get
+ 
+@@ -171,6 +185,20 @@ jobs:
+       - name: Create google-services.json
+         run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+ 
++      - name: Validate .env and google-services.json
++        run: |
++          if [ ! -s .env ]; then
++            echo "::error::.env está vazio - confira o secret ENV_FILE do repositório"
++            exit 1
++          fi
++          python3 -c "import json; json.load(open('android/app/google-services.json'))" || {
++            echo "::error::google-services.json inválido - confira o secret GOOGLE_SERVICES_JSON"
++            exit 1
++          }
++          for key in SENTRY_DSN STRIPE_PUBLISHABLE_KEY GOOGLE_PLACES_API_KEY; do
++            grep -q "^$key=" .env || echo "::warning::$key não encontrada em .env (pode causar crash no boot do app)"
++          done
++
+       - name: Install dependencies
+         run: flutter pub get
+ 
+diff --git a/lib/main.dart b/lib/main.dart
+index 880cfd3..124088c 100644
+--- a/lib/main.dart
++++ b/lib/main.dart
+@@ -38,31 +38,22 @@ late final SharedPreferences sharedPrefs;
+ main() async {
+   WidgetsFlutterBinding.ensureInitialized();
+ 
+-  await dotenv.load(fileName: ".env");
+-
+-  Stripe.publishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? '';
+-  await Stripe.instance.applySettings();
+-
+-  await Firebase.initializeApp(
+-    options: DefaultFirebaseOptions.currentPlatform,
+-  );
+-
+-  await FirebaseAppCheck.instance.activate(
+-    // ignore: deprecated_member_use
+-    androidProvider:
+-        kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
+-  );
+-
+-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+-
+-  final pushService = PushNotificationService(authServiceRoteador);
+-  await pushService.initialize();
+-
+-  sharedPrefs = await SharedPreferences.getInstance();
++  // Carrega o .env cedo, só para pegar o SENTRY_DSN e já inicializar o
++  // Sentry antes de qualquer outra coisa. Assim, se Stripe/Firebase/FCM
++  // falharem logo em seguida, o erro é reportado em vez de travar a tela
++  // branca do splash silenciosamente (o que antes acontecia porque essas
++  // chamadas ficavam FORA do runZonedGuarded do SentryFlutter.init).
++  String sentryDsn = '';
++  try {
++    await dotenv.load(fileName: ".env");
++    sentryDsn = dotenv.env['SENTRY_DSN'] ?? '';
++  } catch (e, s) {
++    debugPrint('Falha ao carregar .env: $e\n$s');
++  }
+ 
+   await SentryFlutter.init(
+     (options) {
+-      options.dsn = dotenv.env['SENTRY_DSN'] ?? '';
++      options.dsn = sentryDsn;
+       // Set tracesSampleRate to 1.0 to capture 100% of transactions for tracing.
+       // We recommend adjusting this value in production.
+       options.tracesSampleRate = 1.0;
+@@ -70,10 +61,82 @@ main() async {
+       // Setting to 1.0 will profile 100% of sampled transactions:
+       //options.profilesSampleRate = 1.0;
+     },
+-    appRunner: () => runApp(SentryWidget(child: const MyApp())),
++    appRunner: () async {
++      try {
++        Stripe.publishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? '';
++        await Stripe.instance.applySettings();
++
++        await Firebase.initializeApp(
++          options: DefaultFirebaseOptions.currentPlatform,
++        );
++
++        await FirebaseAppCheck.instance.activate(
++          // ignore: deprecated_member_use
++          androidProvider: kDebugMode
++              ? AndroidProvider.debug
++              : AndroidProvider.playIntegrity,
++        );
++
++        FirebaseMessaging.onBackgroundMessage(
++            _firebaseMessagingBackgroundHandler);
++
++        final pushService = PushNotificationService(authServiceRoteador);
++        await pushService.initialize();
++
++        sharedPrefs = await SharedPreferences.getInstance();
++
++        runApp(SentryWidget(child: const MyApp()));
++      } catch (e, s) {
++        // Se qualquer inicialização crítica falhar, reporta pro Sentry
++        // (agora já ativo) e mostra uma tela de erro em vez de deixar a
++        // splash branca travada pra sempre.
++        await Sentry.captureException(e, stackTrace: s);
++        debugPrint('Falha ao inicializar o app: $e\n$s');
++        runApp(_StartupErrorApp(error: e));
++      }
++    },
+   );
+ }
+ 
++class _StartupErrorApp extends StatelessWidget {
++  const _StartupErrorApp({required this.error});
++
++  final Object error;
++
++  @override
++  Widget build(BuildContext context) {
++    return MaterialApp(
++      debugShowCheckedModeBanner: false,
++      home: Scaffold(
++        backgroundColor: Colors.white,
++        body: Center(
++          child: Padding(
++            padding: const EdgeInsets.all(24),
++            child: Column(
++              mainAxisSize: MainAxisSize.min,
++              children: [
++                const Icon(Icons.error_outline, size: 48, color: Colors.red),
++                const SizedBox(height: 16),
++                const Text(
++                  'Não foi possível iniciar o app.',
++                  textAlign: TextAlign.center,
++                  style: TextStyle(fontWeight: FontWeight.bold),
++                ),
++                const SizedBox(height: 8),
++                Text(
++                  '$error',
++                  textAlign: TextAlign.center,
++                  style: const TextStyle(fontSize: 12, color: Colors.grey),
++                ),
++              ],
++            ),
++          ),
++        ),
++      ),
++    );
++  }
++}
++
+ @NowaGenerated({'visibleInNowa': false})
+ class MyApp extends StatelessWidget {
+   @NowaGenerated({'loader': 'auto-constructor'})

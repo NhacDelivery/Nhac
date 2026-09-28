@@ -24,13 +24,13 @@ class LoadingNhac extends StatelessWidget {
           width: tamanho.w,
           height: tamanho.h,
           child: Lottie.asset(
-            'assets/animations/nhac-intro.json',
+            'assets/animations/loading_nhac.json',
             fit: BoxFit.contain,
             errorBuilder: (context, error, stackTrace) {
-              return Center(
-                child: CircularProgressIndicator(
-                  color: const Color(0xFFFE645C),
-                ),
+              return Icon(
+                Icons.restaurant_rounded,
+                color: const Color(0xFFFE645C),
+                size: tamanho.w,
               );
             },
           ),

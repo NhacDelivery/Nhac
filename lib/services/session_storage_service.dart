@@ -30,9 +30,39 @@ class SessionStorageService {
     return await _storage.read(key: AppConstants.secureKeyNomeUsuario);
   }
 
+  // Guarda localmente se a sessão atual foi aberta via Google. O backend
+  // não devolve nenhum campo indicando o provedor de login (nem no login
+  // normal, nem no /auth/social), então isso é rastreado no próprio
+  // dispositivo, no momento em que o login acontece.
+  Future<void> salvarLoginGoogle(bool viaGoogle) async {
+    await _storage.write(
+      key: AppConstants.secureKeyLoginGoogle,
+      value: viaGoogle.toString(),
+    );
+  }
+
+  Future<bool> obterLoginGoogle() async {
+    final valor = await _storage.read(key: AppConstants.secureKeyLoginGoogle);
+    return valor == 'true';
+  }
+
+  Future<void> salvarLoginTelefone(bool viaTelefone) async {
+    await _storage.write(
+      key: AppConstants.secureKeyLoginTelefone,
+      value: viaTelefone.toString(),
+    );
+  }
+
+  Future<bool> obterLoginTelefone() async {
+    final valor = await _storage.read(key: AppConstants.secureKeyLoginTelefone);
+    return valor == 'true';
+  }
+
   Future<void> limparSessao() async {
     await _storage.delete(key: AppConstants.secureKeyToken);
     await _storage.delete(key: AppConstants.secureKeyUsuarioId);
     await _storage.delete(key: AppConstants.secureKeyNomeUsuario);
+    await _storage.delete(key: AppConstants.secureKeyLoginGoogle);
+    await _storage.delete(key: AppConstants.secureKeyLoginTelefone);
   }
 }

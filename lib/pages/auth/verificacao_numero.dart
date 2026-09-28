@@ -4,8 +4,10 @@ import 'dart:async';
 import 'package:nowa_runtime/nowa_runtime.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-
 import 'package:nhac/globals/ui_utils.dart';
+import 'package:nhac/services/auth_service.dart';
+import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 
 @NowaGenerated()
 class VerificacaoNumero extends StatefulWidget {
@@ -57,6 +59,20 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
         timer.cancel();
       }
     });
+  }
+
+  Future<void> _reenviarCodigo() async {
+    try {
+      await context.read<AuthService>().enviarCodigoSms(widget.numero);
+      _iniciarTimer();
+      if (mounted) {
+        context.showSuccess("Código reenviado com sucesso!");
+      }
+    } catch (e) {
+      if (mounted) {
+        context.showError(e.toString());
+      }
+    }
   }
 
   @override
@@ -139,12 +155,22 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
                   onChanged: (value) {},
                  onCompleted: (value) async {
                     final localContext = context;
-                    // Verificação por SMS não é suportada pelo backend atual
-                    // (apenas e-mail + senha via /auth/login e /auth/registrar).
-                    // TODO(backend): reabilitar quando existir verificação de
-                    // telefone/SMS integrada à API.
-                    if (localContext.mounted) {
-                      localContext.showError('Login por telefone está temporariamente indisponível.');
+                    final authService = localContext.read<AuthService>();
+                    
+                    try {
+                      final isNovoUsuario = await authService.loginSms(widget.numero, value);
+                      
+                      if (!localContext.mounted) return;
+                      
+                      if (isNovoUsuario) {
+                        localContext.push('/cadastro/nome');
+                      } else {
+                        localContext.push('/home-page');
+                      }
+                    } catch (e) {
+                      if (localContext.mounted) {
+                        localContext.showError(e.toString());
+                      }
                     }
                   },
                   
@@ -159,7 +185,7 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
                   children: [
                     const SizedBox(width: 8.0),
                     GestureDetector(
-                      onTap: _podeReenviar ? _iniciarTimer : null,
+                      onTap: _podeReenviar ? _reenviarCodigo : null,
                       child: SvgPicture(
                         const SvgAssetLoader('assets/reload.svg'),
                         width: 14.0,
@@ -172,7 +198,7 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
                     ),
                     const SizedBox(width: 8.0),
                     GestureDetector(
-                      onTap: _podeReenviar ? _iniciarTimer : null,
+                      onTap: _podeReenviar ? _reenviarCodigo : null,
                       child: Text(
                         textoAtual,
                         style: TextStyle(
