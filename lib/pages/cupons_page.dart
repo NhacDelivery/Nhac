@@ -3,6 +3,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:nhac/components/seta_voltar.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/models/usuario/cupom_model.dart';
 import 'package:nhac/repositories/cupom_repository.dart';
@@ -136,7 +137,8 @@ class _CuponsPageState extends State<CuponsPage> {
                   ],
                 ),
               ),
-            if (_carregando) const Center(child: CircularProgressIndicator()),
+            if (_carregando)
+              const LoadingNhac(telaCheia: false, tamanho: 40),
             if (_erro != null) ...[
               Text(_erro!),
               TextButton(onPressed: _carregar, child: const Text('Tentar novamente')),

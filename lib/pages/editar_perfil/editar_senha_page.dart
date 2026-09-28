@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:nhac/controllers/user_provider.dart';
@@ -116,7 +117,7 @@ class _EditarSenhaPageState extends State<EditarSenhaPage> {
           context.showError('Usuarios do Google nao podem alterar a senha por aqui.');
         }
       });
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const LoadingNhac(telaCheia: true);
     }
 
     return Scaffold(

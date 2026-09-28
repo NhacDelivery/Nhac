@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:nhac/services/auth_service.dart';
@@ -114,7 +115,7 @@ class _EditarEmailPageState extends State<EditarEmailPage> {
           context.showError('Usuários do Google não podem alterar o e-mail por aqui.');
         }
       });
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const LoadingNhac(telaCheia: true);
     }
 
     return Scaffold(

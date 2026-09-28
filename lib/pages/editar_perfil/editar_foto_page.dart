@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/controllers/user_provider.dart';
@@ -185,7 +186,7 @@ class _EditarFotoPageState extends State<EditarFotoPage> {
                                               fit: BoxFit.cover,
                                               placeholder: (ctx, url) => Container(
                                                 color: Colors.grey.shade200,
-                                                child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF5D201C))),
+                                                child: const LoadingNhac(telaCheia: false, tamanho: 40),
                                               ),
                                               errorWidget: (ctx, url, err) => Container(
                                                 color: Colors.grey.shade300,

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -274,12 +275,9 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               SizedBox(
-                width: 18.r,
-                height: 18.r,
-                child: const CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Color(0xFF5D201C),
-                ),
+                width: 24.r,
+                height: 24.r,
+                child: const LoadingNhac(telaCheia: false, tamanho: 24),
               ),
               SizedBox(width: 12.w),
               Text(

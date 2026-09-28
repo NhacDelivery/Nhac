@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/loja/lojas.dart';
@@ -432,8 +433,7 @@ class _LojaPageState extends State<LojaPage>
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const SliverToBoxAdapter(
                     child: Center(
-                        child: CircularProgressIndicator(
-                            color: Color(0xFFFF6961))));
+                        child: LoadingNhac(telaCheia: false, tamanho: 40)));
               }
               if (snapshot.hasError ||
                   !snapshot.hasData ||

@@ -320,8 +320,8 @@ class _SearchPageState extends State<SearchPage>
                               ConnectionState.waiting) {
                             return const Center(
                               key: ValueKey('loading'),
-                              child:
-                                  LoadingNhac(telaCheia: false, tamanho: 300),
+                                child:
+                                  LoadingNhac(telaCheia: false, tamanho: 40),
                             );
                           }
                           if (snapshot.hasError) {

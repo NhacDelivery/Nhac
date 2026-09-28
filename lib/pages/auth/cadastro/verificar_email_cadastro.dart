@@ -10,6 +10,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/components/seta_voltar.dart';
 import 'package:nhac/globals/ui_utils.dart';
@@ -205,16 +206,7 @@ class _VerificarEmailCadastroState extends State<VerificarEmailCadastro> {
                 ),
                 const SizedBox(height: 16.0),
                 if (_validando)
-                  const Center(
-                    child: SizedBox(
-                      height: 22.0,
-                      width: 22.0,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        color: Color(0xFFFF6961),
-                      ),
-                    ),
-                  ),
+                  const LoadingNhac(telaCheia: false, tamanho: 24),
                 const SizedBox(height: 16.0),
                 Center(
                   child: TextButton(

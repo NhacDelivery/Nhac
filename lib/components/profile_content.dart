@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/controllers/endereco_provider.dart';
 import 'package:nhac/controllers/user_provider.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/biometric_service.dart';
 import 'package:provider/provider.dart';
@@ -348,10 +349,8 @@ class _ProfileContentState extends State<ProfileContent> {
                                         imageUrl: usuario.imagemUrl ?? '',
                                         fit: BoxFit.cover,
                                         placeholder: (context, url) =>
-                                            const Center(
-                                                child:
-                                                    CircularProgressIndicator(
-                                                        strokeWidth: 2)),
+                                          const LoadingNhac(
+                                            telaCheia: false, tamanho: 40),
                                         errorWidget: (context, url, error) =>
                                             Icon(Icons.person,
                                                 size: 48.r,
@@ -455,7 +454,7 @@ class _ProfileContentState extends State<ProfileContent> {
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _carregandoEstatisticas
-                          ? const CircularProgressIndicator()
+                          ? const LoadingNhac(telaCheia: false, tamanho: 24)
                           : _buildStatItem(
                               '${_estatisticas['totalPedidos'] ?? 0}',
                               'Pedidos'),
@@ -464,7 +463,7 @@ class _ProfileContentState extends State<ProfileContent> {
                           width: 1.w,
                           color: Colors.grey.shade300),
                       _carregandoEstatisticas
-                          ? const CircularProgressIndicator()
+                          ? const LoadingNhac(telaCheia: false, tamanho: 24)
                           : _buildStatItem(
                               '${_estatisticas['lojasFavoritadas'] ?? 0}',
                               'Favoritos',
@@ -474,7 +473,7 @@ class _ProfileContentState extends State<ProfileContent> {
                           width: 1.w,
                           color: Colors.grey.shade300),
                       _carregandoEstatisticas
-                          ? const CircularProgressIndicator()
+                          ? const LoadingNhac(telaCheia: false, tamanho: 24)
                           : _buildStatItem(
                               '${_estatisticas['cuponsResgatados'] ?? 0}',
                               'Cupons',

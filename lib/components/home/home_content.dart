@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:nhac/components/home/home_category_chips.dart';
+import 'package:nhac/components/home/home_order_tracking_card.dart';
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/models/loja/lojas.dart';
 import 'package:nhac/models/produto/produtos.dart';
@@ -13,6 +14,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/components/home/home_banner_carousel.dart';
@@ -250,7 +252,7 @@ class _HomeContentState extends State<HomeContent> {
           }
 
           _isLoadingLojas = false;
-          
+
           LocalCacheService.lojasCache = List.from(_lojas);
           LocalCacheService.currentPageLojasCache = _currentPageLojas;
           LocalCacheService.hasMoreLojasCache = _hasMoreLojas;
@@ -535,7 +537,7 @@ class _HomeContentState extends State<HomeContent> {
         if (_isLoadingLojas)
           Padding(
             padding: EdgeInsets.symmetric(vertical: 16.h),
-            child: const CircularProgressIndicator(color: Color(0xFFFF6961)),
+            child: const LoadingNhac(telaCheia: false, tamanho: 40),
           ),
       ],
     );
@@ -594,10 +596,10 @@ class _HomeContentState extends State<HomeContent> {
         if (mounted) {
           setState(() => _currentAddress = endereco);
           LocalCacheService.salvarLocalizacaoGps(endereco);
-          
+
           final authService = context.read<AuthService>();
           final enderecoProvider = context.read<EnderecoProvider>();
-          
+
           if (authService.isAuthenticated && enderecoProvider.enderecos.isEmpty) {
             final novoEndereco = EnderecoModel(
               id: '',
@@ -900,6 +902,8 @@ class _HomeContentState extends State<HomeContent> {
                   ),
                 ),
                 SizedBox(height: 28.h),
+                const HomeOrderTrackingCard(),
+                SizedBox(height: 28.h),
                 TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 800),
                   tween: Tween(begin: 0.0, end: 1.0),
@@ -916,6 +920,7 @@ class _HomeContentState extends State<HomeContent> {
                   child: const HomeCategoryChips(),
                 ),
                 SizedBox(height: 28.h),
+
                 TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 800),
                   tween: Tween(begin: 0.0, end: 1.0),
@@ -974,7 +979,6 @@ class _HomeContentState extends State<HomeContent> {
                   ),
                 ),
                 SizedBox(height: 28.h),
-
                 TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 800),
                   tween: Tween(begin: 0.0, end: 1.0),

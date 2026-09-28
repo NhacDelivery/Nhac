@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nhac/components/seta_voltar.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'dart:async';
 import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:nhac/services/auth_service.dart';
@@ -195,7 +196,7 @@ class _InserirCodigoRecuperacaoPageState extends State<InserirCodigoRecuperacaoP
                   onCompleted: _validarCodigo,
                 ),
                 if (_validando)
-                  const Center(child: CircularProgressIndicator()),
+                  const LoadingNhac(telaCheia: false, tamanho: 24),
                 if (_erroCodigo != null)
                   Text(
                     _erroCodigo!,

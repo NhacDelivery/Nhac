@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -196,10 +197,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                             placeholder: (context, url) => Container(
                               color: const Color(0xFFF5F5F5),
                               child: const Center(
-                                child: CircularProgressIndicator(
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                      Color(0xFFFF6961)),
-                                ),
+                                child: LoadingNhac(telaCheia: false, tamanho: 40),
                               ),
                             ),
                             errorWidget: (context, url, error) => Container(
@@ -677,7 +675,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
           FutureBuilder<List<AvaliacoesModel>>(
             future: _avaliacoesFuture,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: LoadingNhac(telaCheia: false, tamanho: 40));
               if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) return Text('Sem avaliações ainda.', style: TextStyle(color: Colors.grey.shade600));
 
               return Column(

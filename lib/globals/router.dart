@@ -363,9 +363,21 @@ final GoRouter appRouter = GoRouter(
     path: '/rastreio',
     pageBuilder: (context, state) {
       final pedidoId = state.uri.queryParameters['pedidoId'] ?? '';
-      return _buildSlideRightToLeftPage(
+      return CustomTransitionPage(
         key: state.pageKey,
         child: RastreioPedidoPage(pedidoId: pedidoId),
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          const begin = Offset(0.0, 1.0);
+          const end = Offset.zero;
+          const curve = Curves.easeOutCubic;
+
+          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 300),
       );
     },
   ),

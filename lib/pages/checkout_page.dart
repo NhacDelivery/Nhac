@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/models/usuario/cupom_model.dart';
 import 'package:nhac/repositories/cupom_repository.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -236,10 +237,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final enderecoProvider = Provider.of<EnderecoProvider>(context);
 
     if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFFFFE7E5),
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const LoadingNhac(telaCheia: true);
     }
 
     final EnderecoModel? enderecoisPadrao = enderecoProvider.enderecos.isEmpty
@@ -937,8 +935,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (dialogContext) => const Center(
-            child: CircularProgressIndicator(color: Color(0xFFFF6961))),
+        builder: (dialogContext) => const LoadingNhac(
+          telaCheia: false,
+          tamanho: 100,
+        ),
       );
 
       _checkoutIdempotencyKey ??= const Uuid().v4();

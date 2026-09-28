@@ -10,6 +10,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import 'package:nhac/globals/ui_utils.dart';
@@ -217,9 +218,7 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
 
   Widget _corpo() {
     if (_carregando) {
-      return const Center(
-        child: CircularProgressIndicator(color: Color(0xFFFF6961)),
-      );
+      return const LoadingNhac(telaCheia: false, tamanho: 120);
     }
 
     if (_erroFatal != null) {

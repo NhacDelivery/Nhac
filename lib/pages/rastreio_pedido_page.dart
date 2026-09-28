@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -18,6 +19,18 @@ import 'package:nhac/services/pedido_status_socket_service.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
 import 'package:nhac/globals/app_constants.dart';
 
+class _RastreioCacheEntry {
+  final PedidoModel pedido;
+  final LojasModel? loja;
+  final RotaEntregaModel? rota;
+
+  const _RastreioCacheEntry({
+    required this.pedido,
+    required this.loja,
+    required this.rota,
+  });
+}
+
 class RastreioPedidoPage extends StatefulWidget {
   final String pedidoId;
 
@@ -31,6 +44,8 @@ class RastreioPedidoPage extends StatefulWidget {
 }
 
 class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
+  static final Map<String, _RastreioCacheEntry> _cache = {};
+
   final PedidoRepository _pedidoRepository = PedidoRepository();
   final LojaRepository _lojaRepository = LojaRepository();
   final EntregaRepository _entregaRepository = EntregaRepository();
@@ -60,7 +75,15 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
   @override
   void initState() {
     super.initState();
-    _carregarDados();
+    final cached = _cache.remove(widget.pedidoId);
+    if (cached != null) {
+      _pedido = cached.pedido;
+      _loja = cached.loja;
+      _rota = cached.rota;
+      _isLoading = false;
+      _cache[widget.pedidoId] = cached;
+    }
+    _carregarDados(silencioso: cached != null);
     _conectarStatus();
   }
 
@@ -91,8 +114,8 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
 
     try {
       final pedido = await _pedidoRepository.buscarPedidoPorId(widget.pedidoId);
-      LojasModel? loja;
-      RotaEntregaModel? rota;
+      LojasModel? loja = _loja;
+      RotaEntregaModel? rota = _rota;
 
       try {
         loja = await _lojaRepository.buscarLoja(pedido.lojaId);
@@ -113,9 +136,20 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
         _erro = '';
       });
 
+      _cache.remove(widget.pedidoId);
+      _cache[widget.pedidoId] = _RastreioCacheEntry(
+        pedido: pedido,
+        loja: loja,
+        rota: rota,
+      );
+      if (_cache.length > 5) {
+        _cache.remove(_cache.keys.first);
+      }
+
       _publicarNotificacaoAoVivo();
     } catch (e) {
       if (!mounted) return;
+      if (_pedido != null && _loja != null) return;
       setState(() {
         _erro = 'Erro ao carregar dados do pedido: $e';
         _isLoading = false;
@@ -290,9 +324,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
 
   Widget _buildConteudo(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const LoadingNhac(telaCheia: true);
     }
 
     if (_erro.isNotEmpty) {
