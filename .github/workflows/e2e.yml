@@ -2,30 +2,11 @@ name: E2E cliente
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   pull_request:
-    paths:
-      - 'integration_test/**'
-      - 'test/**'
-      - '.github/workflows/build-apk.yml'
-      - 'lib/components/home/**'
-      - 'lib/controllers/cart_provider.dart'
-      - 'lib/e2e/**'
-      - 'lib/globals/app_constants.dart'
-      - 'lib/globals/router.dart'
-      - 'lib/main.dart'
-      - 'lib/pages/auth/**'
-      - 'lib/pages/bem_vindo.dart'
-      - 'lib/pages/carrinho_page.dart'
-      - 'lib/pages/checkout_page.dart'
-      - 'lib/pages/home_page.dart'
-      - 'lib/pages/loja_page.dart'
-      - 'lib/pages/produto_detalhes_page.dart'
-      - 'lib/pages/rastreio_pedido_page.dart'
-      - 'lib/repositories/**'
-      - 'lib/services/auth_service.dart'
-      - 'lib/services/api_client.dart'
-      - 'tool/run_e2e.sh'
-      - '.github/workflows/e2e.yml'
+  schedule:
+    - cron: '0 6 * * *'
 
 concurrency:
   group: e2e-cliente-${{ github.ref }}
@@ -41,7 +22,7 @@ jobs:
   e2e:
     name: E2E-001 a E2E-004
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 110
     services:
       mariadb:
         image: mariadb:11.4
@@ -68,7 +49,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: NhacDelivery/backend-nhac
-          ref: main
+          ref: f1035bd0b53c22e2a1dc98c71372220238d56369
           path: backend-nhac
 
       - name: Setup Java 25
@@ -78,6 +59,10 @@ jobs:
           java-version: '25'
           cache: maven
           cache-dependency-path: backend-nhac/pom.xml
+
+      - name: Build backend jar
+        working-directory: backend-nhac
+        run: ./mvnw -B -ntp -q -DskipTests package
 
       - name: Capture backend JDK
         id: backend-java
@@ -114,11 +99,13 @@ jobs:
         run: sudo chmod 666 /dev/kvm
 
       - name: Executar E2E Android isolado
+        timeout-minutes: 95
         uses: ReactiveCircus/android-emulator-runner@v2
         env:
           RUN_E2E: 'true'
           E2E_DB_MANAGED: 'true'
-          E2E_REPEAT: ${{ github.event_name == 'workflow_dispatch' && '3' || '1' }}
+          E2E_REPEAT: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && '3' || '1' }}
+          E2E_DB_CONTAINER: ${{ job.services.mariadb.id }}
           E2E_DEVICE_ID: emulator-5554
           BACKEND_DIR: ${{ github.workspace }}/backend-nhac
           BACKEND_JAVA_HOME: ${{ steps.backend-java.outputs.home }}
@@ -126,7 +113,7 @@ jobs:
           api-level: 34
           arch: x86_64
           profile: pixel_2
-          cores: 4
+          cores: 3
           ram-size: 4096M
           heap-size: 1024M
           disk-size: 6144M
@@ -138,7 +125,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-logs-${{ github.run_number }}
+          name: e2e-logs-${{ github.run_number }}-${{ github.run_attempt }}
           path: Nhac/e2e-logs
           if-no-files-found: warn
           retention-days: 14
