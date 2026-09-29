@@ -37,7 +37,7 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
     BannerItem(
       imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800', // TODO: substituir por URL permanente (Firebase Storage ou asset local)
       tipoFiltro: 'categoria',
-      valorFiltro: 'Prato Principal',
+      valorFiltro: 'Pratos Executivos',
     ),
     BannerItem(
       imageUrl: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=800',
@@ -58,6 +58,7 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
   }
 
   void _startAutoPlay() {
+    _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (_pageController.hasClients) {
         int nextPage = _currentPage + 1;
@@ -86,8 +87,10 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
       children: [
         SizedBox(
           height: 180.h,
-          child: GestureDetector(
-            onPanDown: (_) => _timer?.cancel(),
+          child: Listener(
+            onPointerDown: (_) => _timer?.cancel(),
+            onPointerUp: (_) => _startAutoPlay(),
+            onPointerCancel: (_) => _startAutoPlay(),
             child: PageView.builder(
               controller: _pageController,
               clipBehavior: Clip.none,

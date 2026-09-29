@@ -41,6 +41,19 @@ void main() {
         ],
       );
 
+  test('pedido envia coordenadas do endereço usadas no frete', () {
+    final pedido = CriarPedidoRequest(
+      lojaId: 'loja1', formaPagamento: 'PIX',
+      enderecoEntrega: EnderecoModel(rua: 'Rua A', numero: '1', bairro: 'Centro',
+          cidade: 'Osasco', estado: 'SP', cep: '06000-000'),
+      entregaLatitude: -23.5, entregaLongitude: -46.7,
+      itens: const [CriarPedidoItemRequest(produtoId: 'prod1', nome: 'Produto', quantidade: 1)],
+    );
+    final endereco = pedido.toMap()['enderecoEntrega'] as Map<String, dynamic>;
+    expect(endereco['latitude'], -23.5);
+    expect(endereco['longitude'], -46.7);
+  });
+
   test('POST /pedidos envia Idempotency-Key', () async {
     when(() => dio.post(
           '/pedidos',

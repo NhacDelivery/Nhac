@@ -11,10 +11,17 @@ class ProdutoRepository {
 
   Future<List<ProdutosModel>> buscarPromocoes() async {
     try {
-      final response = await _dio
-          .get('/produtos', queryParameters: {'precoMaximo': 20.0, 'size': 50});
-      final List<dynamic> conteudo = extrairLista(response.data);
-      return conteudo.map((map) => ProdutosModel.fromMap(map)).toList();
+      final promocoes = <ProdutosModel>[];
+      for (var pagina = 0; pagina < 20; pagina++) {
+        final response = await _dio.get('/produtos',
+            queryParameters: {'page': pagina, 'size': 50});
+        final List<dynamic> conteudo = extrairLista(response.data);
+        promocoes.addAll(conteudo.map((map) => ProdutosModel.fromMap(map))
+            .where((produto) => produto.percentualDesconto > 0));
+        if (promocoes.length >= 10 || conteudo.isEmpty ||
+            (response.data is Map && response.data['last'] != false)) break;
+      }
+      return promocoes;
     } catch (e) {
       throw Exception("Erro ao buscar promoções: $e");
     }

@@ -55,4 +55,18 @@ void main() {
     verify(() => dio.get('/produtos',
         queryParameters: any(named: 'queryParameters'))).called(1);
   });
+
+  test('promoções exigem desconto real mesmo para produto barato', () async {
+    when(() => dio.get('/produtos', queryParameters: {'page': 0, 'size': 50}))
+        .thenAnswer((_) async => Response(
+          requestOptions: RequestOptions(path: '/produtos'),
+          data: {'content': [
+            {'id': 'barato', 'preco': 15, 'percentualDesconto': 0},
+            {'id': 'descontado', 'preco': 30, 'percentualDesconto': 10},
+          ], 'last': true},
+          statusCode: 200,
+        ));
+    final produtos = await repository.buscarPromocoes();
+    expect(produtos.map((p) => p.id), ['descontado']);
+  });
 }

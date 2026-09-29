@@ -2,6 +2,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/services/auth_service.dart';
+import 'package:nhac/services/notificacao_historico_service.dart';
 
 class PushNotificationService {
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
@@ -65,7 +66,20 @@ class PushNotificationService {
         settings: initSettings, 
       );
 
+      Future<void> registrar(RemoteMessage message) async {
+        final usuarioId = _authService.usuarioId;
+        final titulo = message.notification?.title;
+        if (usuarioId == null || titulo == null) return;
+        await NotificacaoHistoricoService.registrar(usuarioId, NotificacaoRegistrada(
+          message.messageId ?? '${message.sentTime?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch}',
+          titulo, message.notification?.body ?? '', message.sentTime ?? DateTime.now()));
+      }
+      FirebaseMessaging.onMessageOpenedApp.listen((message) => registrar(message));
+      final inicial = await _fcm.getInitialMessage();
+      if (inicial != null) await registrar(inicial);
+
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        registrar(message);
         RemoteNotification? notification = message.notification;
         AndroidNotification? android = message.notification?.android;
 

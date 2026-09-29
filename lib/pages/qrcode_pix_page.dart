@@ -40,6 +40,7 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
   StatusPedido _statusPedido = StatusPedido.pendente;
   bool _timeout = false;
   bool _pagamentoConfirmado = false;
+  bool _verificando = false;
   int _tentativas = 0;
   static const int _maxTentativas = 60; // 60 x 5s = 5 minutos
   static const Duration _intervaloPolling = Duration(seconds: 5);
@@ -48,6 +49,7 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
   void initState() {
     super.initState();
     _iniciarPolling();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _verificarStatus());
     _conectarStatus();
   }
 
@@ -88,7 +90,8 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
   bool _mostrarBotaoVerificarManual = false;
 
   Future<void> _verificarStatus({bool manual = false}) async {
-    if (_pagamentoConfirmado || !mounted) return;
+    if (_pagamentoConfirmado || !mounted || _verificando) return;
+    _verificando = true;
 
     if (!manual) _tentativas++;
 
@@ -114,6 +117,8 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
       }
     } catch (e) {
       debugPrint('Erro ao verificar status do pedido: $e');
+    } finally {
+      _verificando = false;
     }
 
     // Timeout: parar polling apos max tentativas
@@ -189,7 +194,7 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
             ),
             SizedBox(height: 4.h),
             Text(
-              'Se voce ja pagou, o pedido sera processado normalmente.',
+              'A consulta automática parou, mas o pagamento ainda pode ser confirmado. Use “Verificar pagamento” ou acompanhe o pedido.',
               style: TextStyle(fontSize: 12.sp, color: Colors.orange.shade600),
               textAlign: TextAlign.center,
             ),

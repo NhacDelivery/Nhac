@@ -18,4 +18,14 @@ class EntregaRepository {
       throw mapException(e);
     }
   }
+
+  Future<PontoCoordenadaModel?> buscarLocalizacaoEntregador(String pedidoId) async {
+    try {
+      final response = await _dio.get('/entregas/$pedidoId/localizacao-entregador');
+      if (response.statusCode == 204 || response.data == null) return null;
+      return PontoCoordenadaModel.fromMap(Map<String, dynamic>.from(response.data as Map));
+    } on DioException catch (e) {
+      throw mapException(e);
+    }
+  }
 }

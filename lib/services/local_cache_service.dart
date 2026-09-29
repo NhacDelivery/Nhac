@@ -113,12 +113,16 @@ class LocalCacheService {
   // Limpo quando o app fecha (já que é memória) ou quando o usuário dá pull-to-refresh
   static List<dynamic>? produtosNecessidadesCache;
   static List<dynamic>? produtosPromocaoCache;
+  static DateTime? ultimaAtualizacaoHome;
+  static bool get cacheHomeVencido => ultimaAtualizacaoHome == null ||
+      DateTime.now().difference(ultimaAtualizacaoHome!) > const Duration(minutes: 2);
   
   static List<dynamic>? lojasCache;
   static int currentPageLojasCache = 0;
   static bool hasMoreLojasCache = true;
 
   static void limparCacheHome() {
+    ultimaAtualizacaoHome = null;
     produtosNecessidadesCache = null;
     produtosPromocaoCache = null;
     lojasCache = null;
@@ -132,6 +136,12 @@ class LocalCacheService {
     await Future.wait([
       limparUsuario(),
       limparEnderecos(),
+      limparHistoricoPesquisa(),
     ]);
+  }
+
+  static Future<void> limparHistoricoPesquisa() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keySearchHistory);
   }
 }

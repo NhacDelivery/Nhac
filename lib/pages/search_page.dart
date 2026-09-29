@@ -48,8 +48,8 @@ class _SearchPageState extends State<SearchPage>
   // já que o backend filtra produtos/lojas por valor exato.
   static const _categoriasSugeridas = [
     {'nome': 'Combos', 'icon': Icons.fastfood_rounded},
-    {'nome': 'Prato Principal', 'icon': Icons.restaurant_rounded},
-    {'nome': 'Acompanhamento', 'icon': Icons.rice_bowl_rounded},
+    {'nome': 'Pratos Executivos', 'icon': Icons.restaurant_rounded},
+    {'nome': 'Acompanhamentos', 'icon': Icons.rice_bowl_rounded},
     {'nome': 'Sobremesas', 'icon': Icons.icecream_rounded},
     {'nome': 'Bebidas', 'icon': Icons.local_drink_rounded},
   ];
