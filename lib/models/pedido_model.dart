@@ -35,6 +35,15 @@ class PedidoModel {
 
   String get statusApi => status.apiValue;
 
+  Map<String, dynamic> toMap() => {
+    'id': id, 'usuarioId': usuarioId, 'lojaId': lojaId,
+    'lojaNome': lojaNome, 'valorTotal': valorTotal, 'taxaFrete': taxaFrete,
+    'formaPagamento': formaPagamento, 'trocoPara': trocoPara,
+    'observacao': observacao, 'enderecoEntrega': enderecoEntrega.toMap(),
+    'itens': itens.map((item) => item.toMap()).toList(),
+    'status': status.apiValue, 'criadoEm': criadoEm?.toIso8601String(),
+  };
+
   factory PedidoModel.fromMap(Map<String, dynamic> map) {
     return PedidoModel(
       id: map['id']?.toString() ?? '',

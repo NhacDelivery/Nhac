@@ -4,6 +4,7 @@ import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/models/pedido/criar_pedido_request.dart';
 import 'package:nhac/models/pedido/pedido_criado_response.dart';
 import 'package:nhac/models/pedido/pedido_resumo_model.dart';
+import 'package:nhac/models/pedido/pagamento_pendente_model.dart';
 import 'package:nhac/models/pedido_model.dart';
 import 'package:nhac/services/api_client.dart';
 
@@ -11,6 +12,34 @@ class PedidoRepository {
   final Dio _dio;
 
   PedidoRepository({Dio? dio}) : _dio = dio ?? ApiClient().dio;
+
+  Future<PedidoModel?> buscarPedidoAtivo() async {
+    try {
+      final response = await _dio.get('/pedidos/ativo');
+      if (response.statusCode == 204 || response.data == null) return null;
+      return PedidoModel.fromMap(Map<String, dynamic>.from(response.data as Map));
+    } on DioException catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<PagamentoPendenteModel> buscarPagamento(String pedidoId) async {
+    try {
+      final response = await _dio.get('/pedidos/$pedidoId/pagamento');
+      return PagamentoPendenteModel.fromMap(
+          Map<String, dynamic>.from(response.data as Map));
+    } on DioException catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<void> simularPagamentoPix(String pedidoId) async {
+    try {
+      await _dio.post('/pedidos/$pedidoId/pagamento/simular');
+    } on DioException catch (e) {
+      throw mapException(e);
+    }
+  }
 
   Future<PedidoCriadoResponse> finalizarPedido(
     CriarPedidoRequest pedido, {
@@ -51,6 +80,9 @@ class PedidoRepository {
               : 'Não foi possível finalizar o pedido.',
           title: title,
           code: code,
+          pedidoAtivoId: code == 'PEDIDO_ATIVO' && details is Map
+              ? details['pedidoId']?.toString()
+              : null,
           produtoId: details is Map ? details['produtoId']?.toString() : null,
           suggestions: data['suggestions'] is List
               ? List<dynamic>.from(data['suggestions'] as List)

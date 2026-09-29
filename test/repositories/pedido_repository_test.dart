@@ -167,4 +167,48 @@ void main() {
     expect(pedidos, hasLength(1));
     expect(pedidos.single.id, 'ped1');
   });
+
+  test('pedido ativo 204 não usa histórico paginado', () async {
+    when(() => dio.get('/pedidos/ativo')).thenAnswer((_) async => Response(
+      requestOptions: RequestOptions(path: '/pedidos/ativo'), statusCode: 204,
+    ));
+    expect(await repository.buscarPedidoAtivo(), isNull);
+    verify(() => dio.get('/pedidos/ativo')).called(1);
+  });
+
+  test('pagamento pendente recupera o mesmo PIX e prazo', () async {
+    when(() => dio.get('/pedidos/ped1/pagamento')).thenAnswer((_) async => Response(
+      requestOptions: RequestOptions(path: '/pedidos/ped1/pagamento'),
+      statusCode: 200,
+      data: {
+        'pedidoId': 'ped1', 'formaPagamento': 'PIX', 'status': 'PENDENTE',
+        'valorTotal': 25.5, 'expiraEm': '2026-09-29T13:00:00Z',
+        'pixCopiaECola': '000201...', 'qrCodeUrl': '000201...',
+        'simulacaoDisponivel': true,
+      },
+    ));
+    final pagamento = await repository.buscarPagamento('ped1');
+    expect(pagamento.pixCopiaECola, '000201...');
+    expect(pagamento.valorTotal, 25.5);
+    expect(pagamento.simulacaoDisponivel, isTrue);
+  });
+
+  test('409 PEDIDO_ATIVO expõe o pedido para recuperar o fluxo', () async {
+    when(() => dio.post('/pedidos', data: any(named: 'data'),
+        options: any(named: 'options'))).thenThrow(DioException(
+      requestOptions: RequestOptions(path: '/pedidos'),
+      response: Response(requestOptions: RequestOptions(path: '/pedidos'),
+        statusCode: 409, data: {
+          'error': 'PEDIDO_ATIVO', 'message': 'Finalize seu pedido atual.',
+          'details': {'pedidoId': 'ped-antigo'},
+        }),
+    ));
+    try {
+      await repository.finalizarPedido(request(), idempotencyKey: 'idem-2');
+      fail('Era esperado PEDIDO_ATIVO');
+    } on CustomCheckoutException catch (e) {
+      expect(e.code, 'PEDIDO_ATIVO');
+      expect(e.pedidoAtivoId, 'ped-antigo');
+    }
+  });
 }

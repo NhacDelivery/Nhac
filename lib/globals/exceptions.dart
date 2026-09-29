@@ -23,12 +23,14 @@ class NetworkException extends AppException {
 class CustomCheckoutException extends AppException {
   final String title;
   final String? produtoId;
+  final String? pedidoAtivoId;
   final List<dynamic>? suggestions;
 
   CustomCheckoutException({
     required String message,
     required this.title,
     this.produtoId,
+    this.pedidoAtivoId,
     this.suggestions,
     String? code,
   }) : super(message, code: code);

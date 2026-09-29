@@ -510,6 +510,14 @@ class _ProfileContentState extends State<ProfileContent> {
                     child: Column(
                       children: [
                         _buildAccountRow(
+                          icon: Icons.receipt_long_outlined,
+                          iconColor: const Color(0xFFFF6961),
+                          title: 'Meus pedidos',
+                          subtitle: 'Acompanhe pedidos atuais e anteriores',
+                          onTap: () => context.push('/meus-pedidos'),
+                        ),
+                        Divider(height: 1, color: Colors.grey.shade100, indent: 64.w),
+                        _buildAccountRow(
                           icon: Icons.person_outline,
                           iconColor: const Color(0xFFFF6961),
                           title: 'Dados Pessoais',

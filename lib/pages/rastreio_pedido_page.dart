@@ -683,6 +683,18 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
                   ),
                   if (status == StatusPedido.pendente) ...[
                     SizedBox(height: 20.h),
+                    if (_pedido!.formaPagamento.toUpperCase() == 'PIX' ||
+                        _pedido!.formaPagamento.toUpperCase() == 'CARTAO') ...[
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: () => context.push('/pagamento?pedidoId=${widget.pedidoId}'),
+                          icon: const Icon(Icons.payment),
+                          label: const Text('Continuar pagamento'),
+                        ),
+                      ),
+                      SizedBox(height: 8.h),
+                    ],
                     SizedBox(
                       width: double.infinity,
                       child: OutlinedButton(

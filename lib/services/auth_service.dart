@@ -173,6 +173,8 @@ class AuthService with ChangeNotifier {
       LocalCacheService.limparTudo(),
       if (usuarioAnterior != null)
         LocalCacheService.removerPedidoAtivo(usuarioAnterior),
+      if (usuarioAnterior != null)
+        LocalCacheService.removerSnapshotPedido(usuarioAnterior),
     ]);
   }
 

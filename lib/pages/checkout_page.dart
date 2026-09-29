@@ -3,7 +3,6 @@ import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/models/usuario/cupom_model.dart';
 import 'package:nhac/repositories/cupom_repository.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:nhac/pages/qrcode_pix_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:nhac/models/pedido/criar_pedido_request.dart';
@@ -16,7 +15,6 @@ import 'package:nhac/controllers/endereco_provider.dart';
 import 'package:nhac/models/usuario/endereco_model.dart';
 import 'package:nhac/components/botoes/botao_largo_nhac.dart';
 import 'package:nhac/services/auth_service.dart';
-import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/globals/ui_utils.dart';
@@ -956,6 +954,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
           .toList(),
     );
 
+    // O POST também aplica essa regra sob lock; esta consulta orienta o usuário
+    // antes da tentativa e não serve como autorização para criar outro pedido.
+    try {
+      final ativo = await PedidoRepository().buscarPedidoAtivo();
+      if (!context.mounted) return;
+      if (ativo != null) {
+        setState(() => _isSubmitting = false);
+        context.showError('Finalize seu pedido atual antes de fazer outro.');
+        context.go('/rastreio?pedidoId=${ativo.id}');
+        return;
+      }
+    } catch (_) { /* O POST ainda garante a regra no servidor. */ }
+
     final navigator = Navigator.of(context, rootNavigator: true);
 
     try {
@@ -979,110 +990,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
       } catch (_) {
         // O pedido foi criado; uma falha do cache não pode repetir o checkout.
       }
-      final clientSecret = respostaPedido.clientSecret;
-      final pixCopiaECola = respostaPedido.pixCopiaECola;
-      final qrCodeUrl = respostaPedido.qrCodeUrl;
-
       navigator.pop(); // Close loading
 
       if (!context.mounted) return;
-
-      final pagamentoEletronico =
-          _formaPagamento == 'Cartão de crédito' || _formaPagamento == 'PIX';
-      final artefatoPagamentoAusente =
-          (_formaPagamento == 'Cartão de crédito' &&
-                  (clientSecret == null || clientSecret.isEmpty)) ||
-              (_formaPagamento == 'PIX' &&
-                  (pixCopiaECola == null || pixCopiaECola.isEmpty));
-
-      if (respostaPedido.replay &&
-          pagamentoEletronico &&
-          artefatoPagamentoAusente) {
+      if (_formaPagamento == 'Cartão de crédito' || _formaPagamento == 'PIX') {
         await cartProvider.esvaziarCarrinho();
         if (!context.mounted) return;
-        context.showSuccess(
-          'Esse pedido já havia sido criado. Acompanhe o status no rastreio.',
-        );
-        context.go('/rastreio?pedidoId=$idGerado');
-        return;
-      }
-
-      if (_formaPagamento == 'Cartão de crédito' &&
-          clientSecret != null &&
-          clientSecret.isNotEmpty) {
-        try {
-          await Stripe.instance.initPaymentSheet(
-            paymentSheetParameters: SetupPaymentSheetParameters(
-              paymentIntentClientSecret: clientSecret,
-              merchantDisplayName: 'Nhac Delivery',
-            ),
-          );
-          await Stripe.instance.presentPaymentSheet();
-
-          if (!context.mounted) return;
-
-          // Polling curto: verifica o status real do pedido no backend.
-          // Se o webhook ainda não tiver sido processado, o app segue para o
-          // rastreio exibindo "aguardando confirmação", sem afirmar que o
-          // pagamento já foi confirmado pelo servidor.
-          final pedidoRepo = PedidoRepository();
-          bool statusConfirmado = false;
-
-          for (int i = 0; i < 3; i++) {
-            try {
-              await Future.delayed(const Duration(seconds: 2));
-              if (!context.mounted) return;
-              final pedidoAtual =
-                  await pedidoRepo.buscarPedidoPorId(idGerado.toString());
-              if (pedidoAtual.status.pagamentoConfirmado) {
-                statusConfirmado = true;
-                break;
-              }
-            } catch (_) {
-              // O rastreio continuará acompanhando o status pelo backend.
-            }
-          }
-
-          if (!context.mounted) return;
-          if (statusConfirmado) {
-            _exibirSucessoEVoltar(idGerado.toString(), cartProvider);
-          } else {
-            await cartProvider.esvaziarCarrinho();
-            if (!context.mounted) return;
-            context.showSuccess(
-              'Pagamento enviado. Estamos aguardando a confirmação do backend.',
-            );
-            context.go('/rastreio?pedidoId=$idGerado');
-          }
-        } catch (e) {
-          // A configuração do SDK também pode lançar StripeConfigException,
-          // além de falhas de plataforma. O pedido já existe no backend.
-          debugPrint('Falha ao abrir pagamento com cartão: $e');
-          await cartProvider.esvaziarCarrinho();
-          _checkoutIdempotencyKey = null;
-          if (!context.mounted) return;
-          context.showError(
-            'O pedido foi criado, mas o pagamento não foi confirmado. '
-            'Acompanhe o pedido antes de tentar uma nova compra.',
-          );
-          context.go('/rastreio?pedidoId=$idGerado');
-          return;
-        }
-      } else if (_formaPagamento == 'PIX') {
-        // Esvaziar carrinho — o pedido já foi criado no backend com sucesso,
-        // independentemente de o PIX ter sido pago ou não.
-        await cartProvider.esvaziarCarrinho();
-        if (!context.mounted) return;
-        Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => QrCodePixPage(
-                pixQrCode: qrCodeUrl ?? pixCopiaECola ?? '',
-                pixCopiaECola: pixCopiaECola,
-                paymentId: idGerado.toString(),
-                valor: total,
-              ),
-            ));
+        _checkoutIdempotencyKey = null;
+        context.go('/pagamento?pedidoId=$idGerado');
       } else {
         // Dinheiro
         _exibirSucessoEVoltar(idGerado.toString(), cartProvider);
@@ -1094,6 +1009,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
       navigator.pop(); // Close loading
       if (!context.mounted) return;
       setState(() => _isSubmitting = false);
+
+      if (e.pedidoAtivoId != null) {
+        context.showError('Finalize seu pedido atual antes de fazer outro.');
+        context.go('/rastreio?pedidoId=${e.pedidoAtivoId}');
+        return;
+      }
 
       if (e.produtoId != null) {
         cartProvider.marcarItemComoEsgotado(e.produtoId!);

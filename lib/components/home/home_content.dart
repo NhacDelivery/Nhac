@@ -75,7 +75,7 @@ class _HomeContentState extends State<HomeContent> {
     super.initState();
     _isLoading = !_jaCarregouUmaVez;
 
-    _carregarDadosIniciais();
+    _carregarCatalogoInicial();
     _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (LocalCacheService.cacheHomeVencido && !_atualizandoCatalogo) {
         _atualizandoCatalogo = true;
@@ -107,14 +107,32 @@ class _HomeContentState extends State<HomeContent> {
     super.dispose();
   }
 
-  Future<void> _carregarDadosIniciais() async {
+  Future<void> _carregarCatalogoInicial() async {
+    await LocalCacheService.restaurarCatalogoHome();
+    if (!mounted) return;
+    final snapshotAntigo = LocalCacheService.lojasCache != null &&
+        LocalCacheService.cacheHomeVencido;
+    await _carregarDadosIniciais(persistir: !snapshotAntigo);
+    if (!mounted || !snapshotAntigo) return;
+    // O snapshot aparece primeiro; os dados atuais substituem-no em segundo plano.
+    LocalCacheService.limparCacheHome();
+    _currentPageLojas = 0;
+    _hasMoreLojas = true;
+    _lojas.clear();
+    await _carregarDadosIniciais();
+  }
+
+  Future<void> _carregarDadosIniciais({bool persistir = true}) async {
     await Future.wait([
       _fetchProdutosNecessidades(),
       _fetchProdutosPromocao(),
       _fetchLojas(),
     ]);
     _aplicarStatusLojas();
-    LocalCacheService.ultimaAtualizacaoHome = DateTime.now();
+    if (persistir) {
+      LocalCacheService.ultimaAtualizacaoHome = DateTime.now();
+      await LocalCacheService.salvarCatalogoHome();
+    }
 
     if (mounted) {
       _loadingTimer?.cancel();
@@ -273,6 +291,7 @@ class _HomeContentState extends State<HomeContent> {
           LocalCacheService.currentPageLojasCache = _currentPageLojas;
           LocalCacheService.hasMoreLojasCache = _hasMoreLojas;
         });
+        await LocalCacheService.salvarCatalogoHome();
       }
     } on NetworkException catch (e) {
       debugPrint("Erro de rede ao buscar lojas: $e");

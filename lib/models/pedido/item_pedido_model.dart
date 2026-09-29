@@ -25,4 +25,9 @@ class ItemPedidoModel {
       quantidade: int.tryParse(map['quantidade']?.toString() ?? '1') ?? 1,
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id, 'produtoId': produtoId, 'nome': nome,
+    'imagemUrl': imagemUrl, 'preco': preco, 'quantidade': quantidade,
+  };
 }

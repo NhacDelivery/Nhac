@@ -1,6 +1,6 @@
 # Nhac client interaction contract
 
-The authenticated app uses Brazilian Portuguese and the existing Flutter theme. Search shortcuts use the exact `categoriaMenu` values offered in the lojista product form. The inactive demonstration feed is omitted from bottom navigation.
+The authenticated app uses Brazilian Portuguese and the existing Flutter theme. Search shortcuts use the exact `categoriaMenu` values offered in the lojista product form. Bottom navigation has Home, Carrinho, Feed and Perfil; coupons remain available through Perfil and checkout.
 
 | Operation | Pending | Success | Failure and recovery |
 | --- | --- | --- | --- |
@@ -10,6 +10,6 @@ The authenticated app uses Brazilian Portuguese and the existing Flutter theme. 
 | Send chat message | Keep text until server message ID appears | Clear the confirmed text; deduplicate socket/history by ID | Retain text and retry with the same message ID after uncertain delivery |
 | Check Pix | HTTP check on opening; poll while screen remains active | Enter tracking when backend confirms | After polling limit, allow manual status check and explain that payment may still be processed |
 
-Search history is device-local and removed on logout, including session expiry. Product and store cache expires within two minutes while home remains open. Promotions require a positive `percentualDesconto`.
+Search history is device-local and removed on logout, including session expiry. Product and store data is retained on device for fifteen minutes after closing the app, displayed while it is revalidated; network freshness remains two minutes while home is open. The active order snapshot is also retained for fifteen minutes, but only the server authorizes checkout and payment. Promotions require a positive `percentualDesconto`.
 
 The profile's notification list displays FCM messages registered on this device, scoped to the current account; it is not a server-wide notification history.
