@@ -974,12 +974,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
         idempotencyKey: _checkoutIdempotencyKey!,
       );
       final idGerado = respostaPedido.pedidoId;
-      if (uid != null) {
-        try {
-          await LocalCacheService.salvarPedidoAtivo(uid, idGerado);
-        } catch (_) {
-          // O pedido foi criado; uma falha do cache não pode repetir o checkout.
-        }
+      try {
+        await LocalCacheService.salvarPedidoAtivo(uid, idGerado);
+      } catch (_) {
+        // O pedido foi criado; uma falha do cache não pode repetir o checkout.
       }
       final clientSecret = respostaPedido.clientSecret;
       final pixCopiaECola = respostaPedido.pixCopiaECola;

@@ -32,7 +32,9 @@ class PushNotificationService {
   void _abrirPedidoPendenteAposLogin() {
     final pedidoId = pendingPedidoId;
     if (pedidoId == null || !_authService.isAuthenticated ||
-        appRouter.routeInformationProvider.value.uri.path == '/splash') return;
+        appRouter.routeInformationProvider.value.uri.path == '/splash') {
+      return;
+    }
     pendingPedidoId = null;
     _abrirPedido(pedidoId);
   }
