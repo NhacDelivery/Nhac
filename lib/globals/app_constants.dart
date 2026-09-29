@@ -1,4 +1,5 @@
 import 'package:nowa_runtime/nowa_runtime.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 @NowaGenerated()
@@ -22,7 +23,9 @@ class AppConstants {
   // ============================================================
 
   static bool get e2eMode {
-    return dotenv.env['E2E_MODE']?.trim().toLowerCase() == 'true';
+    return !kReleaseMode &&
+        const bool.fromEnvironment('RUN_E2E') &&
+        dotenv.env['E2E_MODE']?.trim().toLowerCase() == 'true';
   }
 
   static String get _e2eLatitude {
