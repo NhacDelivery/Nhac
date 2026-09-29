@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:nhac/models/pedido_model.dart';
+import 'package:nhac/models/produto/produtos.dart';
+import 'package:nhac/models/loja/lojas.dart';
 
 class LocalCacheService {
   static const String _keyUsuario = 'cache_usuario';
@@ -25,6 +28,79 @@ class LocalCacheService {
   }
 
   static String _keyPedidoAtivo(String usuarioId) => 'pedido_ativo_$usuarioId';
+  static String _keySnapshotPedido(String usuarioId) => 'pedido_snapshot_$usuarioId';
+  static const Duration retencaoHome = Duration(minutes: 15);
+  static const String _keyCatalogoHome = 'catalogo_home_v1';
+
+  static Future<void> salvarCatalogoHome() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyCatalogoHome, jsonEncode({
+      'salvoEm': DateTime.now().toUtc().toIso8601String(),
+      'necessidades': produtosNecessidadesCache?.cast<ProdutosModel>().map((p) => p.toMap()).toList() ?? [],
+      'promocoes': produtosPromocaoCache?.cast<ProdutosModel>().map((p) => p.toMap()).toList() ?? [],
+      'lojas': lojasCache?.cast<LojasModel>().map((l) => l.toMap()).toList() ?? [],
+      'paginaLojas': currentPageLojasCache,
+      'maisLojas': hasMoreLojasCache,
+    }));
+  }
+
+  static Future<void> restaurarCatalogoHome() async {
+    if (ultimaAtualizacaoHome != null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keyCatalogoHome);
+    if (raw == null) return;
+    try {
+      final data = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      final salvoEm = DateTime.parse(data['salvoEm'] as String);
+      if (DateTime.now().difference(salvoEm) > retencaoHome) {
+        await prefs.remove(_keyCatalogoHome);
+        return;
+      }
+      produtosNecessidadesCache = (data['necessidades'] as List)
+          .map((p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map))).toList();
+      produtosPromocaoCache = (data['promocoes'] as List)
+          .map((p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map))).toList();
+      lojasCache = (data['lojas'] as List)
+          .map((l) => LojasModel.fromMap(Map<String, dynamic>.from(l as Map))).toList();
+      currentPageLojasCache = (data['paginaLojas'] as num).toInt();
+      hasMoreLojasCache = data['maisLojas'] == true;
+      ultimaAtualizacaoHome = salvoEm;
+    } catch (_) {
+      await prefs.remove(_keyCatalogoHome);
+    }
+  }
+
+  static Future<void> salvarSnapshotPedido(String usuarioId, PedidoModel pedido) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keySnapshotPedido(usuarioId), jsonEncode({
+      'salvoEm': DateTime.now().toUtc().toIso8601String(),
+      'pedido': pedido.toMap(),
+    }));
+  }
+
+  static Future<PedidoModel?> carregarSnapshotPedido(String usuarioId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_keySnapshotPedido(usuarioId));
+    if (raw == null) return null;
+    try {
+      final data = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      final salvoEm = DateTime.parse(data['salvoEm'] as String);
+      if (DateTime.now().difference(salvoEm) > retencaoHome) {
+        await prefs.remove(_keySnapshotPedido(usuarioId));
+        return null;
+      }
+      final pedido = PedidoModel.fromMap(Map<String, dynamic>.from(data['pedido'] as Map));
+      return pedido.usuarioId == usuarioId && !pedido.status.terminal ? pedido : null;
+    } catch (_) {
+      await prefs.remove(_keySnapshotPedido(usuarioId));
+      return null;
+    }
+  }
+
+  static Future<void> removerSnapshotPedido(String usuarioId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keySnapshotPedido(usuarioId));
+  }
 
   static Future<String?> carregarPedidoAtivo(String usuarioId) async {
     final prefs = await SharedPreferences.getInstance();
@@ -143,7 +219,7 @@ class LocalCacheService {
   }
 
   // Cache em memória para a Home (produtos e lojas)
-  // Limpo quando o app fecha (já que é memória) ou quando o usuário dá pull-to-refresh
+  // Restaurado do armazenamento local por até 15 minutos após fechar o app.
   static List<dynamic>? produtosNecessidadesCache;
   static List<dynamic>? produtosPromocaoCache;
   static DateTime? ultimaAtualizacaoHome;
@@ -170,11 +246,18 @@ class LocalCacheService {
       limparUsuario(),
       limparEnderecos(),
       limparHistoricoPesquisa(),
+      limparCatalogoHomePersistido(),
     ]);
   }
 
   static Future<void> limparHistoricoPesquisa() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keySearchHistory);
+  }
+
+  static Future<void> limparCatalogoHomePersistido() async {
+    limparCacheHome();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyCatalogoHome);
   }
 }

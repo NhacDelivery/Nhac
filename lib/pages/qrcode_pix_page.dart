@@ -18,6 +18,8 @@ class QrCodePixPage extends StatefulWidget {
   final String? pixCopiaECola;
   final String paymentId; // Este é o pedidoId retornado pelo backend
   final double valor;
+  final DateTime? expiraEm;
+  final bool simulacaoDisponivel;
 
   const QrCodePixPage({
     super.key,
@@ -25,6 +27,8 @@ class QrCodePixPage extends StatefulWidget {
     this.pixCopiaECola,
     required this.paymentId,
     required this.valor,
+    this.expiraEm,
+    this.simulacaoDisponivel = false,
   });
 
   @override
@@ -41,9 +45,13 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
   bool _timeout = false;
   bool _pagamentoConfirmado = false;
   bool _verificando = false;
+  bool _simulando = false;
   int _tentativas = 0;
-  static const int _maxTentativas = 60; // 60 x 5s = 5 minutos
+  static const int _maxTentativas = 84; // Após sete minutos, manter consulta até estado terminal.
   static const Duration _intervaloPolling = Duration(seconds: 5);
+
+  bool get _prazoVencido => widget.expiraEm != null &&
+      !DateTime.now().isBefore(widget.expiraEm!);
 
   @override
   void initState() {
@@ -78,7 +86,10 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
       if (mounted) _navegarParaRastreio(sucesso: true);
     } else if (status == StatusPedido.cancelado) {
       _pollingTimer?.cancel();
-      if (mounted) context.showError('Pedido cancelado.');
+      if (mounted) {
+        context.showError('O prazo terminou. O pedido está no histórico.');
+        context.go('/meus-pedidos');
+      }
     }
   }
 
@@ -121,9 +132,8 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
       _verificando = false;
     }
 
-    // Timeout: parar polling apos max tentativas
+    // Após o prazo, continuar observando o backend enquanto a tela estiver aberta.
     if (_tentativas >= _maxTentativas && !_pagamentoConfirmado) {
-      _pollingTimer?.cancel();
       if (!mounted) return;
       setState(() {
         _timeout = true;
@@ -134,9 +144,22 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
   void _navegarParaRastreio({bool sucesso = false}) {
     if (sucesso) {
       context.showSuccess(
-          'Pagamento PIX confirmado! Seu pedido está sendo preparado.');
+          'Pagamento PIX confirmado! Acompanhe o andamento do pedido.');
     }
     context.go('/rastreio?pedidoId=${widget.paymentId}');
+  }
+
+  Future<void> _simularPagamento() async {
+    if (_simulando || !widget.simulacaoDisponivel) return;
+    setState(() => _simulando = true);
+    try {
+      await _pedidoRepository.simularPagamentoPix(widget.paymentId);
+      if (mounted) await _verificarStatus(manual: true);
+    } catch (_) {
+      if (mounted) context.showError('Não foi possível confirmar o teste. Tente novamente.');
+    } finally {
+      if (mounted) setState(() => _simulando = false);
+    }
   }
 
   Widget _buildStatusIndicator() {
@@ -194,7 +217,7 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
             ),
             SizedBox(height: 4.h),
             Text(
-              'A consulta automática parou, mas o pagamento ainda pode ser confirmado. Use “Verificar pagamento” ou acompanhe o pedido.',
+              'Ainda não recebemos a confirmação. Vamos continuar verificando; você também pode acompanhar o pedido.',
               style: TextStyle(fontSize: 12.sp, color: Colors.orange.shade600),
               textAlign: TextAlign.center,
             ),
@@ -347,6 +370,17 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
                 ),
                 textAlign: TextAlign.center,
               ),
+              if (widget.expiraEm != null) ...[
+                SizedBox(height: 8.h),
+                Text('Pague até ${TimeOfDay.fromDateTime(widget.expiraEm!.toLocal()).format(context)}',
+                    style: TextStyle(fontSize: 13.sp, color: const Color(0xFF5D201C))),
+              ],
+              if (_prazoVencido)
+                const Padding(
+                  padding: EdgeInsets.only(top: 8),
+                  child: Text('O prazo terminou. Estamos conferindo o estado do pedido.',
+                      textAlign: TextAlign.center),
+                ),
               SizedBox(height: 24.h),
               // Indicador de status do pagamento
               _buildStatusIndicator(),
@@ -356,8 +390,8 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
                 label:
                     'QR Code PIX. Valor de R\$ ${widget.valor.toStringAsFixed(2)}',
                 image: true,
-                child: AnimatedOpacity(
-                  opacity: _pagamentoConfirmado ? 0.4 : 1.0,
+              child: AnimatedOpacity(
+                  opacity: _pagamentoConfirmado || _prazoVencido ? 0.4 : 1.0,
                   duration: const Duration(milliseconds: 500),
                   child: Container(
                     padding: EdgeInsets.all(16.w),
@@ -426,7 +460,7 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
                 ),
               SizedBox(height: 16.h),
               OutlinedButton(
-                onPressed: () {
+                onPressed: _prazoVencido ? null : () {
                   final textToCopy = widget.pixCopiaECola ?? widget.pixQrCode;
                   Clipboard.setData(ClipboardData(text: textToCopy));
 
@@ -441,14 +475,10 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
                 ),
               ),
               SizedBox(height: 16.h),
-              if (kDebugMode)
+              if (widget.simulacaoDisponivel && !_pagamentoConfirmado && !_prazoVencido)
                 TextButton(
-                  onPressed: () {
-                    _pollingTimer?.cancel();
-                    setState(() => _pagamentoConfirmado = true);
-                    _navegarParaRastreio(sucesso: true);
-                  },
-                  child: const Text('Simular Pagamento (Dev)'),
+                  onPressed: _simulando ? null : _simularPagamento,
+                  child: Text(_simulando ? 'Confirmando...' : 'Simular pagamento (teste)'),
                 ),
             ],
           ),

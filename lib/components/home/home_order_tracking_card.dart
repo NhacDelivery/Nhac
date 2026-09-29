@@ -6,7 +6,6 @@ import 'package:nhac/models/pedido_model.dart';
 import 'package:nhac/models/pedido/status_pedido.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:nhac/models/pedido/pedido_resumo_model.dart';
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/connectivity_service.dart';
@@ -38,6 +37,8 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   final PedidoStatusSocketService _socket = PedidoStatusSocketService();
   StreamSubscription? _statusSubscription;
   StreamSubscription? _connectionSubscription;
+  Timer? _fallbackTimer;
+  bool _socketConectado = false;
   ConnectivityService? _connectivity;
   bool _wasOnline = true;
   bool _refreshing = false;
@@ -55,13 +56,17 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     _usuarioId = context.read<AuthService>().usuarioId;
     _statusSubscription = _socket.status.listen((_) => _loadActiveOrder());
     _connectionSubscription = _socket.conectado.listen((connected) {
+      _socketConectado = connected;
       if (connected) _loadActiveOrder();
+    });
+    _fallbackTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (widget.isActive && _activePedido != null && !_socketConectado) _loadActiveOrder();
     });
     _connectivity = context.read<ConnectivityService>();
     _wasOnline = _connectivity!.isOnline;
     _connectivity!.addListener(_onConnectivityChanged);
     WidgetsBinding.instance.addObserver(this);
-    _loadActiveOrder();
+    _restaurarEAtualizar();
   }
 
   @override
@@ -91,6 +96,15 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     _wasOnline = online;
   }
 
+  Future<void> _restaurarEAtualizar() async {
+    final usuarioId = _usuarioId;
+    if (usuarioId != null) {
+      final snapshot = await LocalCacheService.carregarSnapshotPedido(usuarioId);
+      if (mounted && snapshot != null && _usuarioId == usuarioId) _showOrder(snapshot, persistir: false);
+    }
+    if (mounted) _loadActiveOrder();
+  }
+
   @override
   void dispose() {
     _generation++;
@@ -99,6 +113,7 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     _connectivity?.removeListener(_onConnectivityChanged);
     _statusSubscription?.cancel();
     _connectionSubscription?.cancel();
+    _fallbackTimer?.cancel();
     _socket.dispose();
     _pulseController.dispose();
     super.dispose();
@@ -121,38 +136,15 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     _refreshing = true;
     if (mounted) setState(() { _error = null; _loading = _activePedido == null; });
     try {
-      var cachedId = await LocalCacheService.carregarPedidoAtivo(usuarioId);
-      var cachedActive = false;
-      if (cachedId != null && cachedId.isNotEmpty) {
-        try {
-          final cachedOrder = await _repository.buscarPedidoPorId(cachedId);
-          if (!mounted || generation != _generation) return;
-          cachedActive = !cachedOrder.status.terminal;
-          if (cachedActive) _showOrder(cachedOrder);
-        } catch (_) {
-          // Ainda consultamos o histórico; o pedido salvo pode ter sido removido.
-        }
-        if (!cachedActive) {
-          cachedId = null;
-        }
-      }
-      PedidoResumoModel? active;
-      // O histórico é paginado; pedidos mais antigos podem continuar ativos.
-      for (var page = 0; ; page++) {
-        final history = await _repository.buscarHistorico(page: page, size: 20);
-        for (final item in history) {
-          if (!item.status.terminal) { active = item; break; }
-        }
-        if (active != null || history.length < 20) break;
-      }
-      final full = active == null ? null : await _repository.buscarPedidoPorId(active.id);
+      final full = await _repository.buscarPedidoAtivo();
       if (!mounted || generation != _generation) return;
       if (full != null && !full.status.terminal) {
         _showOrder(full);
         await LocalCacheService.salvarPedidoAtivo(usuarioId, full.id);
-      } else if (!cachedActive) {
+      } else {
         setState(() { _activePedido = null; _loading = false; });
         await LocalCacheService.removerPedidoAtivo(usuarioId);
+        await LocalCacheService.removerSnapshotPedido(usuarioId);
         _socketPedidoId = null;
         await _socket.desconectar();
       }
@@ -169,8 +161,10 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     }
   }
 
-  void _showOrder(PedidoModel pedido) {
+  void _showOrder(PedidoModel pedido, {bool persistir = true}) {
     setState(() { _activePedido = pedido; _loading = false; _error = null; });
+    final usuarioId = _usuarioId;
+    if (usuarioId != null && persistir) LocalCacheService.salvarSnapshotPedido(usuarioId, pedido);
     if (_socketPedidoId != pedido.id) {
       _socketPedidoId = pedido.id;
       _socket.desconectar().then((_) {
@@ -250,8 +244,18 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     final imageUrl =
         pedido.itens.isNotEmpty ? pedido.itens.first.imagemUrl : '';
 
-    return GestureDetector(
-      onTap: () => context.push('/rastreio?pedidoId=${pedido.id}'),
+    final pagamentoPendente = pedido.status == StatusPedido.pendente &&
+        (pedido.formaPagamento.toUpperCase() == 'PIX' ||
+         pedido.formaPagamento.toUpperCase() == 'CARTAO' ||
+         pedido.formaPagamento.toUpperCase() == 'STRIPE' ||
+         pedido.formaPagamento.toUpperCase() == 'GOOGLE_PAY');
+    return Semantics(
+      button: true,
+      label: pagamentoPendente ? 'Continuar pagamento do pedido' : 'Acompanhar pedido',
+      child: GestureDetector(
+      onTap: () => context.push(pagamentoPendente
+          ? '/pagamento?pedidoId=${pedido.id}'
+          : '/rastreio?pedidoId=${pedido.id}'),
       child: Container(
         margin: EdgeInsets.symmetric(horizontal: 20.w),
         decoration: BoxDecoration(
@@ -276,6 +280,9 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
                   TextButton(onPressed: _loadActiveOrder, child: const Text('Tentar novamente')),
                 ]),
               ],
+              if (pagamentoPendente)
+                Text('Toque para continuar o pagamento',
+                    style: TextStyle(color: const Color(0xFF5D201C), fontSize: 13.sp)),
               // ── Header row: icon + status + arrow ──
               Row(
                 children: [
@@ -441,7 +448,7 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
           ),
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildStageLabel(String label, bool active) {

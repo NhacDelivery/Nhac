@@ -10,6 +10,7 @@ import 'package:nhac/controllers/cart_provider.dart';
 import 'package:nhac/controllers/endereco_provider.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:nhac/pages/carrinho_page.dart';
+import 'package:nhac/pages/feed_page.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
@@ -111,6 +112,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       case 1:
         return Icons.shopping_cart_outlined;
       case 2:
+        return Icons.newspaper_outlined;
+      case 3:
         return Icons.person_outline;
       default:
         return Icons.house_outlined;
@@ -161,6 +164,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 children: [
                   HomeContent(isActive: _selectedIndex == 0),
                   CarrinhoPage(isActive: _selectedIndex == 1),
+                  const FeedPage(),
                   const ProfileContent(),
                 ],
               ),
@@ -399,19 +403,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           label: 'Carrinho',
                           index: 1),
                       _buildNavItem(
-                          icon: Icons.person_outline,
-                          label: 'Perfil',
-                          index: 2),
-                      Semantics(
-                        button: true,
-                        label: 'Cupons',
-                        child: IconButton(
-                          tooltip: 'Meus cupons',
-                          onPressed: () => context.push('/cupons'),
-                          icon: Icon(Icons.local_offer_outlined,
-                              size: 28.sp, color: const Color(0xFFA0A0A0)),
-                        ),
-                      ),
+                          icon: Icons.newspaper_outlined, label: 'Feed', index: 2),
+                      _buildNavItem(
+                          icon: Icons.person_outline, label: 'Perfil', index: 3),
                     ],
                   ),
                 ),

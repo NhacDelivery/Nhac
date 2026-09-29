@@ -8,6 +8,8 @@ import 'package:nhac/pages/auth/insira_telefone.dart';
 import 'package:nhac/pages/carrinho_page.dart';
 import 'package:nhac/pages/chat_loja_page.dart';
 import 'package:nhac/pages/checkout_page.dart';
+import 'package:nhac/pages/pagamento_pendente_page.dart';
+import 'package:nhac/pages/meus_pedidos_page.dart';
 import 'package:nhac/pages/rastreio_pedido_page.dart';
 import 'package:nhac/pages/splash_screen.dart';
 import 'package:nhac/pages/bem_vindo_motoca.dart';
@@ -313,6 +315,22 @@ final GoRouter appRouter = GoRouter(
     pageBuilder: (context, state) => _buildSlideRightToLeftPage(
       key: state.pageKey,
       child: const CheckoutPage(),
+    ),
+  ),
+  GoRoute(
+    path: '/pagamento',
+    pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+      key: state.pageKey,
+      child: PagamentoPendentePage(
+        pedidoId: state.uri.queryParameters['pedidoId'] ?? '',
+      ),
+    ),
+  ),
+  GoRoute(
+    path: '/meus-pedidos',
+    pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+      key: state.pageKey,
+      child: const MeusPedidosPage(),
     ),
   ),
   GoRoute(
