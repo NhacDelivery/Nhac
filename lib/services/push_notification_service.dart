@@ -29,6 +29,14 @@ class PushNotificationService {
     });
   }
 
+  void _abrirPedidoPendenteAposLogin() {
+    final pedidoId = pendingPedidoId;
+    if (pedidoId == null || !_authService.isAuthenticated ||
+        appRouter.routeInformationProvider.value.uri.path == '/splash') return;
+    pendingPedidoId = null;
+    _abrirPedido(pedidoId);
+  }
+
   final AndroidNotificationChannel _androidChannel = const AndroidNotificationChannel(
     'nhac_high_importance_channel', 
     'Notificações de Pedidos', 
@@ -39,6 +47,7 @@ class PushNotificationService {
   );
 
   Future<void> initialize() async {
+    _authService.addListener(_abrirPedidoPendenteAposLogin);
     _nativeChannel.setMethodCallHandler((call) async {
       if (call.method == 'openOrder') _abrirPedido(call.arguments?.toString());
     });

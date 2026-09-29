@@ -25,7 +25,7 @@ class HomeOrderTrackingCard extends StatefulWidget {
 }
 
 class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
-    with SingleTickerProviderStateMixin, RouteAware {
+    with SingleTickerProviderStateMixin, RouteAware, WidgetsBindingObserver {
   PedidoModel? _activePedido;
   bool _loading = true;
   String? _error;
@@ -60,6 +60,7 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     _connectivity = context.read<ConnectivityService>();
     _wasOnline = _connectivity!.isOnline;
     _connectivity!.addListener(_onConnectivityChanged);
+    WidgetsBinding.instance.addObserver(this);
     _loadActiveOrder();
   }
 
@@ -79,6 +80,11 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   @override
   void didPopNext() => _loadActiveOrder();
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.isActive) _loadActiveOrder();
+  }
+
   void _onConnectivityChanged() {
     final online = _connectivity?.isOnline ?? false;
     if (online && !_wasOnline) _loadActiveOrder();
@@ -89,6 +95,7 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   void dispose() {
     _generation++;
     homeOrderRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     _connectivity?.removeListener(_onConnectivityChanged);
     _statusSubscription?.cancel();
     _connectionSubscription?.cancel();
@@ -146,6 +153,8 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       } else if (!cachedActive) {
         setState(() { _activePedido = null; _loading = false; });
         await LocalCacheService.removerPedidoAtivo(usuarioId);
+        _socketPedidoId = null;
+        await _socket.desconectar();
       }
     } catch (_) {
       if (mounted && generation == _generation) {

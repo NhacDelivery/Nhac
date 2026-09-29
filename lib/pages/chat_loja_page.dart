@@ -396,17 +396,27 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
           if (widget.produtoReferencia case final produto?)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Row(children: [
-                if (produto.imagemUrl.isNotEmpty)
-                  CachedNetworkImage(imageUrl: produto.imagemUrl, width: 48, height: 48, fit: BoxFit.cover),
-                const SizedBox(width: 10),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(produto.nome, maxLines: 1, overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  Text(NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$').format(produto.preco)),
-                  Text(_referenciaEnviada ? 'Referência enviada à loja' : 'Referência incluída na próxima mensagem',
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF5D201C))),
-                ])),
+              child: Column(children: [
+                Row(children: [
+                  if (produto.imagemUrl.isNotEmpty)
+                    CachedNetworkImage(imageUrl: produto.imagemUrl, width: 48, height: 48, fit: BoxFit.cover),
+                  const SizedBox(width: 10),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(produto.nome, maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    Text(NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$').format(produto.preco)),
+                    Text(_referenciaEnviada ? 'Referência enviada à loja' : 'Referência incluída na próxima mensagem',
+                        style: const TextStyle(fontSize: 11, color: Color(0xFF5D201C))),
+                  ])),
+                ]),
+                if (!_referenciaEnviada)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _conectado && (_pendenteId == null || _envioIncerto) ? _enviar : null,
+                      child: const Text('Enviar produto à loja'),
+                    ),
+                  ),
               ]),
             ),
           Row(
