@@ -32,6 +32,8 @@ import 'package:nhac/pages/auth/recuperacao_senha/inserir_codigo_recuperacao_pag
 import 'package:nhac/pages/auth/recuperacao_senha/nova_senha_recuperacao_page.dart';
 import 'package:nhac/pages/feed_post_detail_page.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
+import 'package:nhac/services/home_order_route_observer.dart';
+import 'package:nhac/models/produto/produtos.dart';
 
 class _SlideRightToLeftPageRoute<T> extends PageRoute<T>
     with MaterialRouteTransitionMixin<T> {
@@ -123,6 +125,7 @@ final authServiceRoteador = AuthService();
 @NowaGenerated()
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
+  observers: [homeOrderRouteObserver],
   refreshListenable: authServiceRoteador,
  redirect: (BuildContext context, GoRouterState state) {
     if (!authServiceRoteador.carregado) {
@@ -390,6 +393,8 @@ final GoRouter appRouter = GoRouter(
           child: ChatLojaPage(
             lojaId: (dados['lojaId'] ?? '').toString(),
             lojaNome: (dados['lojaNome'] ?? 'Loja').toString(),
+            produtoReferencia: dados['produto'] is ProdutosModel
+                ? dados['produto'] as ProdutosModel : null,
           ),
         );
       },

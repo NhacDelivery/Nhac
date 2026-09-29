@@ -38,7 +38,7 @@ class HomeProductSection extends StatelessWidget {
                 color: const Color(0xFF5D201C),
               ),
             ),
-            GestureDetector(
+            if (onSeeAll != null) GestureDetector(
               onTap: onSeeAll,
               child: Text(
                 'Ver tudo',

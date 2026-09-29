@@ -7,6 +7,39 @@ class LocalCacheService {
   static const String _keyEnderecos = 'cache_enderecos';
   static const String _keyLocalizacaoGps = 'cache_localizacao_gps';
   static const String _keySearchHistory = 'cache_search_history';
+  static const String _keyEmailVerificacao = 'email_verificacao_pendente';
+
+  static Future<void> salvarEmailVerificacao(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyEmailVerificacao, email.trim());
+  }
+
+  static Future<String?> carregarEmailVerificacao() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyEmailVerificacao);
+  }
+
+  static Future<void> limparEmailVerificacao() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyEmailVerificacao);
+  }
+
+  static String _keyPedidoAtivo(String usuarioId) => 'pedido_ativo_$usuarioId';
+
+  static Future<String?> carregarPedidoAtivo(String usuarioId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_keyPedidoAtivo(usuarioId));
+  }
+
+  static Future<void> salvarPedidoAtivo(String usuarioId, String pedidoId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyPedidoAtivo(usuarioId), pedidoId);
+  }
+
+  static Future<void> removerPedidoAtivo(String usuarioId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_keyPedidoAtivo(usuarioId));
+  }
 
   static Future<void> salvarHistoricoPesquisa(List<String> historico) async {
     try {

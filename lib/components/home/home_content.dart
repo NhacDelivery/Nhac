@@ -36,7 +36,9 @@ import 'package:nhac/globals/app_constants.dart';
 @NowaGenerated()
 class HomeContent extends StatefulWidget {
   @NowaGenerated({'loader': 'auto-constructor'})
-  const HomeContent({super.key});
+  const HomeContent({super.key, this.isActive = true});
+
+  final bool isActive;
 
   @override
   State<HomeContent> createState() => _HomeContentState();
@@ -916,7 +918,7 @@ class _HomeContentState extends State<HomeContent> {
                   ),
                 ),
                 SizedBox(height: 28.h),
-                const HomeOrderTrackingCard(),
+                HomeOrderTrackingCard(isActive: widget.isActive),
                 SizedBox(height: 28.h),
                 TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 800),
