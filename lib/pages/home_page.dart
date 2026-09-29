@@ -159,7 +159,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   });
                 },
                 children: [
-                  const HomeContent(),
+                  HomeContent(isActive: _selectedIndex == 0),
                   CarrinhoPage(isActive: _selectedIndex == 1),
                   const ProfileContent(),
                 ],
@@ -402,6 +402,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                           icon: Icons.person_outline,
                           label: 'Perfil',
                           index: 2),
+                      Semantics(
+                        button: true,
+                        label: 'Cupons',
+                        child: IconButton(
+                          tooltip: 'Meus cupons',
+                          onPressed: () => context.push('/cupons'),
+                          icon: Icon(Icons.local_offer_outlined,
+                              size: 28.sp, color: const Color(0xFFA0A0A0)),
+                        ),
+                      ),
                     ],
                   ),
                 ),

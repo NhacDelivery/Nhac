@@ -1,10 +1,12 @@
 class PontoCoordenadaModel {
   final double latitude;
   final double longitude;
+  final DateTime? atualizadaEm;
 
   const PontoCoordenadaModel({
     required this.latitude,
     required this.longitude,
+    this.atualizadaEm,
   });
 
   factory PontoCoordenadaModel.fromMap(Map<String, dynamic> map) {
@@ -13,6 +15,7 @@ class PontoCoordenadaModel {
           num.tryParse(map['latitude']?.toString() ?? '0')?.toDouble() ?? 0,
       longitude:
           num.tryParse(map['longitude']?.toString() ?? '0')?.toDouble() ?? 0,
+      atualizadaEm: DateTime.tryParse(map['atualizadaEm']?.toString() ?? ''),
     );
   }
 }

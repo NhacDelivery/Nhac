@@ -17,12 +17,15 @@ import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/models/chat/mensagem_chat.dart';
 import 'package:nhac/repositories/chat_repository.dart';
 import 'package:nhac/services/chat_socket_service.dart';
+import 'package:nhac/models/produto/produtos.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ChatLojaPage extends StatefulWidget {
   final String lojaId;
   final String lojaNome;
+  final ProdutosModel? produtoReferencia;
 
-  const ChatLojaPage({super.key, required this.lojaId, required this.lojaNome});
+  const ChatLojaPage({super.key, required this.lojaId, required this.lojaNome, this.produtoReferencia});
 
   @override
   State<ChatLojaPage> createState() => _ChatLojaPageState();
@@ -43,6 +46,8 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
   String? _erroFatal;
   String? _pendenteId;
   String? _pendenteTexto;
+  bool _pendenteComReferencia = false;
+  bool _referenciaEnviada = false;
   bool _envioIncerto = false;
   int _paginaHistorico = 0;
   bool _temMensagensAntigas = true;
@@ -117,6 +122,8 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
     _prazoConfirmacao?.cancel();
     _campoController.clear();
     setState(() {
+      if (_pendenteComReferencia) _referenciaEnviada = true;
+      _pendenteComReferencia = false;
       _pendenteId = null;
       _pendenteTexto = null;
       _envioIncerto = false;
@@ -175,17 +182,24 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
 
   void _enviar() {
     final texto = _campoController.text.trim();
-    if (texto.isEmpty) return;
+    final produto = widget.produtoReferencia;
+    final anexar = produto != null && !_referenciaEnviada;
+    if (texto.isEmpty && !anexar && _pendenteId == null) return;
     if (_pendenteId != null && !_envioIncerto) return;
     final id = _pendenteId ?? const Uuid().v4();
-    final enviou = _socket.enviar(_pendenteTexto ?? texto, id);
+    final referencia = produto != null && !_referenciaEnviada
+        ? 'Produto: ${produto.nome}\nID: ${produto.id}\nPreço: ${NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$').format(produto.preco)}${produto.imagemUrl.isEmpty ? '' : '\nImagem: ${produto.imagemUrl}'}'
+        : '';
+    final mensagem = _pendenteTexto ?? [referencia, texto].where((parte) => parte.isNotEmpty).join('\n\n');
+    final enviou = _socket.enviar(mensagem, id);
     if (!enviou) {
       context.showError('Sem conexão com o chat. Tente novamente quando conectar.');
       return;
     }
     setState(() {
       _pendenteId = id;
-      _pendenteTexto = texto;
+      _pendenteTexto = mensagem;
+      _pendenteComReferencia = anexar;
       _envioIncerto = false;
     });
     _prazoConfirmacao?.cancel();
@@ -379,6 +393,22 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (widget.produtoReferencia case final produto?)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Row(children: [
+                if (produto.imagemUrl.isNotEmpty)
+                  CachedNetworkImage(imageUrl: produto.imagemUrl, width: 48, height: 48, fit: BoxFit.cover),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(produto.nome, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$').format(produto.preco)),
+                  Text(_referenciaEnviada ? 'Referência enviada à loja' : 'Referência incluída na próxima mensagem',
+                      style: const TextStyle(fontSize: 11, color: Color(0xFF5D201C))),
+                ])),
+              ]),
+            ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [

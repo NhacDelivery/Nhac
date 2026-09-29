@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
@@ -5,18 +6,43 @@ import 'package:nhac/models/pedido_model.dart';
 import 'package:nhac/models/pedido/status_pedido.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:nhac/models/pedido/pedido_resumo_model.dart';
+import 'package:nhac/repositories/loja_repository.dart';
+import 'package:nhac/services/auth_service.dart';
+import 'package:nhac/services/connectivity_service.dart';
+import 'package:nhac/services/home_order_route_observer.dart';
+import 'package:nhac/services/local_cache_service.dart';
+import 'package:nhac/services/pedido_status_socket_service.dart';
+import 'package:provider/provider.dart';
 
 class HomeOrderTrackingCard extends StatefulWidget {
-  const HomeOrderTrackingCard({super.key});
+  const HomeOrderTrackingCard({super.key, this.isActive = true});
+
+  final bool isActive;
 
   @override
   State<HomeOrderTrackingCard> createState() => _HomeOrderTrackingCardState();
 }
 
 class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, RouteAware {
   PedidoModel? _activePedido;
   bool _loading = true;
+  String? _error;
+  String? _usuarioId;
+  String? _socketPedidoId;
+  int? _tempoLojaMin;
+  int? _tempoLojaMax;
+  String? _tempoLojaPedidoId;
+  final PedidoRepository _repository = PedidoRepository();
+  final PedidoStatusSocketService _socket = PedidoStatusSocketService();
+  StreamSubscription? _statusSubscription;
+  StreamSubscription? _connectionSubscription;
+  ConnectivityService? _connectivity;
+  bool _wasOnline = true;
+  bool _refreshing = false;
+  bool _refreshPending = false;
+  int _generation = 0;
   late AnimationController _pulseController;
 
   @override
@@ -26,35 +52,134 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
+    _usuarioId = context.read<AuthService>().usuarioId;
+    _statusSubscription = _socket.status.listen((_) => _loadActiveOrder());
+    _connectionSubscription = _socket.conectado.listen((connected) {
+      if (connected) _loadActiveOrder();
+    });
+    _connectivity = context.read<ConnectivityService>();
+    _wasOnline = _connectivity!.isOnline;
+    _connectivity!.addListener(_onConnectivityChanged);
     _loadActiveOrder();
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) homeOrderRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didUpdateWidget(covariant HomeOrderTrackingCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) _loadActiveOrder();
+  }
+
+  @override
+  void didPopNext() => _loadActiveOrder();
+
+  void _onConnectivityChanged() {
+    final online = _connectivity?.isOnline ?? false;
+    if (online && !_wasOnline) _loadActiveOrder();
+    _wasOnline = online;
+  }
+
+  @override
   void dispose() {
+    _generation++;
+    homeOrderRouteObserver.unsubscribe(this);
+    _connectivity?.removeListener(_onConnectivityChanged);
+    _statusSubscription?.cancel();
+    _connectionSubscription?.cancel();
+    _socket.dispose();
     _pulseController.dispose();
     super.dispose();
   }
 
   Future<void> _loadActiveOrder() async {
+    if (_refreshing) {
+      _refreshPending = true;
+      return;
+    }
+    final usuarioId = context.read<AuthService>().usuarioId;
+    if (usuarioId == null) return;
+    if (_usuarioId != usuarioId) {
+      _usuarioId = usuarioId;
+      _activePedido = null;
+      _socketPedidoId = null;
+      await _socket.desconectar();
+    }
+    final generation = _generation;
+    _refreshing = true;
+    if (mounted) setState(() { _error = null; _loading = _activePedido == null; });
     try {
-      final historico =
-          await PedidoRepository().buscarHistorico(page: 0, size: 5);
-      final active = historico.where((p) => !p.status.terminal).toList();
-      if (active.isNotEmpty) {
-        final fullPedido =
-            await PedidoRepository().buscarPedidoPorId(active.first.id);
-        if (mounted) {
-          setState(() {
-            _activePedido = fullPedido;
-            _loading = false;
-          });
+      var cachedId = await LocalCacheService.carregarPedidoAtivo(usuarioId);
+      var cachedActive = false;
+      if (cachedId != null && cachedId.isNotEmpty) {
+        try {
+          final cachedOrder = await _repository.buscarPedidoPorId(cachedId);
+          if (!mounted || generation != _generation) return;
+          cachedActive = !cachedOrder.status.terminal;
+          if (cachedActive) _showOrder(cachedOrder);
+        } catch (_) {
+          // Ainda consultamos o histórico; o pedido salvo pode ter sido removido.
         }
-      } else {
-        if (mounted) setState(() => _loading = false);
+        if (!cachedActive) {
+          cachedId = null;
+        }
+      }
+      PedidoResumoModel? active;
+      // O histórico é paginado; pedidos mais antigos podem continuar ativos.
+      for (var page = 0; ; page++) {
+        final history = await _repository.buscarHistorico(page: page, size: 20);
+        for (final item in history) {
+          if (!item.status.terminal) { active = item; break; }
+        }
+        if (active != null || history.length < 20) break;
+      }
+      final full = active == null ? null : await _repository.buscarPedidoPorId(active.id);
+      if (!mounted || generation != _generation) return;
+      if (full != null && !full.status.terminal) {
+        _showOrder(full);
+        await LocalCacheService.salvarPedidoAtivo(usuarioId, full.id);
+      } else if (!cachedActive) {
+        setState(() { _activePedido = null; _loading = false; });
+        await LocalCacheService.removerPedidoAtivo(usuarioId);
       }
     } catch (_) {
-      if (mounted) setState(() => _loading = false);
+      if (mounted && generation == _generation) {
+        setState(() { _loading = false; _error = 'Não foi possível atualizar seu pedido.'; });
+      }
+    } finally {
+      _refreshing = false;
+      if (_refreshPending && mounted) {
+        _refreshPending = false;
+        _loadActiveOrder();
+      }
     }
+  }
+
+  void _showOrder(PedidoModel pedido) {
+    setState(() { _activePedido = pedido; _loading = false; _error = null; });
+    if (_socketPedidoId != pedido.id) {
+      _socketPedidoId = pedido.id;
+      _socket.desconectar().then((_) {
+        if (!mounted || _socketPedidoId != pedido.id) return;
+        _socket.conectar(pedido.id);
+      });
+    }
+    if (_tempoLojaPedidoId == pedido.id) return;
+    _tempoLojaPedidoId = pedido.id;
+    _tempoLojaMin = null;
+    _tempoLojaMax = null;
+    LojaRepository().buscarLoja(pedido.lojaId).then((loja) {
+      if (!mounted || _activePedido?.id != pedido.id) return;
+      setState(() {
+        _tempoLojaMin = loja?.dadosOperacionais?.tempoEntregaMin;
+        _tempoLojaMax = loja?.dadosOperacionais?.tempoEntregaMax;
+      });
+    }).catchError((_) {});
   }
 
   String _estimativa(StatusPedido status) {
@@ -62,11 +187,12 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       case StatusPedido.pendente:
         return 'Aguardando pagamento';
       case StatusPedido.pago:
-        return 'Estimativa: ~35 min';
       case StatusPedido.preparando:
-        return 'Estimativa: ~20 min';
       case StatusPedido.saiuEntrega:
-        return 'Estimativa: ~10 min';
+        if (_tempoLojaMin != null && _tempoLojaMax != null) {
+          return 'Estimativa geral da loja: $_tempoLojaMin–$_tempoLojaMax min';
+        }
+        return 'Acompanhe o andamento do pedido';
       default:
         return '';
     }
@@ -89,7 +215,23 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
 
   @override
   Widget build(BuildContext context) {
-    if (_loading || _activePedido == null) return const SizedBox.shrink();
+    if (_activePedido == null) {
+      if (!_loading && _error == null) return const SizedBox.shrink();
+      return Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20.w),
+        child: Card(child: Padding(
+          padding: EdgeInsets.all(16.w),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Seu pedido', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold)),
+            if (_loading) const LinearProgressIndicator(),
+            if (_error != null) ...[
+              Text(_error!),
+              TextButton(onPressed: _loadActiveOrder, child: const Text('Tentar novamente')),
+            ],
+          ]),
+        )),
+      );
+    }
 
     final pedido = _activePedido!;
     final stage = pedido.status.stage;
@@ -119,6 +261,12 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_error != null) ...[
+                Row(children: [
+                  Expanded(child: Text(_error!, style: const TextStyle(color: Colors.red))),
+                  TextButton(onPressed: _loadActiveOrder, child: const Text('Tentar novamente')),
+                ]),
+              ],
               // ── Header row: icon + status + arrow ──
               Row(
                 children: [

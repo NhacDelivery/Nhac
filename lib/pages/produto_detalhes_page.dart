@@ -17,6 +17,13 @@ import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/repositories/avaliacao_repository.dart';
 import 'package:nhac/models/produto/avaliacoes.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
+import 'package:go_router/go_router.dart';
+
+class _RelatedProducts {
+  final List<ProdutosModel> products;
+  final Map<String, bool> storesOpen;
+  const _RelatedProducts(this.products, this.storesOpen);
+}
 
 class ProdutoDetalhesPage extends StatefulWidget {
   final ProdutosModel produto;
@@ -30,7 +37,7 @@ class ProdutoDetalhesPage extends StatefulWidget {
 class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   int _quantidade = 1;
   
-  late Future<List<ProdutosModel>> _produtosRelacionadosFuture;
+  late Future<_RelatedProducts> _produtosRelacionadosFuture;
   Future<LojasModel?>? _lojaFuture;
   Future<List<ProdutosModel>>? _produtosDaLojaFuture;
 
@@ -45,7 +52,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   void initState() {
     super.initState();
     
-    _produtosRelacionadosFuture = _produtoRepository.buscarPorCategoria(widget.produto.categoriaMenu);
+    _produtosRelacionadosFuture = _buscarRelacionados();
 
     _lojaFuture = widget.produto.lojaId.isNotEmpty
         ? _lojaRepository.buscarLoja(widget.produto.lojaId)
@@ -54,6 +61,43 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
 
     _resumoAvaliacoesFuture = _avaliacaoRepository.buscarResumoAvaliacoes(widget.produto.id);
     _avaliacoesFuture = _avaliacaoRepository.buscarAvaliacoes(widget.produto.lojaId);
+  }
+
+  Future<_RelatedProducts> _buscarRelacionados() async {
+    final products = await _produtoRepository.buscarPorCategoria(widget.produto.categoriaMenu);
+    final storeIds = products.map((p) => p.lojaId).where((id) => id.isNotEmpty).toSet();
+    final stores = await Future.wait(storeIds.map((id) async {
+      try {
+        final loja = await _lojaRepository.buscarLoja(id);
+        return MapEntry(id, loja?.isAberto ?? false);
+      } catch (_) {
+        return MapEntry(id, false);
+      }
+    }));
+    return _RelatedProducts(
+      products.where((p) => p.id != widget.produto.id &&
+          stores.any((entry) => entry.key == p.lojaId && entry.value)).toList(),
+      Map.fromEntries(stores),
+    );
+  }
+
+  Future<void> _abrirChat() async {
+    if (widget.produto.lojaId.isEmpty) return;
+    try {
+      final loja = await _lojaFuture;
+      if (!mounted) return;
+      if (loja == null) {
+        context.showError('Não foi possível abrir a conversa com esta loja.');
+        return;
+      }
+      context.push('/chat-loja', extra: {
+        'lojaId': loja.id,
+        'lojaNome': loja.nome,
+        'produto': widget.produto,
+      });
+    } catch (_) {
+      if (mounted) context.showError('Não foi possível abrir a conversa com esta loja.');
+    }
   }
 
   void _incrementarQuantidade() {
@@ -415,7 +459,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
 
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 20.w),
-                        child: FutureBuilder<List<ProdutosModel>>(
+                        child: FutureBuilder<_RelatedProducts>(
                           future: _produtosRelacionadosFuture,
                           builder: (context, snapshot) {
                             if (snapshot.connectionState ==
@@ -423,14 +467,11 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                               return const SizedBox.shrink();
                             }
 
-                            if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+                            if (snapshot.hasError || !snapshot.hasData || snapshot.data!.products.isEmpty) {
                               return const SizedBox.shrink();
                             }
 
-                            final produtosRelacionados = snapshot.data!
-                                .where((p) => p.id != widget.produto.id)
-                                .take(5)
-                                .toList();
+                            final produtosRelacionados = snapshot.data!.products.take(5).toList();
 
                             if (produtosRelacionados.isEmpty) {
                               return const SizedBox.shrink();
@@ -439,7 +480,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                             return HomeProductSection(
                               title: 'Produtos Relacionados',
                               products: produtosRelacionados,
-                              onSeeAll: () {},
+                              lojaAberta: snapshot.data!.storesOpen,
                             );                          
                           },
                         ),
@@ -477,7 +518,10 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               child: Row(
                 children: [
 
-                  _buildIconAction(Icons.chat_bubble_outline, 'Chat', ''),
+                  InkWell(
+                    onTap: _abrirChat,
+                    child: _buildIconAction(Icons.chat_bubble_outline, 'Chat', ''),
+                  ),
                   SizedBox(width: 24.w),
                   Expanded(
                     child: FutureBuilder<LojasModel?>(

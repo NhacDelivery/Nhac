@@ -55,6 +55,9 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
   LojasModel? _loja;
   RotaEntregaModel? _rota;
   LatLng? _motoboyLocation;
+  DateTime? _motoboyAtualizadoEm;
+  bool _motoboyDesatualizado = false;
+  bool _rotaSemCoordenadas = false;
   StreamSubscription<StatusPedido>? _statusSubscription;
   Timer? _refreshTimer;
   bool _refreshing = false;
@@ -110,7 +113,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
     await _statusSocket.conectar(widget.pedidoId);
   }
 
-  Future<void> _carregarDados({bool silencioso = false}) async {
+  Future<void> _carregarDados({bool silencioso = false, bool tentarRota = false}) async {
     if (_refreshing) return;
     _refreshing = true;
     if (!silencioso && mounted) {
@@ -130,16 +133,42 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
         loja = await _lojaRepository.buscarLoja(pedido.lojaId);
       } catch (_) {}
 
-      try {
-        rota = await _entregaRepository.buscarRota(widget.pedidoId);
-      } catch (e) {
-        rotaErro = 'Não foi possível carregar a rota: $e';
+      if (!_rotaSemCoordenadas || tentarRota) {
+        try {
+          rota = await _entregaRepository.buscarRota(widget.pedidoId);
+          if (rota.origem.latitude == 0 && rota.origem.longitude == 0 ||
+              rota.destino.latitude == 0 && rota.destino.longitude == 0) {
+            rota = null;
+            _rotaSemCoordenadas = true;
+            rotaErro = 'Endereço sem coordenadas. O mapa e a distância estão indisponíveis para este pedido.';
+          } else {
+            _rotaSemCoordenadas = false;
+          }
+        } catch (e) {
+          _rotaSemCoordenadas = e.toString().toLowerCase().contains('coordenad');
+          if (_rotaSemCoordenadas) rota = null;
+          rotaErro = _rotaSemCoordenadas
+              ? 'Endereço sem coordenadas. O mapa e a distância estão indisponíveis para este pedido.'
+              : 'Não foi possível carregar a rota. Tente novamente.';
+        }
+      } else {
+        rotaErro = _rotaErro;
       }
-      LatLng? motoboyLocation;
+      LatLng? motoboyLocation = _motoboyLocation;
+      DateTime? motoboyAtualizadoEm = _motoboyAtualizadoEm;
+      bool motoboyDesatualizado = _motoboyDesatualizado;
       try {
         final ponto = await _entregaRepository.buscarLocalizacaoEntregador(widget.pedidoId);
-        if (ponto != null) motoboyLocation = LatLng(ponto.latitude, ponto.longitude);
-      } catch (_) { /* A posição volta a ser consultada na próxima atualização. */ }
+        if (ponto != null && !(ponto.latitude == 0 && ponto.longitude == 0)) {
+          motoboyLocation = LatLng(ponto.latitude, ponto.longitude);
+          motoboyAtualizadoEm = ponto.atualizadaEm ?? DateTime.now();
+          motoboyDesatualizado = false;
+        } else if (motoboyLocation != null) {
+          motoboyDesatualizado = true;
+        }
+      } catch (_) {
+        if (motoboyLocation != null) motoboyDesatualizado = true;
+      }
 
       if (!mounted) return;
       setState(() {
@@ -148,6 +177,8 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
         _rota = rota;
         _rotaErro = rotaErro;
         _motoboyLocation = motoboyLocation;
+        _motoboyAtualizadoEm = motoboyAtualizadoEm;
+        _motoboyDesatualizado = motoboyDesatualizado;
         _isLoading = false;
         _erro = '';
       });
@@ -165,7 +196,10 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
       _publicarNotificacaoAoVivo();
     } catch (e) {
       if (!mounted) return;
-      if (_pedido != null && _loja != null) return;
+      if (_pedido != null && _loja != null) {
+        if (_motoboyLocation != null) setState(() => _motoboyDesatualizado = true);
+        return;
+      }
       setState(() {
         _erro = 'Erro ao carregar dados do pedido: $e';
         _isLoading = false;
@@ -270,7 +304,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
         child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
           Text(_rotaErro ?? 'Rota ainda indisponível. Confira as coordenadas da loja e do endereço de entrega.',
               textAlign: TextAlign.center),
-          TextButton(onPressed: () => _carregarDados(), child: const Text('Tentar novamente')),
+          TextButton(onPressed: () => _carregarDados(tentarRota: true), child: const Text('Tentar novamente')),
         ]),
       );
     }
@@ -327,7 +361,9 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
             markerId: const MarkerId('motoboy'),
             position: _motoboyLocation!,
             icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-            infoWindow: const InfoWindow(title: 'Entregador'),
+            infoWindow: InfoWindow(title: _motoboyDesatualizado
+                ? 'Última posição conhecida (desatualizada)'
+                : 'Entregador'),
           ),
       },
       polylines: {
@@ -607,6 +643,13 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
                     ],
                   ),
                   SizedBox(height: 16.h),
+                  if (_motoboyLocation != null && _motoboyAtualizadoEm != null) ...[
+                    Text(
+                      '${_motoboyDesatualizado ? 'Última posição conhecida · desatualizada' : 'Posição do entregador'}: ${DateFormat('dd/MM HH:mm').format(_motoboyAtualizadoEm!.toLocal())}',
+                      style: TextStyle(color: _motoboyDesatualizado ? Colors.deepOrange : Colors.grey.shade600, fontSize: 12.sp),
+                    ),
+                    SizedBox(height: 8.h),
+                  ],
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [

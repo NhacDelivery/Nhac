@@ -12,6 +12,7 @@ import 'package:provider/provider.dart';
 
 import 'package:nhac/components/nhac_input_field.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
+import 'package:nhac/services/local_cache_service.dart';
 
 import 'package:nhac/utils/validators.dart';
 
@@ -271,6 +272,7 @@ class _EmailClienteState extends State<EmailCliente> {
       } else {
         // O backend exige e-mail confirmado por código antes do /auth/registrar.
         await authService.enviarCodigoCadastro(emailDoUsuario);
+        await LocalCacheService.salvarEmailVerificacao(emailDoUsuario);
         if (!localContext.mounted) return;
         localContext.push('/cadastro/verificar-email', extra: emailDoUsuario);
       }

@@ -137,6 +137,7 @@ class AuthService with ChangeNotifier {
     final usuarioId = data['usuarioId'] as String;
     final nome = data['nome'] as String;
     await _sessionStorage.salvarSessao(token: token, usuarioId: usuarioId, nome: nome);
+    await LocalCacheService.limparEmailVerificacao();
     ApiClient().atualizarTokenCache(token);
     await _sessionStorage.salvarLoginGoogle(viaGoogle);
     await _sessionStorage.salvarLoginTelefone(viaTelefone);
@@ -170,6 +171,8 @@ class AuthService with ChangeNotifier {
       CartRepository(usuarioId: usuarioAnterior).limparCarrinho(),
       CartRepository().limparCarrinho(),
       LocalCacheService.limparTudo(),
+      if (usuarioAnterior != null)
+        LocalCacheService.removerPedidoAtivo(usuarioAnterior),
     ]);
   }
 

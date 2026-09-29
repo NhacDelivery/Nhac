@@ -22,6 +22,7 @@ import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
 import 'package:nhac/globals/app_constants.dart';
+import 'package:nhac/services/local_cache_service.dart';
 
 class CheckoutPage extends StatefulWidget {
   const CheckoutPage({super.key});
@@ -973,6 +974,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
         idempotencyKey: _checkoutIdempotencyKey!,
       );
       final idGerado = respostaPedido.pedidoId;
+      final usuarioId = context.read<AuthService>().usuarioId;
+      if (usuarioId != null) {
+        await LocalCacheService.salvarPedidoAtivo(usuarioId, idGerado);
+      }
       final clientSecret = respostaPedido.clientSecret;
       final pixCopiaECola = respostaPedido.pixCopiaECola;
       final qrCodeUrl = respostaPedido.qrCodeUrl;

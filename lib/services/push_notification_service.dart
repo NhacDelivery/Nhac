@@ -3,13 +3,31 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/notificacao_historico_service.dart';
+import 'package:nhac/globals/router.dart';
+import 'package:flutter/services.dart';
 
 class PushNotificationService {
+  static String? pendingPedidoId;
+  static const MethodChannel _nativeChannel = MethodChannel('com.feentzs.nhac/live_notification');
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   final AuthService _authService;
 
   PushNotificationService(this._authService);
+
+  void _abrirPedido(String? pedidoId) {
+    if (pedidoId == null || pedidoId.isEmpty) return;
+    if (!_authService.isAuthenticated ||
+        appRouter.routeInformationProvider.value.uri.path == '/splash') {
+      pendingPedidoId = pedidoId;
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_authService.isAuthenticated) {
+        appRouter.go('/rastreio?pedidoId=${Uri.encodeQueryComponent(pedidoId)}');
+      }
+    });
+  }
 
   final AndroidNotificationChannel _androidChannel = const AndroidNotificationChannel(
     'nhac_high_importance_channel', 
@@ -21,6 +39,14 @@ class PushNotificationService {
   );
 
   Future<void> initialize() async {
+    _nativeChannel.setMethodCallHandler((call) async {
+      if (call.method == 'openOrder') _abrirPedido(call.arguments?.toString());
+    });
+    try {
+      _abrirPedido(await _nativeChannel.invokeMethod<String>('consumePendingOrder'));
+    } on MissingPluginException {
+      // A implementação nativa só existe no Android.
+    }
     NotificationSettings settings = await _fcm.requestPermission();
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
@@ -28,7 +54,6 @@ class PushNotificationService {
 
       String? token = await _fcm.getToken();
       if (token != null) {
-        debugPrint('MEU FCM TOKEN: $token');
         if (_authService.usuarioId != null) {
           await _guardarTokenNoBancoDeDados(token);
         }
@@ -63,7 +88,8 @@ class PushNotificationService {
       const InitializationSettings initSettings = InitializationSettings(android: androidInit);
 
       await _localNotifications.initialize(
-        settings: initSettings, 
+        settings: initSettings,
+        onDidReceiveNotificationResponse: (response) => _abrirPedido(response.payload),
       );
 
       Future<void> registrar(RemoteMessage message) async {
@@ -72,11 +98,18 @@ class PushNotificationService {
         if (usuarioId == null || titulo == null) return;
         await NotificacaoHistoricoService.registrar(usuarioId, NotificacaoRegistrada(
           message.messageId ?? '${message.sentTime?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch}',
-          titulo, message.notification?.body ?? '', message.sentTime ?? DateTime.now()));
+          titulo, message.notification?.body ?? '', message.sentTime ?? DateTime.now(),
+          pedidoId: message.data['pedidoId']?.toString()));
       }
-      FirebaseMessaging.onMessageOpenedApp.listen((message) => registrar(message));
+      FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        registrar(message);
+        _abrirPedido(message.data['pedidoId']?.toString());
+      });
       final inicial = await _fcm.getInitialMessage();
-      if (inicial != null) await registrar(inicial);
+      if (inicial != null) {
+        await registrar(inicial);
+        _abrirPedido(inicial.data['pedidoId']?.toString());
+      }
 
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
         registrar(message);
@@ -102,6 +135,7 @@ class PushNotificationService {
                 icon: '@mipmap/ic_launcher',
               ),
             ),
+            payload: message.data['pedidoId']?.toString(),
           );
         }
       });
