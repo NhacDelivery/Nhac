@@ -788,7 +788,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       builder: (ctx) => _AddressSelectionSheet(enderecos: enderecos),
     );
     await enderecoProvider.buscarEnderecos();
-    if (!mounted) return;
+    if (!mounted || !context.mounted) return;
     if (enderecoProvider.enderecos.isEmpty) {
       _freteVersao++;
       setState(() { _freteConfirmado = false; _entregaLatitude = null; _entregaLongitude = null; });

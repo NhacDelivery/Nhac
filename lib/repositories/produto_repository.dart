@@ -19,7 +19,9 @@ class ProdutoRepository {
         promocoes.addAll(conteudo.map((map) => ProdutosModel.fromMap(map))
             .where((produto) => produto.percentualDesconto > 0));
         if (promocoes.length >= 10 || conteudo.isEmpty ||
-            (response.data is Map && response.data['last'] != false)) break;
+            (response.data is Map && response.data['last'] != false)) {
+          break;
+        }
       }
       return promocoes;
     } catch (e) {

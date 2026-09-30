@@ -49,12 +49,14 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
           return;
         }
       } catch (_) { /* A tela oferece nova tentativa. */ }
-      if (mounted) setState(() {
-        _carregando = false;
-        _erro = e is AppException && e.code == 'PAGAMENTO_INDISPONIVEL'
-            ? 'O prazo para pagar terminou. Acompanhe a atualização do pedido.'
-            : 'Não foi possível recuperar este pagamento. Verifique a conexão e tente novamente.';
-      });
+      if (mounted) {
+        setState(() {
+          _carregando = false;
+          _erro = e is AppException && e.code == 'PAGAMENTO_INDISPONIVEL'
+              ? 'O prazo para pagar terminou. Acompanhe a atualização do pedido.'
+              : 'Não foi possível recuperar este pagamento. Verifique a conexão e tente novamente.';
+        });
+      }
     }
   }
 
@@ -90,8 +92,10 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
         context.go('/rastreio?pedidoId=${widget.pedidoId}');
       }
     } catch (_) {
-      if (mounted) context.showError(
-        'Pagamento não confirmado. Você pode tentar novamente neste pedido até o prazo terminar.');
+      if (mounted) {
+        context.showError(
+            'Pagamento não confirmado. Você pode tentar novamente neste pedido até o prazo terminar.');
+      }
     } finally {
       if (mounted) setState(() => _abrindoStripe = false);
     }

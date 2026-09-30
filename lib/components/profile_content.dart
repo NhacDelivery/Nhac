@@ -100,7 +100,7 @@ class _ProfileContentState extends State<ProfileContent> {
                           future: NotificacaoHistoricoService.listar(usuarioId),
                           builder: (context, snapshot) {
                             if (snapshot.hasError) return const Center(child: Text('Não foi possível abrir os avisos deste aparelho. Tente novamente.'));
-                            if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+                            if (!snapshot.hasData) return const Center(child: LoadingNhac());
                             final avisos = snapshot.data!;
                             if (avisos.isEmpty) return const Center(child: Text('Nenhum aviso registrado neste aparelho.'));
                             return ListView.builder(itemCount: avisos.length, itemBuilder: (context, index) {
@@ -556,14 +556,6 @@ class _ProfileContentState extends State<ProfileContent> {
                           title: 'Formas de Pagamento',
                           subtitle: 'PIX, Cartões de Crédito...',
                           onTap: () => context.push('/formas-pagamento'),
-                        ),
-                        Divider(height: 1, color: Colors.grey.shade100, indent: 64.w),
-                        _buildAccountRow(
-                          icon: Icons.local_offer_outlined,
-                          iconColor: const Color(0xFFFF6961),
-                          title: 'Meus cupons',
-                          subtitle: 'Ofertas disponíveis para você',
-                          onTap: () => context.push('/cupons'),
                         ),
                       ],
                     ),
