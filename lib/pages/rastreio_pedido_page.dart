@@ -33,10 +33,18 @@ class _RastreioCacheEntry {
 
 class RastreioPedidoPage extends StatefulWidget {
   final String pedidoId;
+  final PedidoRepository? pedidoRepository;
+  final LojaRepository? lojaRepository;
+  final EntregaRepository? entregaRepository;
+  final PedidoStatusSocketService? statusSocket;
 
   const RastreioPedidoPage({
     super.key,
     required this.pedidoId,
+    this.pedidoRepository,
+    this.lojaRepository,
+    this.entregaRepository,
+    this.statusSocket,
   });
 
   @override
@@ -46,10 +54,10 @@ class RastreioPedidoPage extends StatefulWidget {
 class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
   static final Map<String, _RastreioCacheEntry> _cache = {};
 
-  final PedidoRepository _pedidoRepository = PedidoRepository();
-  final LojaRepository _lojaRepository = LojaRepository();
-  final EntregaRepository _entregaRepository = EntregaRepository();
-  final PedidoStatusSocketService _statusSocket = PedidoStatusSocketService();
+  late final PedidoRepository _pedidoRepository;
+  late final LojaRepository _lojaRepository;
+  late final EntregaRepository _entregaRepository;
+  late final PedidoStatusSocketService _statusSocket;
 
   PedidoModel? _pedido;
   LojasModel? _loja;
@@ -82,6 +90,10 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
   @override
   void initState() {
     super.initState();
+    _pedidoRepository = widget.pedidoRepository ?? PedidoRepository();
+    _lojaRepository = widget.lojaRepository ?? LojaRepository();
+    _entregaRepository = widget.entregaRepository ?? EntregaRepository();
+    _statusSocket = widget.statusSocket ?? PedidoStatusSocketService();
     final cached = _cache.remove(widget.pedidoId);
     if (cached != null) {
       _pedido = cached.pedido;
@@ -284,7 +296,19 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
         45;
   }
 
-  String _statusPedidoTexto() => _pedido?.status.label ?? 'Pedido em andamento';
+  String _statusPedidoTexto() {
+    final status = _pedido?.status;
+    final entregador = _pedido?.entregador;
+    if (entregador != null) {
+      if (status == StatusPedido.preparando) {
+        return '${entregador.nome} aceitou sua entrega';
+      }
+      if (status == StatusPedido.saiuEntrega) {
+        return '${entregador.nome} está a caminho';
+      }
+    }
+    return status?.label ?? 'Pedido em andamento';
+  }
 
   Widget _buildMapa() {
     if (AppConstants.e2eMode) {
@@ -491,14 +515,18 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
                   Row(
                     children: [
                       SizedBox(width: 8.w),
-                      Semantics(
-                        key: E2EKeys.trackingStatus,
-                        value: _pedido!.status.apiValue,
-                        child: Text(
-                          _statusPedidoTexto(),
-                          key: const Key('pedido-status-text'),
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold, fontSize: 16.sp),
+                      Expanded(
+                        child: Semantics(
+                          key: E2EKeys.trackingStatus,
+                          value: _pedido!.status.apiValue,
+                          child: Text(
+                            _statusPedidoTexto(),
+                            key: const Key('pedido-status-text'),
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 16.sp),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                       ),
                     ],
@@ -550,21 +578,23 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Previsão até $horaPrevisao',
-                            style: TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 20.sp),
-                          ),
-                          SizedBox(height: 4.h),
-                          Text(
-                            '$quantidadeItens Itens • $tempoExibicao',
-                            style: TextStyle(
-                                color: Colors.grey.shade600, fontSize: 14.sp),
-                          ),
-                        ],
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Previsão até $horaPrevisao',
+                              style: TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 20.sp),
+                            ),
+                            SizedBox(height: 4.h),
+                            Text(
+                              '$quantidadeItens Itens • $tempoExibicao',
+                              style: TextStyle(
+                                  color: Colors.grey.shade600, fontSize: 14.sp),
+                            ),
+                          ],
+                        ),
                       ),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
@@ -588,7 +618,9 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
                   ),
                   SizedBox(height: 24.h),
                   Divider(color: Colors.grey.shade300, height: 1),
-                  SizedBox(height: 24.h),
+                  SizedBox(height: 16.h),
+                  _buildCodigoEntregaCard(),
+                  _buildEntregadorCard(),
                   Row(
                     children: [
                       ClipRRect(
@@ -709,6 +741,210 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
                   SizedBox(height: 32.h),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCodigoEntregaCard() {
+    if (_pedido?.status != StatusPedido.saiuEntrega) {
+      return const SizedBox.shrink();
+    }
+
+    final codigo = _pedido?.codigoEntrega;
+    final temCodigo = codigo != null && codigo.trim().isNotEmpty;
+
+    return Container(
+      key: const Key('cartao-codigo-entrega'),
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: 16.h),
+      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 14.h),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFEBD9),
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(
+          color: const Color(0xFFFF6961).withValues(alpha: 0.4),
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.pin_outlined,
+                color: const Color(0xFF5D201C),
+                size: 20.sp,
+              ),
+              SizedBox(width: 8.w),
+              Text(
+                'Código de entrega',
+                style: TextStyle(
+                  color: const Color(0xFF5D201C),
+                  fontSize: 14.sp,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8.h),
+          if (temCodigo)
+            Semantics(
+              label: 'Código de entrega: ${codigo.split('').join(' ')}',
+              excludeSemantics: true,
+              child: Text(
+                codigo,
+                style: TextStyle(
+                  color: const Color(0xFF5D201C),
+                  fontSize: 32.sp,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 8.w,
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: EdgeInsets.symmetric(vertical: 8.h),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const LoadingNhac(telaCheia: false, tamanho: 20.0),
+                  SizedBox(width: 8.w),
+                  Text(
+                    'Carregando código…',
+                    style: TextStyle(
+                      color: const Color(0xFF5D201C),
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          SizedBox(height: 6.h),
+          Text(
+            'Informe este código ao entregador só quando receber o pedido.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.grey.shade700,
+              fontSize: 12.sp,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEntregadorCard() {
+    final entregador = _pedido?.entregador;
+    if (entregador == null) return const SizedBox.shrink();
+
+    final infoVeiculo = [
+      if (entregador.modeloVeiculo != null && entregador.modeloVeiculo!.isNotEmpty)
+        entregador.modeloVeiculo,
+      if (entregador.corVeiculo != null && entregador.corVeiculo!.isNotEmpty)
+        entregador.corVeiculo,
+      if (entregador.placaVeiculo != null && entregador.placaVeiculo!.isNotEmpty)
+        '(${entregador.placaVeiculo})',
+    ].join(' · ');
+
+    final temAvaliacao = (entregador.totalAvaliacoes ?? 0) > 0;
+
+    return Container(
+      key: const Key('cartao-entregador-rastreio'),
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: 16.h),
+      padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 12.h),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(22.r),
+            child: entregador.fotoUrl != null && entregador.fotoUrl!.isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: entregador.fotoUrl!,
+                    width: 44.r,
+                    height: 44.r,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      width: 44.r,
+                      height: 44.r,
+                      color: const Color(0xFFFFE7E5),
+                      child: Icon(Icons.two_wheeler,
+                          color: const Color(0xFFFF6961), size: 22.r),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      width: 44.r,
+                      height: 44.r,
+                      color: const Color(0xFFFFE7E5),
+                      child: Icon(Icons.two_wheeler,
+                          color: const Color(0xFFFF6961), size: 22.r),
+                    ),
+                  )
+                : Container(
+                    width: 44.r,
+                    height: 44.r,
+                    color: const Color(0xFFFFE7E5),
+                    child: Icon(Icons.two_wheeler,
+                        color: const Color(0xFFFF6961), size: 22.r),
+                  ),
+          ),
+          SizedBox(width: 12.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        entregador.nome,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15.sp,
+                          color: const Color(0xFF5D201C),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (temAvaliacao) ...[
+                      SizedBox(width: 6.w),
+                      Icon(Icons.star_rounded,
+                          color: Colors.amber.shade700, size: 16.sp),
+                      SizedBox(width: 2.w),
+                      Text(
+                        '${entregador.avaliacaoMedia?.toStringAsFixed(1) ?? "5.0"} (${entregador.totalAvaliacoes})',
+                        style: TextStyle(
+                          fontSize: 12.sp,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade700,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                if (infoVeiculo.isNotEmpty) ...[
+                  SizedBox(height: 2.h),
+                  Text(
+                    infoVeiculo,
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 12.sp,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
             ),
           ),
         ],
