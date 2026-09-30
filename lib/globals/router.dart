@@ -36,6 +36,7 @@ import 'package:nhac/pages/feed_post_detail_page.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/services/home_order_route_observer.dart';
 import 'package:nhac/models/produto/produtos.dart';
+import 'package:nhac/pages/pedido_entregue_page.dart';
 
 class _SlideRightToLeftPageRoute<T> extends PageRoute<T>
     with MaterialRouteTransitionMixin<T> {
@@ -402,8 +403,17 @@ final GoRouter appRouter = GoRouter(
       );
     },
   ),
-      GoRoute(
-      path: '/chat-loja',
+  GoRoute(
+    path: '/pedido-entregue',
+    pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+      key: state.pageKey,
+      child: PedidoEntreguePage(
+        pedidoId: state.uri.queryParameters['pedidoId'] ?? '',
+      ),
+    ),
+  ),
+  GoRoute(
+    path: '/chat-loja',
       pageBuilder: (context, state) {
         final dados = state.extra as Map<String, dynamic>? ?? const {};
         return _buildSlideRightToLeftPage(

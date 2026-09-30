@@ -64,7 +64,16 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
     _usuarioId = context.read<AuthService>().usuarioId;
-    _statusSubscription = _socket.status.listen((_) => _loadActiveOrder());
+    _statusSubscription = _socket.status.listen((novoStatus) async {
+      if (novoStatus == StatusPedido.entregue && _activePedido != null) {
+        final pedidoId = _activePedido!.id;
+        final visto = await LocalCacheService.isPedidoEntregueVisto(pedidoId);
+        if (!visto && mounted) {
+          context.push('/pedido-entregue?pedidoId=$pedidoId');
+        }
+      }
+      _loadActiveOrder();
+    });
     _connectionSubscription = _socket.conectado.listen((connected) {
       _socketConectado = connected;
       if (connected) _loadActiveOrder();
@@ -152,6 +161,12 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
         _showOrder(full);
         await LocalCacheService.salvarPedidoAtivo(usuarioId, full.id);
       } else {
+        if (full?.status == StatusPedido.entregue) {
+          final visto = await LocalCacheService.isPedidoEntregueVisto(full!.id);
+          if (!visto && mounted) {
+            context.push('/pedido-entregue?pedidoId=${full.id}');
+          }
+        }
         setState(() { _activePedido = null; _loading = false; });
         await LocalCacheService.removerPedidoAtivo(usuarioId);
         await LocalCacheService.removerSnapshotPedido(usuarioId);

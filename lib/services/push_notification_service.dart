@@ -15,28 +15,37 @@ class PushNotificationService {
 
   PushNotificationService(this._authService);
 
-  void _abrirPedido(String? pedidoId) {
+  static String? pendingStatus;
+
+  void _abrirPedido(String? pedidoId, {String? status}) {
     if (pedidoId == null || pedidoId.isEmpty) return;
     if (!_authService.isAuthenticated ||
         appRouter.routeInformationProvider.value.uri.path == '/splash') {
       pendingPedidoId = pedidoId;
+      pendingStatus = status;
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_authService.isAuthenticated) {
-        appRouter.go('/rastreio?pedidoId=${Uri.encodeQueryComponent(pedidoId)}');
+        if (status?.toUpperCase() == 'ENTREGUE') {
+          appRouter.go('/pedido-entregue?pedidoId=${Uri.encodeQueryComponent(pedidoId)}');
+        } else {
+          appRouter.go('/rastreio?pedidoId=${Uri.encodeQueryComponent(pedidoId)}');
+        }
       }
     });
   }
 
   void _abrirPedidoPendenteAposLogin() {
     final pedidoId = pendingPedidoId;
+    final status = pendingStatus;
     if (pedidoId == null || !_authService.isAuthenticated ||
         appRouter.routeInformationProvider.value.uri.path == '/splash') {
       return;
     }
     pendingPedidoId = null;
-    _abrirPedido(pedidoId);
+    pendingStatus = null;
+    _abrirPedido(pedidoId, status: status);
   }
 
   final AndroidNotificationChannel _androidChannel = const AndroidNotificationChannel(
@@ -100,7 +109,14 @@ class PushNotificationService {
 
       await _localNotifications.initialize(
         settings: initSettings,
-        onDidReceiveNotificationResponse: (response) => _abrirPedido(response.payload),
+        onDidReceiveNotificationResponse: (response) {
+          final payload = response.payload;
+          if (payload != null && payload.startsWith('ENTREGUE:')) {
+            _abrirPedido(payload.substring('ENTREGUE:'.length), status: 'ENTREGUE');
+          } else {
+            _abrirPedido(payload);
+          }
+        },
       );
 
       Future<void> registrar(RemoteMessage message) async {
@@ -114,12 +130,14 @@ class PushNotificationService {
       }
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
         registrar(message);
-        _abrirPedido(message.data['pedidoId']?.toString());
+        final status = message.data['status']?.toString();
+        _abrirPedido(message.data['pedidoId']?.toString(), status: status);
       });
       final inicial = await _fcm.getInitialMessage();
       if (inicial != null) {
         await registrar(inicial);
-        _abrirPedido(inicial.data['pedidoId']?.toString());
+        final status = inicial.data['status']?.toString();
+        _abrirPedido(inicial.data['pedidoId']?.toString(), status: status);
       }
 
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -128,6 +146,8 @@ class PushNotificationService {
         AndroidNotification? android = message.notification?.android;
 
         if (notification != null && android != null) {
+          final isEntregue = message.data['status']?.toString().toUpperCase() == 'ENTREGUE';
+          final pid = message.data['pedidoId']?.toString() ?? '';
           _localNotifications.show(
             id:
             notification.hashCode,
@@ -146,7 +166,7 @@ class PushNotificationService {
                 icon: '@mipmap/ic_launcher',
               ),
             ),
-            payload: message.data['pedidoId']?.toString(),
+            payload: isEntregue ? 'ENTREGUE:$pid' : pid,
           );
         }
       });

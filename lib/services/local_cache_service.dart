@@ -118,6 +118,24 @@ class LocalCacheService {
     await prefs.remove(_keyPedidoAtivo(usuarioId));
   }
 
+  static String _keyPedidoEntregueVisto(String pedidoId) => 'pedido_entregue_visto_$pedidoId';
+
+  static Future<bool> isPedidoEntregueVisto(String pedidoId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(_keyPedidoEntregueVisto(pedidoId)) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<void> marcarPedidoEntregueVisto(String pedidoId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_keyPedidoEntregueVisto(pedidoId), true);
+    } catch (_) {}
+  }
+
   static Future<void> salvarHistoricoPesquisa(List<String> historico) async {
     try {
       final prefs = await SharedPreferences.getInstance();

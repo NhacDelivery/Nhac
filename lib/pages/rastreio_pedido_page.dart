@@ -15,6 +15,7 @@ import 'package:nhac/repositories/entrega_repository.dart';
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/services/live_notification_service.dart';
+import 'package:nhac/services/local_cache_service.dart';
 import 'package:nhac/services/pedido_status_socket_service.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
 import 'package:nhac/globals/app_constants.dart';
@@ -117,7 +118,14 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
   }
 
   Future<void> _conectarStatus() async {
-    _statusSubscription = _statusSocket.status.listen((_) {
+    _statusSubscription = _statusSocket.status.listen((novoStatus) async {
+      if (novoStatus == StatusPedido.entregue) {
+        final visto = await LocalCacheService.isPedidoEntregueVisto(widget.pedidoId);
+        if (!visto && mounted) {
+          context.pushReplacement('/pedido-entregue?pedidoId=${widget.pedidoId}');
+          return;
+        }
+      }
       if (mounted) {
         _carregarDados(silencioso: true);
       }
@@ -137,6 +145,13 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
 
     try {
       final pedido = await _pedidoRepository.buscarPedidoPorId(widget.pedidoId);
+      if (pedido.status == StatusPedido.entregue) {
+        final visto = await LocalCacheService.isPedidoEntregueVisto(pedido.id);
+        if (!visto && mounted) {
+          context.pushReplacement('/pedido-entregue?pedidoId=${pedido.id}');
+          return;
+        }
+      }
       LojasModel? loja = _loja;
       RotaEntregaModel? rota = _rota;
       String? rotaErro;
