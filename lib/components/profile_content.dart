@@ -100,7 +100,7 @@ class _ProfileContentState extends State<ProfileContent> {
                           future: NotificacaoHistoricoService.listar(usuarioId),
                           builder: (context, snapshot) {
                             if (snapshot.hasError) return const Center(child: Text('Não foi possível abrir os avisos deste aparelho. Tente novamente.'));
-                            if (!snapshot.hasData) return const Center(child: LoadingNhac());
+                            if (!snapshot.hasData) return const Center(child: LoadingNhac(telaCheia: false, tamanho: 40.0));
                             final avisos = snapshot.data!;
                             if (avisos.isEmpty) return const Center(child: Text('Nenhum aviso registrado neste aparelho.'));
                             return ListView.builder(itemCount: avisos.length, itemBuilder: (context, index) {
