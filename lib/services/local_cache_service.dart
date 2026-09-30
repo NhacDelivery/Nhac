@@ -72,9 +72,10 @@ class LocalCacheService {
 
   static Future<void> salvarSnapshotPedido(String usuarioId, PedidoModel pedido) async {
     final prefs = await SharedPreferences.getInstance();
+    final map = pedido.toMap()..remove('codigoEntrega');
     await prefs.setString(_keySnapshotPedido(usuarioId), jsonEncode({
       'salvoEm': DateTime.now().toUtc().toIso8601String(),
-      'pedido': pedido.toMap(),
+      'pedido': map,
     }));
   }
 

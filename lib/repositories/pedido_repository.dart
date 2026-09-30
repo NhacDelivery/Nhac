@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nhac/globals/exceptions.dart';
+import 'package:nhac/models/pedido/avaliacao_entregador_model.dart';
 import 'package:nhac/models/pedido/criar_pedido_request.dart';
 import 'package:nhac/models/pedido/pedido_criado_response.dart';
 import 'package:nhac/models/pedido/pedido_resumo_model.dart';
@@ -155,6 +156,42 @@ class PedidoRepository {
               ))
           .toList();
     } on DioException catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<void> avaliarEntregador(
+    String pedidoId,
+    int nota, [
+    String? comentario,
+  ]) async {
+    try {
+      await _dio.post(
+        '/pedidos/$pedidoId/avaliacao-entregador',
+        data: {
+          'nota': nota,
+          if (comentario != null && comentario.trim().isNotEmpty)
+            'comentario': comentario.trim(),
+        },
+      );
+    } on DioException catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<AvaliacaoEntregadorModel?> buscarAvaliacaoEntregador(String pedidoId) async {
+    try {
+      final response = await _dio.get('/pedidos/$pedidoId/avaliacao-entregador');
+      if (response.statusCode == 200 && response.data != null) {
+        return AvaliacaoEntregadorModel.fromMap(
+          Map<String, dynamic>.from(response.data as Map),
+        );
+      }
+      return null;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return null;
+      }
       throw mapException(e);
     }
   }

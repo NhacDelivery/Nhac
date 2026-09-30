@@ -211,4 +211,59 @@ void main() {
       expect(e.pedidoAtivoId, 'ped-antigo');
     }
   });
+
+  test('POST /pedidos/{id}/avaliacao-entregador envia nota e comentário', () async {
+    when(() => dio.post(
+          '/pedidos/ped-123/avaliacao-entregador',
+          data: any(named: 'data'),
+        )).thenAnswer(
+      (_) async => Response(
+        requestOptions: RequestOptions(path: '/pedidos/ped-123/avaliacao-entregador'),
+        statusCode: 201,
+      ),
+    );
+
+    await repository.avaliarEntregador('ped-123', 5, 'Excelente entrega');
+
+    verify(() => dio.post(
+          '/pedidos/ped-123/avaliacao-entregador',
+          data: {'nota': 5, 'comentario': 'Excelente entrega'},
+        )).called(1);
+  });
+
+  test('GET /pedidos/{id}/avaliacao-entregador retorna modelo em caso de 200', () async {
+    when(() => dio.get('/pedidos/ped-123/avaliacao-entregador')).thenAnswer(
+      (_) async => Response(
+        requestOptions: RequestOptions(path: '/pedidos/ped-123/avaliacao-entregador'),
+        statusCode: 200,
+        data: {
+          'id': 'aval-1',
+          'nota': 5,
+          'comentario': 'Muito rápido!',
+          'criadoEm': '2026-09-30T10:00:00Z',
+        },
+      ),
+    );
+
+    final avaliacao = await repository.buscarAvaliacaoEntregador('ped-123');
+    expect(avaliacao, isNotNull);
+    expect(avaliacao!.id, 'aval-1');
+    expect(avaliacao.nota, 5);
+    expect(avaliacao.comentario, 'Muito rápido!');
+  });
+
+  test('GET /pedidos/{id}/avaliacao-entregador retorna null em caso de 404', () async {
+    when(() => dio.get('/pedidos/ped-123/avaliacao-entregador')).thenThrow(
+      DioException(
+        requestOptions: RequestOptions(path: '/pedidos/ped-123/avaliacao-entregador'),
+        response: Response(
+          requestOptions: RequestOptions(path: '/pedidos/ped-123/avaliacao-entregador'),
+          statusCode: 404,
+        ),
+      ),
+    );
+
+    final avaliacao = await repository.buscarAvaliacaoEntregador('ped-123');
+    expect(avaliacao, isNull);
+  });
 }
