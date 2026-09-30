@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/globals/app_constants.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/globals/exceptions.dart';
@@ -107,7 +108,7 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
       return Scaffold(
         appBar: AppBar(title: const Text('Pagamento do pedido')),
         body: Center(child: _carregando
-            ? const CircularProgressIndicator()
+            ? const LoadingNhac(telaCheia: false)
             : Padding(padding: const EdgeInsets.all(24), child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [

@@ -961,8 +961,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (!context.mounted) return;
       if (ativo != null) {
         setState(() => _isSubmitting = false);
-        context.showError('Finalize seu pedido atual antes de fazer outro.');
-        context.go('/rastreio?pedidoId=${ativo.id}');
+        _mostrarAvisoPedidoAtivo(ativo.id);
         return;
       }
     } catch (_) { /* O POST ainda garante a regra no servidor. */ }
@@ -1010,9 +1009,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (!context.mounted) return;
       setState(() => _isSubmitting = false);
 
-      if (e.pedidoAtivoId != null) {
+      if (e.code == 'PEDIDO_ATIVO' || e.pedidoAtivoId != null) {
+        final id = e.pedidoAtivoId;
+        if (id != null && id.isNotEmpty) {
+          _mostrarAvisoPedidoAtivo(id);
+          return;
+        }
+        try {
+          final ativo = await PedidoRepository().buscarPedidoAtivo();
+          if (ativo != null && context.mounted) {
+            _mostrarAvisoPedidoAtivo(ativo.id);
+            return;
+          }
+        } catch (_) {}
+        if (!context.mounted) return;
         context.showError('Finalize seu pedido atual antes de fazer outro.');
-        context.go('/rastreio?pedidoId=${e.pedidoAtivoId}');
         return;
       }
 
@@ -1056,6 +1067,31 @@ class _CheckoutPageState extends State<CheckoutPage> {
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  void _mostrarAvisoPedidoAtivo(String pedidoId) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
+        title: const Text('Pedido em andamento', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text('Finalize seu pedido atual antes de fazer outro.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Fechar'),
+          ),
+          FilledButton(
+            key: const Key('botao-ver-pedido-atual'),
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              context.go('/rastreio?pedidoId=$pedidoId');
+            },
+            child: const Text('Ver pedido atual'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _exibirSucessoEVoltar(String idGerado, CartProvider cartProvider) {
