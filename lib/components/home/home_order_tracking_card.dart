@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
+import 'package:nhac/models/pedido/entregador_pedido_model.dart';
 import 'package:nhac/models/pedido_model.dart';
 import 'package:nhac/models/pedido/status_pedido.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
@@ -15,9 +16,16 @@ import 'package:nhac/services/pedido_status_socket_service.dart';
 import 'package:provider/provider.dart';
 
 class HomeOrderTrackingCard extends StatefulWidget {
-  const HomeOrderTrackingCard({super.key, this.isActive = true});
+  const HomeOrderTrackingCard({
+    super.key,
+    this.isActive = true,
+    this.pedidoRepository,
+    this.socketService,
+  });
 
   final bool isActive;
+  final PedidoRepository? pedidoRepository;
+  final PedidoStatusSocketService? socketService;
 
   @override
   State<HomeOrderTrackingCard> createState() => _HomeOrderTrackingCardState();
@@ -33,8 +41,8 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   int? _tempoLojaMin;
   int? _tempoLojaMax;
   String? _tempoLojaPedidoId;
-  final PedidoRepository _repository = PedidoRepository();
-  final PedidoStatusSocketService _socket = PedidoStatusSocketService();
+  late final PedidoRepository _repository;
+  late final PedidoStatusSocketService _socket;
   StreamSubscription? _statusSubscription;
   StreamSubscription? _connectionSubscription;
   Timer? _fallbackTimer;
@@ -49,6 +57,8 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   @override
   void initState() {
     super.initState();
+    _repository = widget.pedidoRepository ?? PedidoRepository();
+    _socket = widget.socketService ?? PedidoStatusSocketService();
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
@@ -312,7 +322,7 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          pedido.status.label,
+                          _statusTexto(pedido),
                           style: TextStyle(
                             color: const Color(0xFF5D201C),
                             fontWeight: FontWeight.bold,
@@ -409,6 +419,11 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
                 ],
               ),
 
+              if (pedido.entregador != null) ...[
+                SizedBox(height: 10.h),
+                _buildEntregadorCard(pedido.entregador!),
+              ],
+
               SizedBox(height: 14.h),
 
               // ── Progress bar ──
@@ -458,6 +473,128 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
         color: active ? const Color(0xFFFE645C) : Colors.grey.shade400,
         fontSize: 10.sp,
         fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+      ),
+    );
+  }
+
+  String _statusTexto(PedidoModel pedido) {
+    if (pedido.entregador != null) {
+      if (pedido.status == StatusPedido.preparando) {
+        return '${pedido.entregador!.nome} aceitou sua entrega';
+      }
+      if (pedido.status == StatusPedido.saiuEntrega) {
+        return '${pedido.entregador!.nome} está a caminho';
+      }
+    }
+    return pedido.status.label;
+  }
+
+  Widget _buildEntregadorCard(EntregadorPedidoModel entregador) {
+    final infoVeiculo = [
+      if (entregador.modeloVeiculo != null && entregador.modeloVeiculo!.isNotEmpty)
+        entregador.modeloVeiculo,
+      if (entregador.corVeiculo != null && entregador.corVeiculo!.isNotEmpty)
+        entregador.corVeiculo,
+      if (entregador.placaVeiculo != null && entregador.placaVeiculo!.isNotEmpty)
+        '(${entregador.placaVeiculo})',
+    ].join(' · ');
+
+    final temAvaliacao = (entregador.totalAvaliacoes ?? 0) > 0;
+
+    return Container(
+      key: const Key('cartao-entregador-home'),
+      padding: EdgeInsets.symmetric(horizontal: 10.w, vertical: 8.h),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF0ED),
+        borderRadius: BorderRadius.circular(10.r),
+        border: Border.all(
+          color: const Color(0xFFFF6961).withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18.r),
+            child: entregador.fotoUrl != null && entregador.fotoUrl!.isNotEmpty
+                ? CachedNetworkImage(
+                    imageUrl: entregador.fotoUrl!,
+                    width: 36.r,
+                    height: 36.r,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      width: 36.r,
+                      height: 36.r,
+                      color: const Color(0xFFFFE7E5),
+                      child: Icon(Icons.two_wheeler,
+                          color: const Color(0xFFFE645C), size: 18.r),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      width: 36.r,
+                      height: 36.r,
+                      color: const Color(0xFFFFE7E5),
+                      child: Icon(Icons.two_wheeler,
+                          color: const Color(0xFFFE645C), size: 18.r),
+                    ),
+                  )
+                : Container(
+                    width: 36.r,
+                    height: 36.r,
+                    color: const Color(0xFFFFE7E5),
+                    child: Icon(Icons.two_wheeler,
+                        color: const Color(0xFFFE645C), size: 18.r),
+                  ),
+          ),
+          SizedBox(width: 10.w),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        entregador.nome,
+                        style: TextStyle(
+                          color: const Color(0xFF5D201C),
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (temAvaliacao) ...[
+                      SizedBox(width: 4.w),
+                      Icon(Icons.star_rounded,
+                          color: Colors.amber.shade700, size: 15.sp),
+                      SizedBox(width: 2.w),
+                      Text(
+                        '${entregador.avaliacaoMedia?.toStringAsFixed(1) ?? "5.0"} (${entregador.totalAvaliacoes})',
+                        style: TextStyle(
+                          color: Colors.grey.shade700,
+                          fontSize: 11.sp,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                if (infoVeiculo.isNotEmpty) ...[
+                  SizedBox(height: 2.h),
+                  Text(
+                    infoVeiculo,
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontSize: 11.sp,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
