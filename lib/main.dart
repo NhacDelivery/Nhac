@@ -3,6 +3,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/repositories/produto_repository.dart';
@@ -74,6 +75,7 @@ late final SharedPreferences sharedPrefs;
 @NowaGenerated()
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('pt_BR', null);
 
   // Carrega as variáveis do arquivo .env.
   // IMPORTANTE: isso precisa acontecer antes de acessar AppConstants.
