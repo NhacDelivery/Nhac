@@ -117,6 +117,20 @@ jobs:
       - name: Habilitar aceleracao do emulador
         run: sudo chmod 666 /dev/kvm
 
+      - name: Preparar SDK do emulador com retentativa
+        shell: bash
+        run: |
+          for attempt in 1 2 3; do
+            if sdkmanager --install emulator --channel=0; then
+              exit 0
+            fi
+            echo "Falha ao instalar emulator (tentativa ${attempt}/3), limpando cache do SDK..."
+            sdkmanager --clear-cache || true
+            sleep 5
+          done
+          echo "Não foi possível preparar o pacote emulator após 3 tentativas."
+          exit 1
+
       - name: Executar E2E Android isolado
         uses: ReactiveCircus/android-emulator-runner@v2
         env:
