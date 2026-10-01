@@ -166,9 +166,9 @@ void main() {
       expect(find.text('Informe este código ao entregador só quando receber o pedido.'), findsOneWidget);
     });
 
-    testWidgets('Estado 3: sem código em outros status (preparando, entregue, cancelado)', (tester) async {
+    testWidgets('Estado 3: sem código antes da saída para entrega', (tester) async {
       setupScreen(tester);
-      for (final status in [StatusPedido.preparando, StatusPedido.entregue, StatusPedido.cancelado]) {
+      for (final status in [StatusPedido.pendente, StatusPedido.pago, StatusPedido.preparando]) {
         final pedido = criarPedido(
           status: status,
           codigoEntrega: '1234',

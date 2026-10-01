@@ -46,7 +46,7 @@ class NotificacaoHistoricoService {
   static Stream<String> get alteracoes => _alteracoes.stream;
   static String _chave(String usuarioId) => 'avisos_$usuarioId';
   static String _prefixo(String usuarioId) =>
-      'aviso_v2_${Uri.encodeComponent(usuarioId)}_';
+      'aviso_v2:${Uri.encodeComponent(usuarioId)}:';
 
   static Future<List<NotificacaoRegistrada>> listar(String usuarioId) async =>
       (await _listarTodos(usuarioId)).take(50).toList();

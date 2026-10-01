@@ -52,7 +52,7 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
     } catch (_) {}
 
     if (!AppConstants.e2eMode) {
-      await LiveNotificationService.cancelLiveNotification(pedidoId: widget.pedidoId);
+      LiveNotificationService.cancelLiveNotification(pedidoId: widget.pedidoId);
     }
     await LocalCacheService.marcarPedidoEntregueVisto(widget.pedidoId);
     // Abrir um pedido antigo não deve apagar o pedido atual da conta.

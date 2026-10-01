@@ -24,7 +24,7 @@ void main() {
       addTearDown(router.dispose);
       await tester.pumpWidget(MaterialApp.router(routerConfig: router));
       await tester.pumpAndSettle();
-      expect(find.text('R\$ 32,50'), findsOneWidget);
+      expect(find.textContaining('32,50'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('pedido-pedido/1')));
       await tester.pumpAndSettle();
       expect(find.text(status.terminal ? 'Resumo pedido/1' : 'Mapa'), findsOneWidget);

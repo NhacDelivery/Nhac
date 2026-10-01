@@ -123,7 +123,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
         if (anterior != null &&
           novoStatus != anterior.status &&
           !anterior.status.terminal) {
-        await NotificacaoHistoricoService.registrarStatus(
+        NotificacaoHistoricoService.registrarStatus(
           anterior.usuarioId,
           anterior.id,
           novoStatus,
@@ -152,7 +152,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
       if (anterior != null &&
           anterior.status != pedido.status &&
           !anterior.status.terminal) {
-        await NotificacaoHistoricoService.registrarStatus(
+        NotificacaoHistoricoService.registrarStatus(
           pedido.usuarioId,
           pedido.id,
           pedido.status,
@@ -162,7 +162,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
         _refreshTimer?.cancel();
         await _statusSocket.desconectar();
         if (!AppConstants.e2eMode)
-          await LiveNotificationService.cancelLiveNotification(
+          LiveNotificationService.cancelLiveNotification(
               pedidoId: pedido.id);
         if (mounted) {
           context.pushReplacement(

@@ -30,14 +30,15 @@ class HomeProductSection extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
+            Expanded(child: Text(
               title,
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 20.sp,
                 color: const Color(0xFF5D201C),
               ),
-            ),
+            )),
+            SizedBox(width: 12.w),
             if (onSeeAll != null) GestureDetector(
               onTap: onSeeAll,
               child: Text(

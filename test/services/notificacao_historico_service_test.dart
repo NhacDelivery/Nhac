@@ -14,6 +14,14 @@ void main() {
     expect(await NotificacaoHistoricoService.listar('cliente-b'), isEmpty);
   });
 
+  test('Contas com IDs que compartilham prefixo continuam isoladas', () async {
+    SharedPreferences.setMockInitialValues({});
+    await NotificacaoHistoricoService.registrarStatus('cliente', 'p1', StatusPedido.preparando);
+    await NotificacaoHistoricoService.registrarStatus('cliente_extra', 'p2', StatusPedido.entregue);
+    expect((await NotificacaoHistoricoService.listar('cliente')).single.pedidoId, 'p1');
+    expect((await NotificacaoHistoricoService.listar('cliente_extra')).single.pedidoId, 'p2');
+  });
+
   test('Status salvo por push e rastreio aparece só uma vez', () async {
     SharedPreferences.setMockInitialValues({});
     await NotificacaoHistoricoService.registrarStatus('u1', 'p1', StatusPedido.entregue);
