@@ -120,12 +120,29 @@ jobs:
       - name: Preparar SDK do emulador com retentativa
         shell: bash
         run: |
+          SDKMANAGER_BIN="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMANAGER_BIN" ]; then
+            for candidate in \
+              "${ANDROID_SDK_ROOT:-}/cmdline-tools/latest/bin/sdkmanager" \
+              "${ANDROID_HOME:-}/cmdline-tools/latest/bin/sdkmanager"; do
+              if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+                SDKMANAGER_BIN="$candidate"
+                break
+              fi
+            done
+          fi
+
+          if [ -z "$SDKMANAGER_BIN" ]; then
+            echo "sdkmanager indisponível neste runner. O pacote do emulador será preparado pelo android-emulator-runner."
+            exit 0
+          fi
+
           for attempt in 1 2 3; do
-            if sdkmanager --install emulator --channel=0; then
+            if "$SDKMANAGER_BIN" --install emulator --channel=0; then
               exit 0
             fi
             echo "Falha ao instalar emulator (tentativa ${attempt}/3), limpando cache do SDK..."
-            sdkmanager --clear-cache || true
+            "$SDKMANAGER_BIN" --clear-cache || true
             sleep 5
           done
           echo "Não foi possível preparar o pacote emulator após 3 tentativas."
