@@ -6,13 +6,15 @@ on:
       - main
       - eu-e-tu
       - context-ia-migration
-      - feature/checkout-stripe-tests-fix
-      - fix/verificacao-testes-eu-e-tu
+      - 'feature/**'
+      - 'fix/**'
+      - 'hotfix/**'
+      - 'chore/**'
   pull_request:
     branches:
       - main
       - eu-e-tu
-      - feature/checkout-stripe-tests-fix
+      - context-ia-migration
   workflow_dispatch:
 
 concurrency:
@@ -20,18 +22,17 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   FLUTTER_VERSION: '3.44.7'
 
 jobs:
-
-  # ── Qualidade (analyze + test) ──
   quality:
     name: Analyze & Test
+    if: ${{ github.run_attempt <= 2 }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout repository
@@ -40,7 +41,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
 
@@ -51,18 +52,17 @@ jobs:
           key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
           restore-keys: ${{ runner.os }}-pub-
 
-      - name: Create .env file
-        run: echo "${{ secrets.ENV_FILE }}" > .env
-
-      - name: Create google-services.json
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
+      - name: Prepare app config
+        uses: ./.github/actions/prepare-flutter-config
+        with:
+          env_file_content: ${{ secrets.ENV_FILE }}
+          google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
 
       - name: Install dependencies
         run: flutter pub get
 
       - name: Check formatting
         run: dart format --output=none --set-exit-if-changed .
-        continue-on-error: true
 
       - name: Static analysis
         run: flutter analyze --no-fatal-infos
@@ -78,16 +78,17 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-  # ── Build DEBUG (branches: eu-e-tu e context-ia-migration) ──
   build-debug:
     name: Build Debug APK
     needs: quality
     if: |
+      github.run_attempt <= 2 && (
       github.ref_name == 'eu-e-tu' || github.base_ref == 'eu-e-tu' ||
       github.ref_name == 'context-ia-migration' || github.base_ref == 'context-ia-migration' ||
-      github.ref_name == 'feature/checkout-stripe-tests-fix' || github.base_ref == 'feature/checkout-stripe-tests-fix'
+      startsWith(github.ref_name, 'feature/') || startsWith(github.base_ref || '', 'feature/') ||
+      startsWith(github.ref_name, 'fix/') || startsWith(github.base_ref || '', 'fix/'))
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout repository
@@ -96,15 +97,18 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: zulu
           java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+
+      - name: Cache Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Cache pub dependencies
         uses: actions/cache@v4
@@ -113,25 +117,11 @@ jobs:
           key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
           restore-keys: ${{ runner.os }}-pub-
 
-      - name: Create .env file
-        run: echo "${{ secrets.ENV_FILE }}" > .env
-
-      - name: Create google-services.json
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
-
-      - name: Validate .env and google-services.json
-        run: |
-          if [ ! -s .env ]; then
-            echo "::error::.env está vazio - confira o secret ENV_FILE do repositório"
-            exit 1
-          fi
-          python3 -c "import json; json.load(open('android/app/google-services.json'))" || {
-            echo "::error::google-services.json inválido - confira o secret GOOGLE_SERVICES_JSON"
-            exit 1
-          }
-          for key in SENTRY_DSN STRIPE_PUBLISHABLE_KEY GOOGLE_PLACES_API_KEY; do
-            grep -q "^$key=" .env || echo "::warning::$key não encontrada em .env (pode causar crash no boot do app)"
-          done
+      - name: Prepare app config
+        uses: ./.github/actions/prepare-flutter-config
+        with:
+          env_file_content: ${{ secrets.ENV_FILE }}
+          google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
 
       - name: Install dependencies
         run: flutter pub get
@@ -148,13 +138,14 @@ jobs:
           path: build/app/outputs/flutter-apk/app-debug.apk
           retention-days: 7
 
-  # ── Build RELEASE ──
   build-release:
     name: Build Release APK
     needs: quality
-    if: (github.ref_name == 'main' || github.base_ref == 'main') && github.event_name != 'pull_request'
+    if: github.run_attempt <= 2 && (github.ref_name == 'main' || github.base_ref == 'main') && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -163,15 +154,18 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: zulu
           java-version: '17'
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
           flutter-version: ${{ env.FLUTTER_VERSION }}
           cache: true
+
+      - name: Cache Gradle
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Cache pub dependencies
         uses: actions/cache@v4
@@ -180,28 +174,13 @@ jobs:
           key: ${{ runner.os }}-pub-${{ hashFiles('pubspec.lock') }}
           restore-keys: ${{ runner.os }}-pub-
 
-      - name: Decode keystore
-        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > "${{ github.workspace }}/codemagic.keystore"
-
-      - name: Create .env file
-        run: echo "${{ secrets.ENV_FILE }}" > .env
-
-      - name: Create google-services.json
-        run: echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > android/app/google-services.json
-
-      - name: Validate .env and google-services.json
-        run: |
-          if [ ! -s .env ]; then
-            echo "::error::.env está vazio - confira o secret ENV_FILE do repositório"
-            exit 1
-          fi
-          python3 -c "import json; json.load(open('android/app/google-services.json'))" || {
-            echo "::error::google-services.json inválido - confira o secret GOOGLE_SERVICES_JSON"
-            exit 1
-          }
-          for key in SENTRY_DSN STRIPE_PUBLISHABLE_KEY GOOGLE_PLACES_API_KEY; do
-            grep -q "^$key=" .env || echo "::warning::$key não encontrada em .env (pode causar crash no boot do app)"
-          done
+      - name: Prepare app config
+        uses: ./.github/actions/prepare-flutter-config
+        with:
+          env_file_content: ${{ secrets.ENV_FILE }}
+          google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          require_keystore: 'true'
+          keystore_base64: ${{ secrets.KEYSTORE_BASE64 }}
 
       - name: Install dependencies
         run: flutter pub get
@@ -230,8 +209,8 @@ jobs:
       - name: Create Pre-Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "v0.${{ github.run_number }}.0"
-          name: "Pre-Release v0.${{ github.run_number }}.0"
+          tag_name: pre-${{ github.run_number }}-${{ github.sha }}
+          name: Pre-Release ${{ github.ref_name }} #${{ github.run_number }}
           prerelease: true
           generate_release_notes: true
           files: build/app/outputs/flutter-apk/app-release.apk

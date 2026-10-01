@@ -39,9 +39,13 @@ env:
 
 jobs:
   e2e:
-    name: E2E-001 a E2E-004
+    name: E2E API${{ matrix.api_level }} ${{ matrix.profile }}
+    if: ${{ github.run_attempt <= 2 }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(github.event_name == 'workflow_dispatch' && '{"include":[{"api_level":34,"profile":"pixel_2"},{"api_level":33,"profile":"pixel_6"}]}' || '{"include":[{"api_level":34,"profile":"pixel_2"}]}') }}
     services:
       mariadb:
         image: mariadb:11.4
@@ -123,9 +127,9 @@ jobs:
           BACKEND_DIR: ${{ github.workspace }}/backend-nhac
           BACKEND_JAVA_HOME: ${{ steps.backend-java.outputs.home }}
         with:
-          api-level: 34
+          api-level: ${{ matrix.api_level }}
           arch: x86_64
-          profile: pixel_2
+          profile: ${{ matrix.profile }}
           cores: 4
           ram-size: 4096M
           heap-size: 1024M
@@ -134,11 +138,38 @@ jobs:
           working-directory: Nhac
           script: ./tool/run_e2e.sh
 
+      - name: Gerar resumo E2E
+        if: always()
+        working-directory: Nhac
+        shell: bash
+        run: |
+          echo "## Resultado E2E" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run attempt: ${{ github.run_attempt }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- API level: ${{ matrix.api_level }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Perfil: ${{ matrix.profile }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Repeat: ${{ github.event_name == 'workflow_dispatch' && '3' || '1' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if ls e2e-logs/*.log >/dev/null 2>&1; then
+            echo "### Últimas linhas dos logs" >> "$GITHUB_STEP_SUMMARY"
+            for log_file in e2e-logs/*.log; do
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "\`\`\`text" >> "$GITHUB_STEP_SUMMARY"
+              echo "$(basename "$log_file")" >> "$GITHUB_STEP_SUMMARY"
+              tail -n 25 "$log_file" >> "$GITHUB_STEP_SUMMARY"
+              echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+            done
+          else
+            echo "Sem logs E2E gerados." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Upload E2E logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-logs-${{ github.run_number }}
-          path: Nhac/e2e-logs
+          name: e2e-diagnostics-${{ matrix.api_level }}-${{ matrix.profile }}-${{ github.run_number }}
+          path: |
+            Nhac/e2e-logs
+            Nhac/integration_test/screenshots
+            Nhac/build/**/outputs/**/*.mp4
           if-no-files-found: warn
           retention-days: 14
