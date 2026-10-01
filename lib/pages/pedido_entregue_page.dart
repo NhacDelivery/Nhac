@@ -321,8 +321,8 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                       ],
                     ),
                     Divider(height: 24.h, color: Colors.grey.shade200),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Data do pedido',
@@ -331,6 +331,7 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                             color: Colors.grey.shade600,
                           ),
                         ),
+                        SizedBox(height: 4.h),
                         Text(
                           horarioPedido,
                           style: TextStyle(
