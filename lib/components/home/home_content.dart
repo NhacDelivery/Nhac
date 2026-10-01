@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:nhac/components/home/home_category_chips.dart';
 import 'package:nhac/components/home/home_order_tracking_card.dart';
 import 'package:nhac/globals/exceptions.dart';
+import 'package:nhac/utils/app_exceptions.dart' as api_errors;
 import 'package:nhac/models/loja/lojas.dart';
 import 'package:nhac/models/produto/produtos.dart';
 import 'package:nhac/utils/endereco_utils.dart';
@@ -36,9 +37,11 @@ import 'package:nhac/globals/app_constants.dart';
 @NowaGenerated()
 class HomeContent extends StatefulWidget {
   @NowaGenerated({'loader': 'auto-constructor'})
-  const HomeContent({super.key, this.isActive = true});
+  const HomeContent({super.key, this.isActive = true, this.lojaRepository, this.produtoRepository});
 
   final bool isActive;
+  final LojaRepository? lojaRepository;
+  final ProdutoRepository? produtoRepository;
 
   @override
   State<HomeContent> createState() => _HomeContentState();
@@ -51,6 +54,7 @@ class _HomeContentState extends State<HomeContent> {
   Timer? _loadingTimer;
   Timer? _refreshTimer;
   bool _atualizandoCatalogo = false;
+  bool _erroProdutos = false;
 
   final List<LojasModel> _lojas = [];
   int _currentPageLojas = 0;
@@ -59,8 +63,8 @@ class _HomeContentState extends State<HomeContent> {
   bool _errorLojas = false;
   String _mensagemErroLojas = 'Ocorreu um erro ao carregar os restaurantes.';
 
-  final LojaRepository _lojaRepository = LojaRepository();
-  final ProdutoRepository _produtoRepository = ProdutoRepository();
+  late final LojaRepository _lojaRepository;
+  late final ProdutoRepository _produtoRepository;
 
   final List<ProdutosModel> _produtosNecessidades = [];
   bool _isLoadingProdutosNecessidades = true;
@@ -73,16 +77,19 @@ class _HomeContentState extends State<HomeContent> {
   @override
   void initState() {
     super.initState();
+    _lojaRepository = widget.lojaRepository ?? LojaRepository();
+    _produtoRepository = widget.produtoRepository ?? ProdutoRepository();
     _isLoading = !_jaCarregouUmaVez;
 
     _carregarCatalogoInicial();
     _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (LocalCacheService.cacheHomeVencido && !_atualizandoCatalogo) {
+      if (mounted &&
+          widget.isActive &&
+          LocalCacheService.cacheHomeVencido && !_atualizandoCatalogo) {
         _atualizandoCatalogo = true;
         LocalCacheService.limparCacheHome();
         _currentPageLojas = 0;
         _hasMoreLojas = true;
-        _lojas.clear();
         _carregarDadosIniciais().whenComplete(() => _atualizandoCatalogo = false);
       }
     });
@@ -108,7 +115,11 @@ class _HomeContentState extends State<HomeContent> {
   }
 
   Future<void> _carregarCatalogoInicial() async {
-    await LocalCacheService.restaurarCatalogoHome();
+    try {
+      await LocalCacheService.restaurarCatalogoHome();
+    } catch (e) {
+      debugPrint('Não foi possível restaurar o catálogo local: $e');
+    }
     if (!mounted) return;
     final snapshotAntigo = LocalCacheService.lojasCache != null &&
         LocalCacheService.cacheHomeVencido;
@@ -118,20 +129,24 @@ class _HomeContentState extends State<HomeContent> {
     LocalCacheService.limparCacheHome();
     _currentPageLojas = 0;
     _hasMoreLojas = true;
-    _lojas.clear();
     await _carregarDadosIniciais();
   }
 
   Future<void> _carregarDadosIniciais({bool persistir = true}) async {
+    _erroProdutos = false;
     await Future.wait([
       _fetchProdutosNecessidades(),
       _fetchProdutosPromocao(),
       _fetchLojas(),
     ]);
     _aplicarStatusLojas();
-    if (persistir) {
+    if (persistir && !_errorLojas && !_erroProdutos) {
       LocalCacheService.ultimaAtualizacaoHome = DateTime.now();
-      await LocalCacheService.salvarCatalogoHome();
+      try {
+        await LocalCacheService.salvarCatalogoHome();
+      } catch (e) {
+        debugPrint('Não foi possível salvar o catálogo local: $e');
+      }
     }
 
     if (mounted) {
@@ -212,6 +227,7 @@ class _HomeContentState extends State<HomeContent> {
         });
       }
     } catch (e) {
+      _erroProdutos = true;
       debugPrint("Erro ao buscar necessidades da API: $e");
     }
   }
@@ -237,6 +253,7 @@ class _HomeContentState extends State<HomeContent> {
         });
       }
     } catch (e) {
+      _erroProdutos = true;
       debugPrint("Erro ao buscar promoções da API: $e");
     }
   }
@@ -268,6 +285,8 @@ class _HomeContentState extends State<HomeContent> {
       if (novasLojas.isEmpty) {
         if (mounted) {
           setState(() {
+            if (_currentPageLojas == 0) _lojas.clear();
+            LocalCacheService.lojasCache = List.from(_lojas);
             _hasMoreLojas = false;
             _isLoadingLojas = false;
             LocalCacheService.hasMoreLojasCache = false;
@@ -278,6 +297,7 @@ class _HomeContentState extends State<HomeContent> {
 
       if (mounted) {
         setState(() {
+          if (_currentPageLojas == 0) _lojas.clear();
           _lojas.addAll(novasLojas);
           _currentPageLojas++;
 
@@ -291,15 +311,18 @@ class _HomeContentState extends State<HomeContent> {
           LocalCacheService.currentPageLojasCache = _currentPageLojas;
           LocalCacheService.hasMoreLojasCache = _hasMoreLojas;
         });
-        await LocalCacheService.salvarCatalogoHome();
       }
-    } on NetworkException catch (e) {
+    } catch (e) {
       debugPrint("Erro de rede ao buscar lojas: $e");
       if (mounted) {
         setState(() {
           _isLoadingLojas = false;
           _errorLojas = true;
-          _mensagemErroLojas = e.message;
+          _mensagemErroLojas = e is AppException
+              ? e.message
+              : e is api_errors.AppException
+                  ? e.message
+                  : 'Não foi possível carregar os restaurantes. Tente novamente.';
           }
           );
       }
@@ -658,7 +681,6 @@ class _HomeContentState extends State<HomeContent> {
   Future<void> _onRefresh() async {
     _currentPageLojas = 0;
     _hasMoreLojas = true;
-    _lojas.clear();
     LocalCacheService.limparCacheHome();
     await Future.wait([
       _pegarLocalizacaoUsuario(),

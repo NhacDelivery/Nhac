@@ -15,7 +15,7 @@ import 'package:nhac/repositories/entrega_repository.dart';
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/services/live_notification_service.dart';
-import 'package:nhac/services/local_cache_service.dart';
+import 'package:nhac/services/notificacao_historico_service.dart';
 import 'package:nhac/services/pedido_status_socket_service.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
 import 'package:nhac/globals/app_constants.dart';
@@ -119,12 +119,15 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
 
   Future<void> _conectarStatus() async {
     _statusSubscription = _statusSocket.status.listen((novoStatus) async {
-      if (novoStatus == StatusPedido.entregue) {
-        final visto = await LocalCacheService.isPedidoEntregueVisto(widget.pedidoId);
-        if (!visto && mounted) {
-          context.pushReplacement('/pedido-entregue?pedidoId=${widget.pedidoId}');
-          return;
-        }
+      final anterior = _pedido;
+        if (anterior != null &&
+          novoStatus != anterior.status &&
+          !anterior.status.terminal) {
+        await NotificacaoHistoricoService.registrarStatus(
+          anterior.usuarioId,
+          anterior.id,
+          novoStatus,
+        );
       }
       if (mounted) {
         _carregarDados(silencioso: true);
@@ -145,12 +148,28 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
 
     try {
       final pedido = await _pedidoRepository.buscarPedidoPorId(widget.pedidoId);
-      if (pedido.status == StatusPedido.entregue) {
-        final visto = await LocalCacheService.isPedidoEntregueVisto(pedido.id);
-        if (!visto && mounted) {
-          context.pushReplacement('/pedido-entregue?pedidoId=${pedido.id}');
-          return;
+      final anterior = _pedido;
+      if (anterior != null &&
+          anterior.status != pedido.status &&
+          !anterior.status.terminal) {
+        await NotificacaoHistoricoService.registrarStatus(
+          pedido.usuarioId,
+          pedido.id,
+          pedido.status,
+        );
+      }
+      if (pedido.status.terminal) {
+        _refreshTimer?.cancel();
+        await _statusSocket.desconectar();
+        if (!AppConstants.e2eMode)
+          await LiveNotificationService.cancelLiveNotification(
+              pedidoId: pedido.id);
+        if (mounted) {
+          context.pushReplacement(
+            '/pedido-detalhes?pedidoId=${Uri.encodeQueryComponent(pedido.id)}',
+          );
         }
+        return;
       }
       LojasModel? loja = _loja;
       RotaEntregaModel? rota = _rota;
@@ -239,7 +258,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
   void _publicarNotificacaoAoVivo() {
     if (AppConstants.e2eMode) return;
     final pedido = _pedido;
-    if (pedido == null) return;
+    if (pedido == null || pedido.status.terminal) return;
 
     var nomeProduto = 'Seu pedido';
     if (pedido.itens.isNotEmpty) {

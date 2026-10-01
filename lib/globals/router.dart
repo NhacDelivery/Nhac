@@ -404,7 +404,16 @@ final GoRouter appRouter = GoRouter(
     },
   ),
   GoRoute(
-    path: '/pedido-entregue',
+    path: '/pedido-detalhes',
+      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+        key: state.pageKey,
+        child: PedidoEntreguePage(
+          pedidoId: state.uri.queryParameters['pedidoId'] ?? '',
+        ),
+      ),
+    ),
+    GoRoute(
+      path: '/pedido-entregue',
     pageBuilder: (context, state) => _buildSlideRightToLeftPage(
       key: state.pageKey,
       child: PedidoEntreguePage(

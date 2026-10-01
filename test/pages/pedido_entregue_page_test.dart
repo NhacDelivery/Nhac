@@ -52,6 +52,7 @@ void main() {
   PedidoModel criarPedido({
     EntregadorPedidoModel? entregador,
     bool entregadorAvaliado = false,
+    StatusPedido status = StatusPedido.entregue,
   }) {
     return PedidoModel(
       id: 'ped-entregue-1',
@@ -72,7 +73,7 @@ void main() {
           quantidade: 1,
         ),
       ],
-      status: StatusPedido.entregue,
+      status: status,
       entregador: entregador,
       entregadorAvaliado: entregadorAvaliado,
     );
@@ -196,6 +197,27 @@ void main() {
       // Cache do pedido ativo deve ter sido limpo
       expect(await LocalCacheService.carregarPedidoAtivo('user123'), isNull);
       expect(await LocalCacheService.carregarSnapshotPedido('user123'), isNull);
+    });
+
+    testWidgets('Abrir pedido antigo mantém o pedido ativo atual', (tester) async {
+      setupScreen(tester);
+      await LocalCacheService.salvarPedidoAtivo('user123', 'pedido-atual');
+      when(() => mockPedidoRepository.buscarPedidoPorId('ped-entregue-1')).thenAnswer((_) async => criarPedido());
+      await tester.pumpWidget(createWidgetUnderTest(pedidoId: 'ped-entregue-1'));
+      await tester.pumpAndSettle();
+      expect(await LocalCacheService.carregarPedidoAtivo('user123'), 'pedido-atual');
+    });
+
+    testWidgets('Pedido cancelado não mostra sucesso nem avaliação', (tester) async {
+      setupScreen(tester);
+      final pedido = criarPedido(status: StatusPedido.cancelado, entregador: entregadorExemplo);
+      when(() => mockPedidoRepository.buscarPedidoPorId('ped-entregue-1')).thenAnswer((_) async => pedido);
+      await tester.pumpWidget(createWidgetUnderTest(pedidoId: 'ped-entregue-1'));
+      await tester.pumpAndSettle();
+      expect(find.text('Pedido cancelado'), findsOneWidget);
+      expect(find.text('Pedido entregue!'), findsNothing);
+      expect(find.byKey(const Key('botao-avaliar-entregador')), findsNothing);
+      verifyNever(() => mockPedidoRepository.buscarAvaliacaoEntregador(any()));
     });
 
     testWidgets('Fluxo de avaliação com sucesso: seleciona nota, envia e atualiza tela', (tester) async {

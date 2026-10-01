@@ -7,9 +7,12 @@ import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/components/pedido/avaliacao_entregador_sheet.dart';
 import 'package:nhac/models/pedido/entregador_pedido_model.dart';
 import 'package:nhac/models/pedido_model.dart';
+import 'package:nhac/models/pedido/status_pedido.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/local_cache_service.dart';
+import 'package:nhac/services/live_notification_service.dart';
+import 'package:nhac/globals/app_constants.dart';
 import 'package:provider/provider.dart';
 
 class PedidoEntreguePage extends StatefulWidget {
@@ -48,11 +51,14 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
       usuarioId = context.read<AuthService?>()?.usuarioId;
     } catch (_) {}
 
-    // 1. Marca flag visto para não reabrir em cold start
+    if (!AppConstants.e2eMode) {
+      await LiveNotificationService.cancelLiveNotification(pedidoId: widget.pedidoId);
+    }
     await LocalCacheService.marcarPedidoEntregueVisto(widget.pedidoId);
-
-    // 2. Remove pedido ativo e snapshot da Home para liberar novos pedidos
-    if (usuarioId != null) {
+    // Abrir um pedido antigo não deve apagar o pedido atual da conta.
+    if (usuarioId != null &&
+        await LocalCacheService.carregarPedidoAtivo(usuarioId) ==
+            widget.pedidoId) {
       await LocalCacheService.removerPedidoAtivo(usuarioId);
       await LocalCacheService.removerSnapshotPedido(usuarioId);
     }
@@ -82,7 +88,8 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
       final pedido = await _repository.buscarPedidoPorId(widget.pedidoId);
       bool avaliado = pedido.entregadorAvaliado;
 
-      if (!avaliado && pedido.entregador != null) {
+      if (pedido.status == StatusPedido.entregue &&
+          !avaliado && pedido.entregador != null) {
         try {
           final avaliacao = await _repository.buscarAvaliacaoEntregador(widget.pedidoId);
           if (avaliacao != null) {
@@ -107,6 +114,7 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
   }
 
   void _abrirAvaliacao() {
+    if (_pedido?.status != StatusPedido.entregue) return;
     final entregador = _pedido?.entregador;
     AvaliacaoEntregadorSheet.show(
       context,
@@ -166,12 +174,22 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
     }
 
     final pedido = _pedido!;
+    final entregue = pedido.status == StatusPedido.entregue;
+    final cancelado = pedido.status == StatusPedido.cancelado;
     final entregador = pedido.entregador;
     final currencyFormat = NumberFormat.simpleCurrency(locale: 'pt_BR');
-    final horarioEntrega = DateFormat('HH:mm').format(pedido.criadoEm ?? DateTime.now());
+    final horarioPedido = pedido.criadoEm == null
+        ? 'Não informado'
+        : DateFormat('dd/MM/yyyy • HH:mm').format(pedido.criadoEm!.toLocal());
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFAFAFA),
+      backgroundColor: const Color(0xFFFFE7E5),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFFFE7E5),
+        foregroundColor: const Color(0xFF5D201C),
+        surfaceTintColor: Colors.transparent,
+        title: const Text('Detalhes do pedido'),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: EdgeInsets.symmetric(horizontal: 20.w, vertical: 24.h),
@@ -185,7 +203,9 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                   width: 80.r,
                   height: 80.r,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE8F5E9),
+                    color: entregue
+                        ? const Color(0xFFE8F5E9)
+                        : const Color(0xFFFFE7E5),
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
@@ -196,15 +216,21 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                     ],
                   ),
                   child: Icon(
-                    Icons.check_circle_rounded,
-                    color: Colors.green.shade600,
+                    entregue
+                        ? Icons.check_circle_rounded
+                        : cancelado
+                            ? Icons.cancel_outlined
+                            : Icons.receipt_long_rounded,
+                    color: entregue
+                        ? Colors.green.shade600
+                        : const Color(0xFFFF6961),
                     size: 52.r,
                   ),
                 ),
               ),
               SizedBox(height: 16.h),
               Text(
-                'Pedido entregue!',
+                entregue ? 'Pedido entregue!' : pedido.status.label,
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 24.sp,
@@ -214,7 +240,11 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
               ),
               SizedBox(height: 6.h),
               Text(
-                'Esperamos que você aproveite sua refeição.',
+                entregue
+                    ? 'Esperamos que você aproveite sua refeição.'
+                    : cancelado
+                        ? 'Este pedido foi finalizado e não será entregue.'
+                        : 'Confira o resumo do seu pedido.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontSize: 14.sp,
@@ -295,14 +325,14 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Horário de entrega',
+                          'Data do pedido',
                           style: TextStyle(
                             fontSize: 13.sp,
                             color: Colors.grey.shade600,
                           ),
                         ),
                         Text(
-                          horarioEntrega,
+                          horarioPedido,
                           style: TextStyle(
                             fontSize: 13.sp,
                             fontWeight: FontWeight.w600,
@@ -392,7 +422,7 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
               ],
 
               // Botão Avaliar Entregador (apenas se entregador != null e !entregadorAvaliado)
-              if (entregador != null && !_entregadorAvaliado) ...[
+              if (entregue && entregador != null && !_entregadorAvaliado) ...[
                 SizedBox(
                   height: 48.h,
                   child: ElevatedButton.icon(

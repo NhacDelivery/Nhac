@@ -15,7 +15,7 @@ import 'package:nhac/services/biometric_service.dart';
 import 'package:provider/provider.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
-import 'package:nhac/services/notificacao_historico_service.dart';
+import 'package:nhac/pages/notificacoes_page.dart';
 
 class ProfileContent extends StatefulWidget {
   const ProfileContent({super.key});
@@ -68,60 +68,7 @@ class _ProfileContentState extends State<ProfileContent> {
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 400),
         pageBuilder: (context, animation, secondaryAnimation) {
-          return Scaffold(
-            backgroundColor: Colors.white,
-            body: SafeArea(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 32.w, vertical: 32.h),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: SizedBox(
-                        width: 24.w,
-                        height: 24.h,
-                        child: Icon(Icons.close,
-                            color: const Color(0xFF5D201C), size: 24.r),
-                      ),
-                    ),
-                    SizedBox(height: 28.h),
-                    Text(
-                      'Notificações',
-                      style: TextStyle(
-                          fontSize: 24.sp,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF5D201C)),
-                    ),
-                    SizedBox(height: 32.h),
-                    Expanded(child: usuarioId == null
-                      ? const Center(child: Text('Entre na sua conta para ver os avisos.'))
-                      : FutureBuilder<List<NotificacaoRegistrada>>(
-                          future: NotificacaoHistoricoService.listar(usuarioId),
-                          builder: (context, snapshot) {
-                            if (snapshot.hasError) return const Center(child: Text('Não foi possível abrir os avisos deste aparelho. Tente novamente.'));
-                            if (!snapshot.hasData) return const Center(child: LoadingNhac(telaCheia: false, tamanho: 40.0));
-                            final avisos = snapshot.data!;
-                            if (avisos.isEmpty) return const Center(child: Text('Nenhum aviso registrado neste aparelho.'));
-                            return ListView.builder(itemCount: avisos.length, itemBuilder: (context, index) {
-                              final aviso = avisos[index];
-                              return ListTile(
-                                title: Text(aviso.titulo),
-                                subtitle: Text(aviso.corpo),
-                                trailing: aviso.pedidoId == null ? null : const Text('Ver pedido'),
-                                onTap: aviso.pedidoId == null ? null : () {
-                                  Navigator.pop(context);
-                                  context.push('/rastreio?pedidoId=${Uri.encodeQueryComponent(aviso.pedidoId!)}');
-                                },
-                              );
-                            });
-                          },
-                        )),
-                  ],
-                ),
-              ),
-            ),
-          );
+          return NotificacoesPage(usuarioId: usuarioId);
         },
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(0.0, 1.0);

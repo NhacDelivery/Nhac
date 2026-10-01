@@ -5,6 +5,8 @@ import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/notificacao_historico_service.dart';
 import 'package:nhac/globals/router.dart';
 import 'package:flutter/services.dart';
+import 'package:nhac/models/pedido/status_pedido.dart';
+import 'package:nhac/services/session_storage_service.dart';
 
 class PushNotificationService {
   static String? pendingPedidoId;
@@ -119,29 +121,20 @@ class PushNotificationService {
         },
       );
 
-      Future<void> registrar(RemoteMessage message) async {
-        final usuarioId = _authService.usuarioId;
-        final titulo = message.notification?.title;
-        if (usuarioId == null || titulo == null) return;
-        await NotificacaoHistoricoService.registrar(usuarioId, NotificacaoRegistrada(
-          message.messageId ?? '${message.sentTime?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch}',
-          titulo, message.notification?.body ?? '', message.sentTime ?? DateTime.now(),
-          pedidoId: message.data['pedidoId']?.toString()));
-      }
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
-        registrar(message);
+        registrarMensagem(message, usuarioId: _authService.usuarioId);
         final status = message.data['status']?.toString();
         _abrirPedido(message.data['pedidoId']?.toString(), status: status);
       });
       final inicial = await _fcm.getInitialMessage();
       if (inicial != null) {
-        await registrar(inicial);
+        await registrarMensagem(inicial, usuarioId: _authService.usuarioId);
         final status = inicial.data['status']?.toString();
         _abrirPedido(inicial.data['pedidoId']?.toString(), status: status);
       }
 
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-        registrar(message);
+        registrarMensagem(message, usuarioId: _authService.usuarioId);
         RemoteNotification? notification = message.notification;
         AndroidNotification? android = message.notification?.android;
 
@@ -170,6 +163,53 @@ class PushNotificationService {
           );
         }
       });
+    }
+  }
+
+  static Future<void> registrarMensagem(
+    RemoteMessage message, {
+    String? usuarioId,
+  }) async {
+    try {
+      final contaAtual =
+          usuarioId ?? await SessionStorageService().obterUsuarioId();
+      final destinatario = message.data['usuarioId']?.toString();
+      if (contaAtual == null ||
+          (destinatario != null && destinatario != contaAtual)) return;
+      final pedidoId = message.data['pedidoId']?.toString();
+      final status = StatusPedido.fromApi(message.data['status']?.toString());
+      final titulo = message.notification?.title ??
+          message.data['titulo']?.toString() ??
+          message.data['title']?.toString();
+      final corpo = message.notification?.body ??
+          message.data['corpo']?.toString() ??
+          message.data['body']?.toString();
+      if (pedidoId != null &&
+          pedidoId.isNotEmpty &&
+          status != StatusPedido.desconhecido) {
+        await NotificacaoHistoricoService.registrarStatus(
+          contaAtual,
+          pedidoId,
+          status,
+          titulo: titulo,
+          corpo: corpo,
+          recebidaEm: message.sentTime,
+        );
+      } else if (titulo != null) {
+        await NotificacaoHistoricoService.registrar(
+          contaAtual,
+          NotificacaoRegistrada(
+            message.messageId ??
+                '${pedidoId ?? "aviso"}:${message.sentTime?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch}',
+            titulo,
+            corpo ?? '',
+            message.sentTime ?? DateTime.now(),
+            pedidoId: pedidoId,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Não foi possível salvar a notificação recebida: $e');
     }
   }
 

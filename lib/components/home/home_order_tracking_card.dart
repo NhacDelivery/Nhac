@@ -12,6 +12,7 @@ import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/connectivity_service.dart';
 import 'package:nhac/services/home_order_route_observer.dart';
 import 'package:nhac/services/local_cache_service.dart';
+import 'package:nhac/services/notificacao_historico_service.dart';
 import 'package:nhac/services/pedido_status_socket_service.dart';
 import 'package:provider/provider.dart';
 
@@ -65,6 +66,14 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     )..repeat(reverse: true);
     _usuarioId = context.read<AuthService>().usuarioId;
     _statusSubscription = _socket.status.listen((novoStatus) async {
+      final pedido = _activePedido;
+      if (pedido != null && _usuarioId != null && pedido.status != novoStatus) {
+        await NotificacaoHistoricoService.registrarStatus(
+          _usuarioId!,
+          pedido.id,
+          novoStatus,
+        );
+      }
       if (novoStatus == StatusPedido.entregue && _activePedido != null) {
         final pedidoId = _activePedido!.id;
         final visto = await LocalCacheService.isPedidoEntregueVisto(pedidoId);
@@ -156,6 +165,31 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     if (mounted) setState(() { _error = null; _loading = _activePedido == null; });
     try {
       final full = await _repository.buscarPedidoAtivo();
+      if (!mounted || generation != _generation) return;
+      final anterior = _activePedido;
+      if (full != null &&
+          (!full.status.terminal ||
+              (anterior?.id == full.id && anterior?.status != full.status))) {
+        await NotificacaoHistoricoService.registrarStatus(
+          usuarioId,
+          full.id,
+          full.status,
+        );
+      } else if (full == null && anterior != null) {
+        // /ativo pode deixar de devolver o pedido assim que ele é finalizado.
+        try {
+          final finalizado = await _repository.buscarPedidoPorId(anterior.id);
+          if (mounted &&
+              generation == _generation &&
+              finalizado.status.terminal) {
+            await NotificacaoHistoricoService.registrarStatus(
+              usuarioId,
+              finalizado.id,
+              finalizado.status,
+            );
+          }
+        } catch (_) {}
+      }
       if (!mounted || generation != _generation) return;
       if (full != null && !full.status.terminal) {
         _showOrder(full);

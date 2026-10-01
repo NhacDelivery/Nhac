@@ -40,6 +40,7 @@ Future<void> _firebaseMessagingBackgroundHandler(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  await PushNotificationService.registrarMensagem(message);
   debugPrint("Notificação em background recebida!");
 
   if (message.data.containsKey('pedidoId') &&
@@ -50,6 +51,11 @@ Future<void> _firebaseMessagingBackgroundHandler(
     final nomeProduto =
         message.data['nomeProduto']?.toString() ?? 'Seu pedido';
 
+    if (status.terminal) {
+      await LiveNotificationService.cancelLiveNotification(
+          pedidoId: message.data['pedidoId'].toString());
+      return;
+    }
     final stageIndex = status.stage;
 
     LiveNotificationService.updateLiveNotification(
