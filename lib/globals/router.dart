@@ -6,6 +6,7 @@ import 'package:nhac/pages/auth/continuar_senha.dart';
 import 'package:nhac/pages/auth/email_cliente.dart';
 import 'package:nhac/pages/auth/insira_telefone.dart';
 import 'package:nhac/pages/carrinho_page.dart';
+import 'package:nhac/models/chat/pedido_chat_referencia.dart';
 import 'package:nhac/pages/chat_loja_page.dart';
 import 'package:nhac/pages/checkout_page.dart';
 import 'package:nhac/pages/pagamento_pendente_page.dart';
@@ -431,6 +432,9 @@ final GoRouter appRouter = GoRouter(
             lojaNome: (dados['lojaNome'] ?? 'Loja').toString(),
             produtoReferencia: dados['produto'] is ProdutosModel
                 ? dados['produto'] as ProdutosModel
+                : null,
+            pedidoReferencia: dados['pedido'] is PedidoChatReferencia
+                ? dados['pedido'] as PedidoChatReferencia
                 : null,
           ),
         );

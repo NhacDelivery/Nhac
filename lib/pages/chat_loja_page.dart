@@ -8,6 +8,7 @@
 // ou de um pedido específico.
 
 import 'dart:async';
+import 'package:nhac/models/chat/pedido_chat_referencia.dart';
 import 'package:nhac/models/chat/produto_chat_referencia.dart';
 
 import 'package:flutter/material.dart';
@@ -25,6 +26,7 @@ class ChatLojaPage extends StatefulWidget {
   final String lojaId;
   final String lojaNome;
   final ProdutosModel? produtoReferencia;
+  final PedidoChatReferencia? pedidoReferencia;
   final ChatRepository? repository;
   final ChatSocketService? socket;
 
@@ -33,6 +35,7 @@ class ChatLojaPage extends StatefulWidget {
     required this.lojaId,
     required this.lojaNome,
     this.produtoReferencia,
+    this.pedidoReferencia,
     this.repository,
     this.socket,
   });
@@ -203,24 +206,29 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
   void _enviar() {
     final texto = _campoController.text.trim();
     final produto = widget.produtoReferencia;
-    final anexar = (produto != null) && !_referenciaEnviada;
+    final pedido = widget.pedidoReferencia;
+    final anexar = (produto != null || pedido != null) && !_referenciaEnviada;
     if (texto.isEmpty && !anexar && _pendenteId == null) return;
     if (_pendenteId != null && !_envioIncerto) return;
     final id = _pendenteId ?? const Uuid().v4();
     final mensagem = _pendenteTexto ??
         (anexar
-            ? ProdutoChatReferencia(
-                    nome: produto.nome,
-                    id: produto.id,
-                    preco: NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$')
-                        .format(produto.preco),
-                    imagem: produto.imagemUrl,
-                    mensagem: texto)
-                .serializar()
+            ? (produto != null
+                ? ProdutoChatReferencia(
+                        nome: produto.nome,
+                        id: produto.id,
+                        preco: NumberFormat.currency(
+                          locale: 'pt_BR',
+                          symbol: 'R\$',
+                        ).format(produto.preco),
+                        imagem: produto.imagemUrl,
+                        mensagem: texto)
+                    .serializar()
+                : pedido!.comMensagem(texto).serializar())
             : texto);
     if (mensagem.length > 4000) {
-      context.showError(
-          'Reduza a mensagem para enviar junto com a referência do produto.');
+      context
+          .showError('Reduza a mensagem para enviar junto com a referência.');
       return;
     }
     final enviou = _socket.enviar(mensagem, id);
@@ -430,6 +438,8 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
 
   Widget _conteudoMensagem(String conteudo, bool doCliente) {
     // O contexto viaja no texto já persistido pelo backend. Também lê referências antigas.
+    final pedidoRef = PedidoChatReferencia.ler(conteudo);
+    if (pedidoRef != null) return _cartaoPedido(pedidoRef, doCliente);
     final referencia = ProdutoChatReferencia.ler(conteudo);
     final cor = doCliente ? Colors.white : const Color(0xFF5D201C);
     if (referencia == null)
@@ -494,6 +504,96 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
     );
   }
 
+  Widget _cartaoReferenciaPedido(PedidoChatReferencia r) => Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(Icons.receipt_long, color: Color(0xFFFF6961)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Pedido ${r.codigo}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF5D201C),
+                    ),
+                  ),
+                  Text(
+                    r.resumo,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Color(0xFF5D201C)),
+                  ),
+                  Text(
+                    r.status == null ? r.total : '${r.total} · ${r.status}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF5D201C),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+
+  Widget _cartaoPedido(PedidoChatReferencia r, bool doCliente) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _cartaoReferenciaPedido(r),
+          if (r.mensagem.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              r.mensagem,
+              style: TextStyle(
+                color: doCliente ? Colors.white : const Color(0xFF5D201C),
+                fontSize: 15,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ],
+      );
+
+  Widget _previaPedido(PedidoChatReferencia r) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Column(
+          children: [
+            _cartaoReferenciaPedido(r),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _referenciaEnviada
+                        ? 'Pedido enviado à loja'
+                        : 'O pedido será incluído na próxima mensagem',
+                    style:
+                        const TextStyle(fontSize: 11, color: Color(0xFF5D201C)),
+                  ),
+                ),
+                if (!_referenciaEnviada)
+                  TextButton(
+                    onPressed:
+                        _conectado && (_pendenteId == null || _envioIncerto)
+                            ? _enviar
+                            : null,
+                    child: const Text('Enviar pedido à loja'),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      );
+
   Widget _barraDeEnvio() {
     return Container(
       padding: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 12.0),
@@ -504,6 +604,7 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (widget.pedidoReferencia case final pedido?) _previaPedido(pedido),
           if (widget.produtoReferencia case final produto?)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),

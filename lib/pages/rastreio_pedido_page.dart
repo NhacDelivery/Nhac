@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:nhac/models/chat/pedido_chat_referencia.dart';
 import 'package:nhac/services/shared_get.dart';
 import 'package:nhac/services/home_order_route_observer.dart';
 
@@ -461,11 +462,14 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
   Future<void> _abrirMensagemRestaurante() async {
     final loja = _loja;
     if (loja == null) return;
+    final pedido = _pedido;
     context.push(
       '/chat-loja',
       extra: {
         'lojaId': loja.id,
         'lojaNome': loja.nome,
+        // Identifica o pedido: a mesma conversa reúne compras diferentes.
+        if (pedido != null) 'pedido': PedidoChatReferencia.fromPedido(pedido),
       },
     );
   }
