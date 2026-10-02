@@ -40,6 +40,9 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     with SingleTickerProviderStateMixin, RouteAware, WidgetsBindingObserver {
   PedidoModel? _activePedido;
   bool _loading = true;
+  // Só mostra o loading do cartão quando já se sabe que há um pedido ativo
+  // (salvo neste aparelho). Na descoberta inicial nada aparece.
+  bool _pedidoConhecido = false;
   String? _error;
   String? _usuarioId;
   String? _socketPedidoId;
@@ -181,8 +184,14 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       final snapshot = await LocalCacheService.carregarSnapshotPedido(
         usuarioId,
       );
-      if (mounted && snapshot != null && _usuarioId == usuarioId)
+      if (mounted && snapshot != null && _usuarioId == usuarioId) {
         _showOrder(snapshot, persistir: false);
+      } else if (mounted && _usuarioId == usuarioId) {
+        final salvo = await LocalCacheService.carregarPedidoAtivo(usuarioId);
+        if (mounted && _usuarioId == usuarioId && salvo != null) {
+          setState(() => _pedidoConhecido = true);
+        }
+      }
     }
     if (mounted) _loadActiveOrder();
   }
@@ -360,7 +369,9 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   @override
   Widget build(BuildContext context) {
     if (_activePedido == null) {
-      if (_loading || _error == null) return const SizedBox.shrink();
+      if (!(_loading && _pedidoConhecido) && _error == null) {
+        return const SizedBox.shrink();
+      }
       return Padding(
         padding: EdgeInsets.symmetric(horizontal: 20.w),
         child: Card(

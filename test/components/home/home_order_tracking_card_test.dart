@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -173,6 +175,63 @@ void main() {
       expect(find.text('Carlos S. aceitou sua entrega'), findsNothing);
       expect(find.text('Em preparo'), findsOneWidget);
       expect(find.byKey(const Key('cartao-entregador-home')), findsNothing);
+    });
+  });
+
+  group('A4 - loading do cartão Seu pedido', () {
+    testWidgets('descoberta sem pedido conhecido não mostra cartão nem loading',
+        (tester) async {
+      final resposta = Completer<PedidoModel?>();
+      when(() => mockPedidoRepository.buscarPedidoAtivo())
+          .thenAnswer((_) => resposta.future);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Seu pedido'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+
+      resposta.complete(null);
+      await tester.pump();
+      expect(find.text('Seu pedido'), findsNothing);
+    });
+
+    testWidgets('pedido ativo salvo no aparelho mostra o loading até carregar',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({'pedido_ativo_user123': 'ped-home-1'});
+      final resposta = Completer<PedidoModel?>();
+      when(() => mockPedidoRepository.buscarPedidoAtivo())
+          .thenAnswer((_) => resposta.future);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Seu pedido'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      resposta.complete(criarPedido(status: StatusPedido.preparando));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.text('Em preparo'), findsOneWidget);
+    });
+
+    testWidgets('falha ao carregar mostra erro com tentar novamente',
+        (tester) async {
+      SharedPreferences.setMockInitialValues({'pedido_ativo_user123': 'ped-home-1'});
+      when(() => mockPedidoRepository.buscarPedidoAtivo())
+          .thenAnswer((_) async => throw Exception('falha'));
+
+      await tester.pumpWidget(createWidgetUnderTest());
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('Não foi possível atualizar seu pedido.'), findsOneWidget);
+      expect(find.text('Tentar novamente'), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
     });
   });
 }
