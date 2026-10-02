@@ -34,7 +34,10 @@ class _NotificacoesPageState extends State<NotificacoesPage>
 
   Future<void> _atualizar() async {
     final future = _listar();
-    setState(() => _avisos = future);
+    if (!mounted) return;
+    setState(() {
+      _avisos = future;
+    });
     try {
       await future;
     } catch (_) {

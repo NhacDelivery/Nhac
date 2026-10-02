@@ -497,15 +497,52 @@ class _SearchPageState extends State<SearchPage>
   }
 
   Widget _buildResultadosComEstado() {
+    final resultadoAnterior = _ultimoResultado;
+    if (_estadoBusca == EstadoConteudo.erro &&
+        resultadoAnterior != null &&
+        !resultadoAnterior.vazio) {
+      return Column(
+        children: [
+          BannerErroInline(
+            mensagem: _ultimoErro ?? 'Exibindo resultados anteriores.',
+            aoTentarNovamente: () => _buscaCategoria
+                ? _buscarCategoriaComCache(_termoAtual!)
+                : _buscarComCache(_termoAtual!),
+          ),
+          Expanded(child: _buildResultados(resultadoAnterior)),
+        ],
+      );
+    }
     return EstadoComRetry<_ResultadoBusca>(
       estado: _estadoBusca,
-      dados: _ultimoResultado,
+      dados: _estadoBusca == EstadoConteudo.erro ? null : _ultimoResultado,
       mensagemErro: _ultimoErro,
       aoTentarNovamente: _termoAtual != null
           ? () => _buscaCategoria
                 ? _buscarCategoriaComCache(_termoAtual!)
                 : _buscarComCache(_termoAtual!)
           : null,
+      builderErro: (mensagem, tentarNovamente) => SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.all(24.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Color(0xFFFF6961),
+                size: 40,
+              ),
+              const SizedBox(height: 12),
+              Text(mensagem, textAlign: TextAlign.center),
+              TextButton(
+                onPressed: tentarNovamente,
+                child: const Text('Tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+      ),
       builderVazio: () => _buildMensagemEstado(
         key: const ValueKey('vazio'),
         icone: Icons.search_off_rounded,

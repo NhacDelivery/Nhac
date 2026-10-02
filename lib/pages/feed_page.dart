@@ -1,3 +1,6 @@
+import 'package:provider/provider.dart';
+import 'package:nhac/services/auth_service.dart';
+import 'package:nhac/pages/notificacoes_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -118,15 +121,34 @@ class _FeedPageState extends State<FeedPage>
                           color: const Color(0xFF5D201C),
                         ),
                       ),
-                      Icon(
-                        Icons.notifications_none_outlined,
-                        color: const Color(0xFF5D201C),
-                        size: 26.r,
+                      IconButton(
+                        onPressed: () {
+                          final usuarioId = context
+                              .read<AuthService>()
+                              .usuarioId;
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute<void>(
+                              builder: (_) =>
+                                  NotificacoesPage(usuarioId: usuarioId),
+                            ),
+                          );
+                        },
+                        icon: Icon(
+                          Icons.notifications_none_outlined,
+                          color: const Color(0xFF5D201C),
+                          size: 26.r,
+                        ),
                       ),
                     ],
                   ),
                   SizedBox(height: 16.h),
 
+                  const Text(
+                    'Prévia do Feed: publicações de exemplo. Curtidas, comentários e seguidores ainda estão indisponíveis.',
+                    style: TextStyle(color: Color(0xFF5D201C)),
+                  ),
+                  SizedBox(height: 12.h),
                   // Search bar — igual à Home
                   GestureDetector(
                     onTap: () {
@@ -257,7 +279,7 @@ class _FeedPageState extends State<FeedPage>
                     ),
                     SizedBox(height: 12.h),
                     Text(
-                      'Feed indisponível no momento.\nPublicações, comentários e curtidas\nserão liberados quando estiverem disponíveis.',
+                      'Nenhuma oferta validada disponível.',
                       style: TextStyle(
                         color: Colors.grey.shade400,
                         fontSize: 15.sp,
@@ -627,19 +649,32 @@ class _FeedPageState extends State<FeedPage>
     );
   }
 
+  void _avisarIndisponivel() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Esta ação ainda está indisponível. O Feed está em demonstração.',
+        ),
+      ),
+    );
+  }
+
   Widget _buildFooterAction({required IconData icon, required String label}) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 20.r, color: Colors.grey.shade500),
-        if (label.isNotEmpty) ...[
-          SizedBox(width: 5.w),
-          Text(
-            label,
-            style: TextStyle(fontSize: 13.sp, color: Colors.grey.shade600),
-          ),
+    return InkWell(
+      onTap: _avisarIndisponivel,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 20.r, color: Colors.grey.shade500),
+          if (label.isNotEmpty) ...[
+            SizedBox(width: 5.w),
+            Text(
+              label,
+              style: TextStyle(fontSize: 13.sp, color: Colors.grey.shade600),
+            ),
+          ],
         ],
-      ],
+      ),
     );
   }
 
