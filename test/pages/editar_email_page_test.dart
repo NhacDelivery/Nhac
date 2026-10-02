@@ -69,6 +69,12 @@ class MockAuthService extends ChangeNotifier implements AuthService {
     required String senha,
   }) async => true;
   @override
+  Future<bool> confirmarComGoogle() async => true;
+  @override
+  Future<bool> confirmarComSms(String telefone, String codigo) async => true;
+  @override
+  String telefoneLocal(String telefone) => telefone;
+  @override
   Future<void> loginComGoogle() async {}
   @override
   Future<void> logout() async {}

@@ -27,6 +27,23 @@ class LocalCacheService {
     await prefs.remove(_keyEmailVerificacao);
   }
 
+  static String _keyPreferenciasComida(String usuarioId) =>
+      'preferencias_comida_$usuarioId';
+
+  static Future<Set<String>> carregarPreferenciasComida(
+      String usuarioId) async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getStringList(_keyPreferenciasComida(usuarioId)) ?? const [])
+        .toSet();
+  }
+
+  static Future<void> salvarPreferenciasComida(
+      String usuarioId, Set<String> preferencias) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+        _keyPreferenciasComida(usuarioId), preferencias.toList()..sort());
+  }
+
   static String _keyPedidoAtivo(String usuarioId) => 'pedido_ativo_$usuarioId';
   static String _keySnapshotPedido(String usuarioId) =>
       'pedido_snapshot_$usuarioId';

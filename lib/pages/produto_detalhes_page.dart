@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
@@ -94,6 +95,41 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
           )
           .toList(),
       Map.fromEntries(stores),
+    );
+  }
+
+  void _mostrarMaisOpcoes() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('Copiar link do produto'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await Clipboard.setData(
+                  ClipboardData(
+                    text: 'https://nhac.app/produto/${widget.produto.id}',
+                  ),
+                );
+                if (mounted) context.showSuccess('Link copiado.');
+              },
+            ),
+            if (widget.produto.lojaId.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.chat_bubble_outline),
+                title: const Text('Perguntar à loja sobre este produto'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _abrirChat();
+                },
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -266,9 +302,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           color: const Color(0xFF5D201C),
                           size: 20.r,
                         ),
-                        onPressed: () => context.showError(
-                          'Mais opções indisponíveis no momento.',
-                        ),
+                        onPressed: _mostrarMaisOpcoes,
                       ),
                     ),
                   ),

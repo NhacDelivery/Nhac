@@ -70,6 +70,64 @@ class AuthService with ChangeNotifier {
         response.data['usuarioId'] == usuarioEsperado;
   }
 
+  /// Confirma a identidade de uma conta Google (que não tem senha) pedindo o
+  /// login do Google de novo. Só vale se for a mesma conta da sessão atual, e
+  /// a sessão não é substituída. Devolve false se a pessoa cancelar.
+  Future<bool> confirmarComGoogle() async {
+    final usuarioEsperado = _usuarioId;
+    if (usuarioEsperado == null) return false;
+    try {
+      final googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) return false;
+      final idToken = (await googleUser.authentication).idToken;
+      if (idToken == null) {
+        throw AuthException(
+          'Não foi possível obter o token de autenticação do Google.',
+        );
+      }
+      final response = await _dio.post(
+        '/auth/social',
+        data: {'idToken': idToken},
+      );
+      return _usuarioId == usuarioEsperado &&
+          response.data['usuarioId'] == usuarioEsperado;
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  /// Deixa o telefone só com os dígitos locais, tirando o +55 se vier junto
+  /// (o backend devolve o número em E.164, mas [formatarTelefoneE164] já soma o 55).
+  String telefoneLocal(String telefone) {
+    final numeros = telefone.replaceAll(RegExp(r'\D'), '');
+    return numeros.length > 11 && numeros.startsWith('55')
+        ? numeros.substring(2)
+        : numeros;
+  }
+
+  /// Confirma a identidade de uma conta de telefone (sem senha) com o código
+  /// SMS enviado por [enviarCodigoSms]. Só vale para a conta da sessão atual
+  /// e não substitui a sessão.
+  Future<bool> confirmarComSms(String telefone, String codigo) async {
+    final usuarioEsperado = _usuarioId;
+    if (usuarioEsperado == null) return false;
+    try {
+      final response = await _dio.post(
+        '/auth/login-sms',
+        data: {
+          'telefone': formatarTelefoneE164(telefoneLocal(telefone)),
+          'codigo': codigo,
+        },
+      );
+      return _usuarioId == usuarioEsperado &&
+          response.data['usuarioId'] == usuarioEsperado;
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
   Future<void> registrar({
     required String nome,
     required String email,

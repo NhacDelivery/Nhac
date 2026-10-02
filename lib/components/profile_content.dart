@@ -12,6 +12,7 @@ import 'package:nhac/controllers/user_provider.dart';
 import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/biometric_service.dart';
+import 'package:nhac/services/local_cache_service.dart';
 import 'package:provider/provider.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
@@ -32,11 +33,40 @@ class _ProfileContentState extends State<ProfileContent> {
     'cuponsResgatados': 0,
   };
   bool _carregandoEstatisticas = true;
+  Set<String> _preferencias = {};
+
+  static const _opcoesPreferencia = <(String, IconData)>[
+    ('Pizza', Icons.local_pizza),
+    ('Vegetariana', Icons.ramen_dining),
+    ('Salgados', Icons.fastfood),
+    ('Padarias', Icons.bakery_dining),
+    ('Frutos do mar', Icons.set_meal),
+    ('Doces', Icons.cake),
+  ];
+
+  Future<void> _carregarPreferencias() async {
+    final usuarioId = context.read<AuthService>().usuarioId;
+    if (usuarioId == null) return;
+    final salvas =
+        await LocalCacheService.carregarPreferenciasComida(usuarioId);
+    if (mounted) setState(() => _preferencias = salvas);
+  }
+
+  Future<void> _alternarPreferencia(String nome) async {
+    final usuarioId = context.read<AuthService>().usuarioId;
+    final novas = {..._preferencias};
+    if (!novas.remove(nome)) novas.add(nome);
+    setState(() => _preferencias = novas);
+    if (usuarioId != null) {
+      await LocalCacheService.salvarPreferenciasComida(usuarioId, novas);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _carregarEstatisticas();
+    _carregarPreferencias();
   }
 
   Future<void> _carregarEstatisticas() async {
@@ -59,6 +89,21 @@ class _ProfileContentState extends State<ProfileContent> {
     if (await BiometricService.authenticate()) return true;
     if (!mounted) return false;
     final auth = context.read<AuthService>();
+    // Contas de Google e de telefone não têm senha: confirmam pelo próprio meio de login.
+    if (auth.isGoogleUser || auth.isPhoneUser) {
+      try {
+        return auth.isGoogleUser
+            ? await auth.confirmarComGoogle()
+            : await _confirmarPorSms(auth);
+      } catch (_) {
+        if (mounted) {
+          context.showError(
+            'Não foi possível confirmar sua identidade. Confira a conexão e tente de novo.',
+          );
+        }
+        return false;
+      }
+    }
     final email = context.read<UserProvider>().usuario?.email;
     if (email == null || email.isEmpty) {
       context.showError(
@@ -101,6 +146,51 @@ class _ProfileContentState extends State<ProfileContent> {
         );
       return false;
     }
+  }
+
+  Future<bool> _confirmarPorSms(AuthService auth) async {
+    final telefone = context.read<UserProvider>().usuario?.telefone ?? '';
+    if (auth.telefoneLocal(telefone).isEmpty) {
+      context.showError('Não foi possível obter o telefone da conta.');
+      return false;
+    }
+    await auth.enviarCodigoSms(auth.telefoneLocal(telefone));
+    if (!mounted) return false;
+    final controller = TextEditingController();
+    final codigo = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirme sua identidade'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Enviamos um código por SMS para o telefone da conta.'),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Código recebido'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    // Aguarda a animação do diálogo antes de descartar o controller.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    controller.dispose();
+    if (codigo == null || codigo.isEmpty || !mounted) return false;
+    return auth.confirmarComSms(telefone, codigo);
   }
 
   void _logoutUsuario(BuildContext context) async {
@@ -261,9 +351,8 @@ class _ProfileContentState extends State<ProfileContent> {
     final userProvider = context.watch<UserProvider>();
     final usuario = userProvider.usuario;
     final enderecoProvider = context.watch<EnderecoProvider>();
-    final enderecoisPadrao = enderecoProvider.enderecos
-        .where((e) => e.isPadrao)
-        .firstOrNull;
+    final enderecoisPadrao =
+        enderecoProvider.enderecos.where((e) => e.isPadrao).firstOrNull;
     final String textoEndereco = enderecoisPadrao != null
         ? '${enderecoisPadrao.rua}, ${enderecoisPadrao.numero}${(enderecoisPadrao.complemento?.isNotEmpty ?? false) ? ' - ${enderecoisPadrao.complemento}' : ''}'
         : 'Nenhum endereço selecionado';
@@ -295,31 +384,29 @@ class _ProfileContentState extends State<ProfileContent> {
               refreshTriggerPullDistance: 180.h,
               onRefresh: () async =>
                   await context.read<UserProvider>().carregarDadosUsuario(),
-              builder:
-                  (
-                    context,
-                    refreshState,
-                    pulledExtent,
-                    refreshTriggerPullDistance,
-                    refreshIndicatorExtent,
-                  ) {
-                    return Center(
-                      child: Opacity(
-                        opacity: (pulledExtent / refreshIndicatorExtent).clamp(
-                          0.0,
-                          1.0,
-                        ),
-                        child: Lottie.asset(
-                          'assets/animations/loading_nhac.json',
-                          width: 240.w,
-                          height: 240.h,
-                          animate:
-                              refreshState == RefreshIndicatorMode.refresh ||
-                              refreshState == RefreshIndicatorMode.armed,
-                        ),
-                      ),
-                    );
-                  },
+              builder: (
+                context,
+                refreshState,
+                pulledExtent,
+                refreshTriggerPullDistance,
+                refreshIndicatorExtent,
+              ) {
+                return Center(
+                  child: Opacity(
+                    opacity: (pulledExtent / refreshIndicatorExtent).clamp(
+                      0.0,
+                      1.0,
+                    ),
+                    child: Lottie.asset(
+                      'assets/animations/loading_nhac.json',
+                      width: 240.w,
+                      height: 240.h,
+                      animate: refreshState == RefreshIndicatorMode.refresh ||
+                          refreshState == RefreshIndicatorMode.armed,
+                    ),
+                  ),
+                );
+              },
             ),
             SliverPadding(
               padding: EdgeInsets.symmetric(horizontal: 24.w),
@@ -409,15 +496,15 @@ class _ProfileContentState extends State<ProfileContent> {
                                         fit: BoxFit.cover,
                                         placeholder: (context, url) =>
                                             const LoadingNhac(
-                                              telaCheia: false,
-                                              tamanho: 40,
-                                            ),
+                                          telaCheia: false,
+                                          tamanho: 40,
+                                        ),
                                         errorWidget: (context, url, error) =>
                                             Icon(
-                                              Icons.person,
-                                              size: 48.r,
-                                              color: Colors.grey.shade400,
-                                            ),
+                                          Icons.person,
+                                          size: 48.r,
+                                          color: Colors.grey.shade400,
+                                        ),
                                       ),
                                     ),
                             ),
@@ -651,14 +738,20 @@ class _ProfileContentState extends State<ProfileContent> {
                   ),
                   SizedBox(height: 32.h),
                   Text(
-                    'Preferências de comida (em breve)',
+                    'Preferências de comida',
                     style: TextStyle(
                       fontSize: 18.sp,
                       fontWeight: FontWeight.bold,
                       color: const Color(0xFF5D201C),
                     ),
                   ),
-                  SizedBox(height: 16.h),
+                  SizedBox(height: 4.h),
+                  Text(
+                    'Salvas neste aparelho. Ainda não mudam as recomendações.',
+                    style:
+                        TextStyle(fontSize: 12.sp, color: Colors.grey.shade600),
+                  ),
+                  SizedBox(height: 12.h),
                   Container(
                     padding: EdgeInsets.symmetric(vertical: 20.h),
                     decoration: BoxDecoration(
@@ -681,37 +774,16 @@ class _ProfileContentState extends State<ProfileContent> {
                       physics: const BouncingScrollPhysics(),
                       child: Row(
                         children: [
-                          _buildPreferenceItem(
-                            Icons.local_pizza,
-                            'Pizza',
-                            false,
-                          ),
-                          SizedBox(width: 20.w),
-                          _buildPreferenceItem(
-                            Icons.ramen_dining,
-                            'Vegetariana',
-                            false,
-                          ),
-                          SizedBox(width: 20.w),
-                          _buildPreferenceItem(
-                            Icons.fastfood,
-                            'Salgados',
-                            false,
-                          ),
-                          SizedBox(width: 20.w),
-                          _buildPreferenceItem(
-                            Icons.bakery_dining,
-                            'Padarias',
-                            false,
-                          ),
-                          SizedBox(width: 20.w),
-                          _buildPreferenceItem(
-                            Icons.set_meal,
-                            'Frutos do mar',
-                            false,
-                          ),
-                          SizedBox(width: 20.w),
-                          _buildPreferenceItem(Icons.cake, 'Doces', false),
+                          for (final (i, pref)
+                              in _opcoesPreferencia.indexed) ...[
+                            if (i > 0) SizedBox(width: 20.w),
+                            _buildPreferenceItem(
+                              pref.$2,
+                              pref.$1,
+                              _preferencias.contains(pref.$1),
+                              onTap: () => _alternarPreferencia(pref.$1),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -801,45 +873,54 @@ class _ProfileContentState extends State<ProfileContent> {
     );
   }
 
-  Widget _buildPreferenceItem(IconData icon, String label, bool isSelected) {
-    return Column(
-      children: [
-        Container(
-          padding: EdgeInsets.all(16.w),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16.r),
-            border: isSelected
-                ? Border.all(color: const Color(0xFFFF6961), width: 2)
-                : Border.all(color: Colors.grey.shade200, width: 1),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: const Color(0xFFFF6961).withValues(alpha: 0.2),
-                      blurRadius: 8.r,
-                      offset: Offset(0, 4.h),
-                    ),
-                  ]
-                : null,
+  Widget _buildPreferenceItem(
+    IconData icon,
+    String label,
+    bool isSelected, {
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16.r),
+      child: Column(
+        children: [
+          Container(
+            padding: EdgeInsets.all(16.w),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16.r),
+              border: isSelected
+                  ? Border.all(color: const Color(0xFFFF6961), width: 2)
+                  : Border.all(color: Colors.grey.shade200, width: 1),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFFFF6961).withValues(alpha: 0.2),
+                        blurRadius: 8.r,
+                        offset: Offset(0, 4.h),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Icon(
+              icon,
+              color: isSelected
+                  ? const Color(0xFFFF6961)
+                  : const Color(0xFF5D201C),
+              size: 28.r,
+            ),
           ),
-          child: Icon(
-            icon,
-            color: isSelected
-                ? const Color(0xFFFF6961)
-                : const Color(0xFF5D201C),
-            size: 28.r,
+          SizedBox(height: 8.h),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11.sp,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              color: const Color(0xFF5D201C),
+            ),
           ),
-        ),
-        SizedBox(height: 8.h),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11.sp,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-            color: const Color(0xFF5D201C),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
