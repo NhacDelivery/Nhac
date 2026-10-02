@@ -330,7 +330,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
         'lojaId': loja.id,
         'lojaNome': loja.nome,
         'pedidoReferencia':
-            'Pedido: ${widget.pedidoId}\n${_pedido?.itens.map((item) => item.nome).join(', ') ?? ''}',
+            'Pedido: ${widget.pedidoId}\n${_pedido?.itens.map((item) => '${item.quantidade}x ${item.nome}').join(', ') ?? ''}\nTotal: ${currencyFormat.format(_pedido?.valorTotal ?? 0)}\nStatus: ${_pedido?.status.label ?? ''}',
       },
     );
   }

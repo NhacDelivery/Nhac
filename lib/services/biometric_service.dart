@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:local_auth_android/local_auth_android.dart';
 
@@ -9,7 +8,7 @@ class BiometricService {
   static Future<bool> isDeviceSecure() async {
     try {
       return await _auth.isDeviceSupported();
-    } on PlatformException catch (e) {
+    } catch (e) {
       debugPrint('Erro ao verificar suporte do dispositivo: $e');
       return false;
     }
@@ -18,17 +17,17 @@ class BiometricService {
   static Future<bool> authenticate() async {
     try {
       final secure = await isDeviceSecure();
-      
+
       if (!secure) {
-        
-        return false; 
+        return false;
       }
 
       return await _auth.authenticate(
-        localizedReason: 'Autenticação necessária para acessar seus dados pessoais.',
+        localizedReason:
+            'Autenticação necessária para acessar seus dados pessoais.',
         options: const AuthenticationOptions(
           stickyAuth: true,
-          biometricOnly: false, 
+          biometricOnly: false,
           useErrorDialogs: true,
         ),
         authMessages: const [
@@ -36,10 +35,9 @@ class BiometricService {
             signInTitle: 'Autenticação necessária',
             biometricHint: 'Toque no sensor',
           ),
-     
         ],
       );
-    } on PlatformException catch (e) {
+    } catch (e) {
       debugPrint('Erro na autenticação: $e');
       return false;
     }

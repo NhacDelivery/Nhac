@@ -35,7 +35,9 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
   }
 
   final produto = ProdutosModel(
@@ -58,7 +60,9 @@ void main() {
       await montar(tester, produtos, lojas);
       await tester.enterText(find.byType(TextField), 'suco');
       await tester.pump(const Duration(milliseconds: 450));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
       expect(find.text('Suco natural'), findsOneWidget);
       expect(find.text('Tudo'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -97,16 +101,22 @@ void main() {
       await tester.pump();
       await tester.enterText(find.byType(TextField), 'nova');
       await tester.pump(const Duration(milliseconds: 450));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
       antiga.completeError(Exception('Falha antiga'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
       expect(find.text('Suco natural'), findsOneWidget);
       when(
         () => produtos.buscarProdutosPorNome('falha'),
       ).thenAnswer((_) async => throw Exception('Sem rede'));
       await tester.enterText(find.byType(TextField), 'falha');
       await tester.pump(const Duration(milliseconds: 450));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
       expect(find.text('Tentar novamente'), findsOneWidget);
       expect(find.text('Nada encontrado'), findsNothing);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -130,7 +140,9 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
 
     // SearchPage não usa AppBar: a barra de busca é custom (Row com botão
     // de voltar + campo de texto arredondado), ver _buildBarraBusca().

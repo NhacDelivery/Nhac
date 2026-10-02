@@ -176,7 +176,6 @@ class _HomeContentState extends State<HomeContent> {
       _lojaAbertaMap = {
         for (final p in todos)
           if (p.lojaId.isNotEmpty) p.lojaId: p.lojaAberta,
-        for (final loja in _lojas) loja.id: loja.isAberto,
       };
 
       _produtosNecessidades.removeWhere((p) {
@@ -388,7 +387,9 @@ class _HomeContentState extends State<HomeContent> {
             _hasMoreLojas = false;
             _isLoadingLojas = false;
             LocalCacheService.hasMoreLojasCache = false;
-            if (_currentPageLojas == 0) {
+            if (isRefresh || _currentPageLojas == 0) {
+              _currentPageLojas = 0;
+              LocalCacheService.currentPageLojasCache = 0;
               _estadoLojas = EstadoConteudo.vazio;
             }
           });
@@ -400,6 +401,7 @@ class _HomeContentState extends State<HomeContent> {
         setState(() {
           if (isRefresh || _currentPageLojas == 0) _lojas.clear();
           _lojas.addAll(novasLojas);
+          _aplicarStatusLojas();
           _currentPageLojas = isRefresh ? 1 : _currentPageLojas + 1;
           _hasMoreLojas = novasLojas.length >= 10;
 
