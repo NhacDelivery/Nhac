@@ -1,3 +1,4 @@
+import 'package:nhac/services/shared_get.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:nhac/globals/exceptions.dart';
@@ -14,11 +15,33 @@ class PedidoRepository {
 
   PedidoRepository({Dio? dio}) : _dio = dio ?? ApiClient().dio;
 
+  void invalidarPedido(String pedidoId) {
+    final client = SharedGet.forClient(_dio);
+    client.invalidatePath('/pedidos/$pedidoId');
+    client.invalidatePath('/pedidos/ativos');
+    client.invalidatePath('/pedidos/ativo');
+  }
+
+  Future<List<PedidoModel>> buscarPedidosAtivos() async {
+    try {
+      final response =
+          await SharedGet.forClient(_dio).get(_dio, '/pedidos/ativos');
+      return (response.data as List)
+          .map((item) =>
+              PedidoModel.fromMap(Map<String, dynamic>.from(item as Map)))
+          .toList();
+    } on DioException catch (e) {
+      throw mapException(e);
+    }
+  }
+
   Future<PedidoModel?> buscarPedidoAtivo() async {
     try {
-      final response = await _dio.get('/pedidos/ativo');
+      final response =
+          await SharedGet.forClient(_dio).get(_dio, '/pedidos/ativo');
       if (response.statusCode == 204 || response.data == null) return null;
-      return PedidoModel.fromMap(Map<String, dynamic>.from(response.data as Map));
+      return PedidoModel.fromMap(
+          Map<String, dynamic>.from(response.data as Map));
     } on DioException catch (e) {
       throw mapException(e);
     }
@@ -26,7 +49,8 @@ class PedidoRepository {
 
   Future<PagamentoPendenteModel> buscarPagamento(String pedidoId) async {
     try {
-      final response = await _dio.get('/pedidos/$pedidoId/pagamento');
+      final response = await SharedGet.forClient(_dio)
+          .get(_dio, '/pedidos/$pedidoId/pagamento');
       return PagamentoPendenteModel.fromMap(
           Map<String, dynamic>.from(response.data as Map));
     } on DioException catch (e) {
@@ -67,7 +91,7 @@ class PedidoRepository {
               e.response?.statusCode == 422) &&
           data is Map) {
         final message = data['message']?.toString() ?? '';
-        final code = data['error']?.toString();
+        final code = (data['errorCode'] ?? data['error'])?.toString();
         final title = data['title']?.toString() ??
             (code == 'IDEMPOTENCIA_CONFLITO'
                 ? 'Checkout alterado'
@@ -96,7 +120,8 @@ class PedidoRepository {
 
   Future<PedidoModel> buscarPedidoPorId(String pedidoId) async {
     try {
-      final response = await _dio.get('/pedidos/$pedidoId');
+      final response =
+          await SharedGet.forClient(_dio).get(_dio, '/pedidos/$pedidoId');
       return PedidoModel.fromMap(
         Map<String, dynamic>.from(response.data as Map),
       );
@@ -115,7 +140,8 @@ class PedidoRepository {
 
   Future<Map<String, dynamic>> buscarEstatisticas(String usuarioId) async {
     try {
-      final response = await _dio.get('/usuarios/$usuarioId/estatisticas');
+      final response = await SharedGet.forClient(_dio)
+          .get(_dio, '/usuarios/$usuarioId/estatisticas');
       if (response.statusCode == 200 && response.data != null) {
         return Map<String, dynamic>.from(response.data as Map);
       }
@@ -139,7 +165,8 @@ class PedidoRepository {
     int size = 10,
   }) async {
     try {
-      final response = await _dio.get(
+      final response = await SharedGet.forClient(_dio).get(
+        _dio,
         '/pedidos',
         queryParameters: {
           'page': page,
@@ -179,9 +206,11 @@ class PedidoRepository {
     }
   }
 
-  Future<AvaliacaoEntregadorModel?> buscarAvaliacaoEntregador(String pedidoId) async {
+  Future<AvaliacaoEntregadorModel?> buscarAvaliacaoEntregador(
+      String pedidoId) async {
     try {
-      final response = await _dio.get('/pedidos/$pedidoId/avaliacao-entregador');
+      final response = await SharedGet.forClient(_dio)
+          .get(_dio, '/pedidos/$pedidoId/avaliacao-entregador');
       if (response.statusCode == 200 && response.data != null) {
         return AvaliacaoEntregadorModel.fromMap(
           Map<String, dynamic>.from(response.data as Map),

@@ -8,6 +8,7 @@
 // ou de um pedido específico.
 
 import 'dart:async';
+import 'package:nhac/models/chat/produto_chat_referencia.dart';
 
 import 'package:flutter/material.dart';
 import 'package:nhac/components/loading_nhac.dart';
@@ -24,14 +25,16 @@ class ChatLojaPage extends StatefulWidget {
   final String lojaId;
   final String lojaNome;
   final ProdutosModel? produtoReferencia;
-  final String? pedidoReferencia;
+  final ChatRepository? repository;
+  final ChatSocketService? socket;
 
   const ChatLojaPage({
     super.key,
     required this.lojaId,
     required this.lojaNome,
     this.produtoReferencia,
-    this.pedidoReferencia,
+    this.repository,
+    this.socket,
   });
 
   @override
@@ -39,8 +42,8 @@ class ChatLojaPage extends StatefulWidget {
 }
 
 class _ChatLojaPageState extends State<ChatLojaPage> {
-  final _repository = ChatRepository();
-  final _socket = ChatSocketService();
+  late final _repository = widget.repository ?? ChatRepository();
+  late final _socket = widget.socket ?? ChatSocketService();
   final _campoController = TextEditingController();
   final _scrollController = ScrollController();
 
@@ -200,20 +203,26 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
   void _enviar() {
     final texto = _campoController.text.trim();
     final produto = widget.produtoReferencia;
-    final anexar =
-        (produto != null || widget.pedidoReferencia != null) &&
-        !_referenciaEnviada;
+    final anexar = (produto != null) && !_referenciaEnviada;
     if (texto.isEmpty && !anexar && _pendenteId == null) return;
     if (_pendenteId != null && !_envioIncerto) return;
     final id = _pendenteId ?? const Uuid().v4();
-    final referencia = produto != null && !_referenciaEnviada
-        ? 'Produto: ${produto.nome}\nID: ${produto.id}\nPreço: ${NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$').format(produto.preco)}${produto.imagemUrl.isEmpty ? '' : '\nImagem: ${produto.imagemUrl}'}'
-        : !_referenciaEnviada
-        ? widget.pedidoReferencia ?? ''
-        : '';
-    final mensagem =
-        _pendenteTexto ??
-        [referencia, texto].where((parte) => parte.isNotEmpty).join('\n\n');
+    final mensagem = _pendenteTexto ??
+        (anexar
+            ? ProdutoChatReferencia(
+                    nome: produto.nome,
+                    id: produto.id,
+                    preco: NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$')
+                        .format(produto.preco),
+                    imagem: produto.imagemUrl,
+                    mensagem: texto)
+                .serializar()
+            : texto);
+    if (mensagem.length > 4000) {
+      context.showError(
+          'Reduza a mensagem para enviar junto com a referência do produto.');
+      return;
+    }
     final enviou = _socket.enviar(mensagem, id);
     if (!enviou) {
       context.showError(
@@ -401,9 +410,8 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
           ],
         ),
         child: Column(
-          crossAxisAlignment: doCliente
-              ? CrossAxisAlignment.end
-              : CrossAxisAlignment.start,
+          crossAxisAlignment:
+              doCliente ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             _conteudoMensagem(mensagem.conteudo, doCliente),
             const SizedBox(height: 4.0),
@@ -422,16 +430,14 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
 
   Widget _conteudoMensagem(String conteudo, bool doCliente) {
     // O contexto viaja no texto já persistido pelo backend. Também lê referências antigas.
-    final referencia = RegExp(
-      r'^Produto: ([^\n]+)\nID: ([^\n]+)\nPreço: ([^\n]+)(?:\nImagem: ([^\n]+))?(?:\n\n([\s\S]*))?$',
-    ).firstMatch(conteudo);
+    final referencia = ProdutoChatReferencia.ler(conteudo);
     final cor = doCliente ? Colors.white : const Color(0xFF5D201C);
     if (referencia == null)
       return Text(
         conteudo,
         style: TextStyle(color: cor, fontSize: 15, height: 1.3),
       );
-    final imagem = referencia.group(4);
+    final imagem = referencia.imagem;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -461,14 +467,14 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      referencia.group(1)!,
+                      referencia.nome,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Color(0xFF5D201C),
                       ),
                     ),
                     Text(
-                      referencia.group(3)!,
+                      referencia.preco,
                       style: const TextStyle(color: Color(0xFF5D201C)),
                     ),
                   ],
@@ -477,10 +483,10 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
             ],
           ),
         ),
-        if (referencia.group(5)?.isNotEmpty == true) ...[
+        if (referencia.mensagem.isNotEmpty) ...[
           const SizedBox(height: 8),
           Text(
-            referencia.group(5)!,
+            referencia.mensagem,
             style: TextStyle(color: cor, fontSize: 15, height: 1.3),
           ),
         ],
@@ -498,14 +504,6 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (widget.pedidoReferencia != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(
-                widget.pedidoReferencia!,
-                style: const TextStyle(color: Color(0xFF5D201C)),
-              ),
-            ),
           if (widget.produtoReferencia case final produto?)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -559,8 +557,8 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
                       child: TextButton(
                         onPressed:
                             _conectado && (_pendenteId == null || _envioIncerto)
-                            ? _enviar
-                            : null,
+                                ? _enviar
+                                : null,
                         child: const Text('Enviar produto à loja'),
                       ),
                     ),
@@ -601,12 +599,10 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
                 color: const Color(0xFFFF6961),
                 shape: const CircleBorder(),
                 child: IconButton(
-                  tooltip: _envioIncerto
-                      ? 'Reenviar mensagem'
-                      : 'Enviar mensagem',
-                  onPressed: _pendenteId != null && !_envioIncerto
-                      ? null
-                      : _enviar,
+                  tooltip:
+                      _envioIncerto ? 'Reenviar mensagem' : 'Enviar mensagem',
+                  onPressed:
+                      _pendenteId != null && !_envioIncerto ? null : _enviar,
                   icon: Icon(
                     _envioIncerto ? Icons.refresh : Icons.send_rounded,
                     color: Colors.white,

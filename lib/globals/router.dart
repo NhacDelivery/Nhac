@@ -132,8 +132,7 @@ final GoRouter appRouter = GoRouter(
 
     final bool estaAutenticado = authServiceRoteador.isAuthenticated;
 
-    final bool telaPublica =
-        state.matchedLocation == '/' ||
+    final bool telaPublica = state.matchedLocation == '/' ||
         state.matchedLocation == '/splash' ||
         state.matchedLocation == '/bem-vindo' ||
         state.matchedLocation == '/bem-vindo-motoca' ||
@@ -146,7 +145,7 @@ final GoRouter appRouter = GoRouter(
 
     final bool noMeioDoCadastro =
         state.matchedLocation == '/verificacao_numero' ||
-        state.matchedLocation.startsWith('/cadastro');
+            state.matchedLocation.startsWith('/cadastro');
 
     if (!estaAutenticado && !telaPublica) {
       return '/bem-vindo';
@@ -280,7 +279,6 @@ final GoRouter appRouter = GoRouter(
         child: const EditarSenhaPage(),
       ),
     ),
-
     GoRoute(
       path: '/enderecos-salvos',
       pageBuilder: (context, state) => _buildSlideRightToLeftPage(
@@ -431,7 +429,6 @@ final GoRouter appRouter = GoRouter(
           child: ChatLojaPage(
             lojaId: (dados['lojaId'] ?? '').toString(),
             lojaNome: (dados['lojaNome'] ?? 'Loja').toString(),
-            pedidoReferencia: dados['pedidoReferencia'] as String?,
             produtoReferencia: dados['produto'] is ProdutosModel
                 ? dados['produto'] as ProdutosModel
                 : null,

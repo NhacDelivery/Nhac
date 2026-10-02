@@ -18,6 +18,7 @@ void main() {
 
   setUp(() {
     dio = MockDio();
+    when(() => dio.options).thenReturn(BaseOptions());
     repository = PedidoRepository(dio: dio);
   });
 
@@ -43,11 +44,21 @@ void main() {
 
   test('pedido envia coordenadas do endereço usadas no frete', () {
     final pedido = CriarPedidoRequest(
-      lojaId: 'loja1', formaPagamento: 'PIX',
-      enderecoEntrega: EnderecoModel(rua: 'Rua A', numero: '1', bairro: 'Centro',
-          cidade: 'Osasco', estado: 'SP', cep: '06000-000'),
-      entregaLatitude: -23.5, entregaLongitude: -46.7,
-      itens: const [CriarPedidoItemRequest(produtoId: 'prod1', nome: 'Produto', quantidade: 1)],
+      lojaId: 'loja1',
+      formaPagamento: 'PIX',
+      enderecoEntrega: EnderecoModel(
+          rua: 'Rua A',
+          numero: '1',
+          bairro: 'Centro',
+          cidade: 'Osasco',
+          estado: 'SP',
+          cep: '06000-000'),
+      entregaLatitude: -23.5,
+      entregaLongitude: -46.7,
+      itens: const [
+        CriarPedidoItemRequest(
+            produtoId: 'prod1', nome: 'Produto', quantidade: 1)
+      ],
     );
     final endereco = pedido.toMap()['enderecoEntrega'] as Map<String, dynamic>;
     expect(endereco['latitude'], -23.5);
@@ -170,23 +181,29 @@ void main() {
 
   test('pedido ativo 204 não usa histórico paginado', () async {
     when(() => dio.get('/pedidos/ativo')).thenAnswer((_) async => Response(
-      requestOptions: RequestOptions(path: '/pedidos/ativo'), statusCode: 204,
-    ));
+          requestOptions: RequestOptions(path: '/pedidos/ativo'),
+          statusCode: 204,
+        ));
     expect(await repository.buscarPedidoAtivo(), isNull);
     verify(() => dio.get('/pedidos/ativo')).called(1);
   });
 
   test('pagamento pendente recupera o mesmo PIX e prazo', () async {
-    when(() => dio.get('/pedidos/ped1/pagamento')).thenAnswer((_) async => Response(
-      requestOptions: RequestOptions(path: '/pedidos/ped1/pagamento'),
-      statusCode: 200,
-      data: {
-        'pedidoId': 'ped1', 'formaPagamento': 'PIX', 'status': 'PENDENTE',
-        'valorTotal': 25.5, 'expiraEm': '2026-09-29T13:00:00Z',
-        'pixCopiaECola': '000201...', 'qrCodeUrl': '000201...',
-        'simulacaoDisponivel': true,
-      },
-    ));
+    when(() => dio.get('/pedidos/ped1/pagamento'))
+        .thenAnswer((_) async => Response(
+              requestOptions: RequestOptions(path: '/pedidos/ped1/pagamento'),
+              statusCode: 200,
+              data: {
+                'pedidoId': 'ped1',
+                'formaPagamento': 'PIX',
+                'status': 'PENDENTE',
+                'valorTotal': 25.5,
+                'expiraEm': '2026-09-29T13:00:00Z',
+                'pixCopiaECola': '000201...',
+                'qrCodeUrl': '000201...',
+                'simulacaoDisponivel': true,
+              },
+            ));
     final pagamento = await repository.buscarPagamento('ped1');
     expect(pagamento.pixCopiaECola, '000201...');
     expect(pagamento.valorTotal, 25.5);
@@ -194,14 +211,18 @@ void main() {
   });
 
   test('409 PEDIDO_ATIVO expõe o pedido para recuperar o fluxo', () async {
-    when(() => dio.post('/pedidos', data: any(named: 'data'),
+    when(() => dio.post('/pedidos',
+        data: any(named: 'data'),
         options: any(named: 'options'))).thenThrow(DioException(
       requestOptions: RequestOptions(path: '/pedidos'),
-      response: Response(requestOptions: RequestOptions(path: '/pedidos'),
-        statusCode: 409, data: {
-          'error': 'PEDIDO_ATIVO', 'message': 'Finalize seu pedido atual.',
-          'details': {'pedidoId': 'ped-antigo'},
-        }),
+      response: Response(
+          requestOptions: RequestOptions(path: '/pedidos'),
+          statusCode: 409,
+          data: {
+            'error': 'PEDIDO_ATIVO',
+            'message': 'Finalize seu pedido atual.',
+            'details': {'pedidoId': 'ped-antigo'},
+          }),
     ));
     try {
       await repository.finalizarPedido(request(), idempotencyKey: 'idem-2');
@@ -212,13 +233,15 @@ void main() {
     }
   });
 
-  test('POST /pedidos/{id}/avaliacao-entregador envia nota e comentário', () async {
+  test('POST /pedidos/{id}/avaliacao-entregador envia nota e comentário',
+      () async {
     when(() => dio.post(
           '/pedidos/ped-123/avaliacao-entregador',
           data: any(named: 'data'),
         )).thenAnswer(
       (_) async => Response(
-        requestOptions: RequestOptions(path: '/pedidos/ped-123/avaliacao-entregador'),
+        requestOptions:
+            RequestOptions(path: '/pedidos/ped-123/avaliacao-entregador'),
         statusCode: 201,
       ),
     );
@@ -231,10 +254,12 @@ void main() {
         )).called(1);
   });
 
-  test('GET /pedidos/{id}/avaliacao-entregador retorna modelo em caso de 200', () async {
+  test('GET /pedidos/{id}/avaliacao-entregador retorna modelo em caso de 200',
+      () async {
     when(() => dio.get('/pedidos/ped-123/avaliacao-entregador')).thenAnswer(
       (_) async => Response(
-        requestOptions: RequestOptions(path: '/pedidos/ped-123/avaliacao-entregador'),
+        requestOptions:
+            RequestOptions(path: '/pedidos/ped-123/avaliacao-entregador'),
         statusCode: 200,
         data: {
           'id': 'aval-1',
@@ -252,12 +277,15 @@ void main() {
     expect(avaliacao.comentario, 'Muito rápido!');
   });
 
-  test('GET /pedidos/{id}/avaliacao-entregador retorna null em caso de 404', () async {
+  test('GET /pedidos/{id}/avaliacao-entregador retorna null em caso de 404',
+      () async {
     when(() => dio.get('/pedidos/ped-123/avaliacao-entregador')).thenThrow(
       DioException(
-        requestOptions: RequestOptions(path: '/pedidos/ped-123/avaliacao-entregador'),
+        requestOptions:
+            RequestOptions(path: '/pedidos/ped-123/avaliacao-entregador'),
         response: Response(
-          requestOptions: RequestOptions(path: '/pedidos/ped-123/avaliacao-entregador'),
+          requestOptions:
+              RequestOptions(path: '/pedidos/ped-123/avaliacao-entregador'),
           statusCode: 404,
         ),
       ),

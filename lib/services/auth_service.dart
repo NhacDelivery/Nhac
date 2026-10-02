@@ -206,6 +206,8 @@ class AuthService with ChangeNotifier {
       CartRepository().limparCarrinho(),
       LocalCacheService.limparTudo(),
       if (usuarioAnterior != null)
+        LocalCacheService.removerPedidosHome(usuarioAnterior),
+      if (usuarioAnterior != null)
         LocalCacheService.removerPedidoAtivo(usuarioAnterior),
       if (usuarioAnterior != null)
         LocalCacheService.removerSnapshotPedido(usuarioAnterior),

@@ -1,3 +1,4 @@
+import 'package:nhac/services/shared_get.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/models/produto/produtos.dart';
@@ -11,30 +12,17 @@ class ProdutoRepository {
 
   Future<List<ProdutosModel>> buscarPromocoes() async {
     try {
-      final promocoes = <ProdutosModel>[];
-      for (var pagina = 0; pagina < 20; pagina++) {
-        final response = await _dio.get(
-          '/produtos',
-          queryParameters: {'page': pagina, 'size': 50},
-        );
-        final List<dynamic> conteudo = extrairLista(response.data);
-        promocoes.addAll(
-          conteudo
-              .map((map) => ProdutosModel.fromMap(map))
-              .where(
-                (produto) =>
-                    produto.percentualDesconto > 0 &&
-                    produto.preco < 20 &&
-                    produto.lojaAberta,
-              ),
-        );
-        if (promocoes.length >= 10 ||
-            conteudo.isEmpty ||
-            (response.data is Map && response.data['last'] != false)) {
-          break;
-        }
-      }
-      return promocoes;
+      final response = await SharedGet.forClient(_dio).get(
+        _dio,
+        '/produtos/promocoes',
+        queryParameters: {'page': 0, 'size': 10, 'sort': 'id,asc'},
+        validity: const Duration(minutes: 2),
+      );
+      return extrairLista(response.data)
+          .map((map) => ProdutosModel.fromMap(map))
+          .where(
+              (p) => p.percentualDesconto > 0 && p.preco < 20 && p.lojaAberta)
+          .toList();
     } catch (e) {
       throw Exception("Erro ao buscar promoções: $e");
     }
@@ -42,7 +30,8 @@ class ProdutoRepository {
 
   Future<List<ProdutosModel>> buscarNecessidades() async {
     try {
-      final response = await _dio.get(
+      final response = await SharedGet.forClient(_dio).get(
+        _dio,
         '/produtos',
         queryParameters: {'size': 50},
       );
@@ -55,7 +44,8 @@ class ProdutoRepository {
 
   Future<List<ProdutosModel>> buscarPorCategoria(String categoria) async {
     try {
-      final response = await _dio.get(
+      final response = await SharedGet.forClient(_dio).get(
+        _dio,
         '/produtos',
         queryParameters: {'categoriaMenu': categoria, 'size': 50},
       );
@@ -72,7 +62,8 @@ class ProdutoRepository {
       final produtos = <ProdutosModel>[];
       var pagina = 0;
       while (true) {
-        final response = await _dio.get(
+        final response = await SharedGet.forClient(_dio).get(
+          _dio,
           '/produtos',
           queryParameters: {
             'lojaId': lojaId,
@@ -97,7 +88,8 @@ class ProdutoRepository {
 
   Future<List<ProdutosModel>> buscarProdutosPorNome(String termo) async {
     try {
-      final response = await _dio.get(
+      final response = await SharedGet.forClient(_dio).get(
+        _dio,
         '/produtos',
         queryParameters: {'nome': termo, 'size': 20},
       );

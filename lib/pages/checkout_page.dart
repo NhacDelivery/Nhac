@@ -102,10 +102,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
           endereco.cep,
         ].where((v) => v.trim().isNotEmpty).join(', ');
         final locais = await locationFromAddress(enderecoCompleto);
-        if (locais.isEmpty)
-          throw StateError('Endereço não encontrado no mapa.');
+        if (locais.length != 1) {
+          throw StateError(
+              'Não foi possível identificar um único local. Revise rua, número, cidade e CEP do endereço.');
+        }
         latitude = locais.first.latitude;
         longitude = locais.first.longitude;
+      }
+      if (!latitude.isFinite ||
+          !longitude.isFinite ||
+          latitude.abs() > 90 ||
+          longitude.abs() > 180 ||
+          (latitude == 0 && longitude == 0)) {
+        throw StateError(
+            'O serviço de endereço não retornou coordenadas válidas. Revise o endereço.');
       }
       final resposta = await LojaRepository().calcularFrete(
         cartProvider.lojaId,
@@ -124,7 +134,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       debugPrint('Não foi possível recalcular o frete: $e');
       if (!mounted || versao != _freteVersao) return;
       context.showError(
-        'Não foi possível confirmar o frete. Seu endereço foi mantido. Tente calcular novamente.',
+        'Não foi possível confirmar o endereço e o frete: ${e.toString().replaceFirst('Bad state: ', '')}',
       );
       // Não apresenta a taxa base como se fosse um frete calculado.
       setState(() {
@@ -232,9 +242,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 final enderecoAtualizado = endereco.copyWith(numero: numero);
 
                 await context.read<EnderecoProvider>().atualizarEndereco(
-                  enderecoAtualizado.id,
-                  enderecoAtualizado,
-                );
+                      enderecoAtualizado.id,
+                      enderecoAtualizado,
+                    );
 
                 if (!mounted) return;
                 Navigator.pop(context);
@@ -279,9 +289,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final subtotal = cartProvider.valorTotal;
     final frete = _taxaFrete;
 
-    final desconto = _subtotalValidado == subtotal
-        ? (_cupom?.descontoAplicado ?? 0)
-        : 0.0;
+    final desconto =
+        _subtotalValidado == subtotal ? (_cupom?.descontoAplicado ?? 0) : 0.0;
     final total = subtotal + frete - desconto;
     final tempoEntrega = _tempoEstimadoMinutos == null
         ? 'Tempo calculado no fechamento'
@@ -544,8 +553,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             _cupom == null
                                 ? 'Veja seus cupons e economize neste pedido'
                                 : (_subtotalValidado == subtotal
-                                      ? 'Desconto de ${currencyFormat.format(desconto)} aplicado'
-                                      : 'Carrinho alterado. Selecione o cupom novamente.'),
+                                    ? 'Desconto de ${currencyFormat.format(desconto)} aplicado'
+                                    : 'Carrinho alterado. Selecione o cupom novamente.'),
                             style: TextStyle(
                               fontSize: 12.sp,
                               color: const Color(
@@ -567,9 +576,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         onPressed: _isSubmitting
                             ? null
                             : () => setState(() {
-                                _cupom = null;
-                                _subtotalValidado = null;
-                              }),
+                                  _cupom = null;
+                                  _subtotalValidado = null;
+                                }),
                         icon: const Icon(
                           Icons.close_rounded,
                           color: Color(0xFFFF6961),
@@ -826,9 +835,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               Icon(
                 icon,
                 size: 24.r,
-                color: isSelected
-                    ? const Color(0xFFFF6961)
-                    : Colors.grey.shade500,
+                color:
+                    isSelected ? const Color(0xFFFF6961) : Colors.grey.shade500,
               ),
               SizedBox(width: 16.w),
               Expanded(
@@ -836,12 +844,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   title,
                   style: TextStyle(
                     fontSize: 15.sp,
-                    fontWeight: isSelected
-                        ? FontWeight.w600
-                        : FontWeight.normal,
-                    color: isSelected
-                        ? const Color(0xFFFF6961)
-                        : Colors.black87,
+                    fontWeight:
+                        isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color:
+                        isSelected ? const Color(0xFFFF6961) : Colors.black87,
                   ),
                 ),
               ),
@@ -1062,20 +1068,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
           .toList(),
     );
 
-    // O POST também aplica essa regra sob lock; esta consulta orienta o usuário
-    // antes da tentativa e não serve como autorização para criar outro pedido.
-    try {
-      final ativo = await PedidoRepository().buscarPedidoAtivo();
-      if (!context.mounted) return;
-      if (ativo != null) {
-        setState(() => _isSubmitting = false);
-        _mostrarAvisoPedidoAtivo(ativo.id);
-        return;
-      }
-    } catch (_) {
-      /* O POST ainda garante a regra no servidor. */
-    }
-
     final navigator = Navigator.of(context, rootNavigator: true);
 
     try {
@@ -1116,24 +1108,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
       navigator.pop(); // Close loading
       if (!context.mounted) return;
       setState(() => _isSubmitting = false);
-
-      if (e.code == 'PEDIDO_ATIVO' || e.pedidoAtivoId != null) {
-        final id = e.pedidoAtivoId;
-        if (id != null && id.isNotEmpty) {
-          _mostrarAvisoPedidoAtivo(id);
-          return;
-        }
-        try {
-          final ativo = await PedidoRepository().buscarPedidoAtivo();
-          if (ativo != null && context.mounted) {
-            _mostrarAvisoPedidoAtivo(ativo.id);
-            return;
-          }
-        } catch (_) {}
-        if (!context.mounted) return;
-        context.showError('Finalize seu pedido atual antes de fazer outro.');
-        return;
-      }
 
       if (e.produtoId != null) {
         cartProvider.marcarItemComoEsgotado(e.produtoId!);
@@ -1180,36 +1154,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
-  }
-
-  void _mostrarAvisoPedidoAtivo(String pedidoId) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16.r),
-        ),
-        title: const Text(
-          'Pedido em andamento',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        content: const Text('Finalize seu pedido atual antes de fazer outro.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Fechar'),
-          ),
-          FilledButton(
-            key: const Key('botao-ver-pedido-atual'),
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              context.go('/rastreio?pedidoId=$pedidoId');
-            },
-            child: const Text('Ver pedido atual'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _exibirSucessoEVoltar(String idGerado, CartProvider cartProvider) {
@@ -1480,8 +1424,8 @@ class _AddressSelectionSheet extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   onTap: () async {
                     await context.read<EnderecoProvider>().definirComoPadrao(
-                      endereco.id,
-                    );
+                          endereco.id,
+                        );
                     if (context.mounted) Navigator.pop(context);
                   },
                   leading: Container(

@@ -47,7 +47,7 @@ Exception mapException(Object error) {
       if (data.containsKey('message')) {
         return AppException(
           data['message'].toString(),
-          code: data['error']?.toString(),
+          code: (data['errorCode'] ?? data['error'])?.toString(),
         );
       }
     }

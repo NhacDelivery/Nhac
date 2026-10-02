@@ -20,13 +20,17 @@ class HomeOrderTrackingCard extends StatefulWidget {
   const HomeOrderTrackingCard({
     super.key,
     this.isActive = true,
+    this.initialPedido,
     this.pedidoRepository,
     this.socketService,
+    this.onPedidoChanged,
   });
 
   final bool isActive;
+  final PedidoModel? initialPedido;
   final PedidoRepository? pedidoRepository;
   final PedidoStatusSocketService? socketService;
+  final ValueChanged<PedidoModel>? onPedidoChanged;
 
   @override
   State<HomeOrderTrackingCard> createState() => _HomeOrderTrackingCardState();
@@ -51,7 +55,11 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   ConnectivityService? _connectivity;
   bool _wasOnline = true;
   bool _refreshing = false;
-  bool _refreshPending = false;
+  bool _eventPending = false;
+  Timer? _eventTimer;
+  bool _visible = true;
+  bool _foreground = true;
+  bool get _active => widget.isActive && _visible && _foreground;
   int _generation = 0;
   late AnimationController _pulseController;
 
@@ -66,7 +74,13 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     )..repeat(reverse: true);
     _usuarioId = context.read<AuthService>().usuarioId;
     _statusSubscription = _socket.status.listen((novoStatus) async {
+      if (!mounted || !_active) return;
       final pedido = _activePedido;
+      if (pedido != null && pedido.status != novoStatus) {
+        _generation++;
+        _eventPending = _refreshing;
+        _repository.invalidarPedido(pedido.id);
+      }
       if (pedido != null && _usuarioId != null && pedido.status != novoStatus) {
         await NotificacaoHistoricoService.registrarStatus(
           _usuarioId!,
@@ -74,10 +88,12 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
           novoStatus,
         );
       }
-      if (novoStatus == StatusPedido.entregue && _activePedido != null) {
+      if (widget.initialPedido == null &&
+          novoStatus == StatusPedido.entregue &&
+          _activePedido != null) {
         final pedidoId = _activePedido!.id;
         final visto = await LocalCacheService.isPedidoEntregueVisto(pedidoId);
-        if (!visto && mounted) {
+        if (!visto && mounted && _active) {
           context.push('/pedido-entregue?pedidoId=$pedidoId');
         }
       }
@@ -88,14 +104,20 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       if (connected) _loadActiveOrder();
     });
     _fallbackTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (widget.isActive && _activePedido != null && !_socketConectado)
-        _loadActiveOrder();
+      if (widget.initialPedido == null &&
+          _active &&
+          _activePedido != null &&
+          !_socketConectado) _loadActiveOrder();
     });
     _connectivity = context.read<ConnectivityService>();
     _wasOnline = _connectivity!.isOnline;
     _connectivity!.addListener(_onConnectivityChanged);
     WidgetsBinding.instance.addObserver(this);
-    _restaurarEAtualizar();
+    if (widget.initialPedido != null) {
+      _showOrder(widget.initialPedido!, persistir: false);
+    } else {
+      _restaurarEAtualizar();
+    }
   }
 
   @override
@@ -108,16 +130,43 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   @override
   void didUpdateWidget(covariant HomeOrderTrackingCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isActive && !oldWidget.isActive) _loadActiveOrder();
+    if (widget.initialPedido != null &&
+        widget.initialPedido != oldWidget.initialPedido) {
+      _showOrder(widget.initialPedido!, persistir: false);
+    }
+    if (!_active) {
+      _socketPedidoId = null;
+      _socket.desconectar();
+    } else if (!oldWidget.isActive) {
+      if (_activePedido != null) _showOrder(_activePedido!, persistir: false);
+      if (widget.initialPedido == null) _loadActiveOrder();
+    }
   }
 
   @override
-  void didPopNext() => _loadActiveOrder();
+  void didPushNext() {
+    _visible = false;
+    _socketPedidoId = null;
+    _socket.desconectar();
+  }
+
+  @override
+  void didPopNext() {
+    _visible = true;
+    if (_activePedido != null) _showOrder(_activePedido!, persistir: false);
+    if (widget.initialPedido == null) _loadActiveOrder();
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && widget.isActive)
-      _loadActiveOrder();
+    _foreground = state == AppLifecycleState.resumed;
+    if (_active) {
+      if (_activePedido != null) _showOrder(_activePedido!, persistir: false);
+      if (widget.initialPedido == null) _loadActiveOrder();
+    } else {
+      _socketPedidoId = null;
+      _socket.desconectar();
+    }
   }
 
   void _onConnectivityChanged() {
@@ -147,16 +196,14 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     _statusSubscription?.cancel();
     _connectionSubscription?.cancel();
     _fallbackTimer?.cancel();
+    _eventTimer?.cancel();
     _socket.dispose();
     _pulseController.dispose();
     super.dispose();
   }
 
   Future<void> _loadActiveOrder() async {
-    if (_refreshing) {
-      _refreshPending = true;
-      return;
-    }
+    if (_refreshing || !_active || !mounted) return;
     final usuarioId = context.read<AuthService>().usuarioId;
     if (usuarioId == null) return;
     if (_usuarioId != usuarioId) {
@@ -173,8 +220,13 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
         _loading = _activePedido == null;
       });
     try {
-      final full = await _repository.buscarPedidoAtivo();
-      if (!mounted || generation != _generation) return;
+      final full = widget.initialPedido == null
+          ? await _repository.buscarPedidoAtivo()
+          : await _repository.buscarPedidoPorId(widget.initialPedido!.id);
+      if (!mounted ||
+          !_active ||
+          generation != _generation ||
+          context.read<AuthService>().usuarioId != usuarioId) return;
       final anterior = _activePedido;
       if (full != null &&
           (!full.status.terminal ||
@@ -199,14 +251,20 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
           }
         } catch (_) {}
       }
-      if (!mounted || generation != _generation) return;
+      if (!mounted ||
+          !_active ||
+          generation != _generation ||
+          context.read<AuthService>().usuarioId != usuarioId) return;
+      if (full != null) widget.onPedidoChanged?.call(full);
       if (full != null && !full.status.terminal) {
         _showOrder(full);
-        await LocalCacheService.salvarPedidoAtivo(usuarioId, full.id);
+        if (widget.initialPedido == null)
+          await LocalCacheService.salvarPedidoAtivo(usuarioId, full.id);
       } else {
-        if (full?.status == StatusPedido.entregue) {
+        if (widget.initialPedido == null &&
+            full?.status == StatusPedido.entregue) {
           final visto = await LocalCacheService.isPedidoEntregueVisto(full!.id);
-          if (!visto && mounted) {
+          if (!visto && mounted && _active) {
             context.push('/pedido-entregue?pedidoId=${full.id}');
           }
         }
@@ -214,8 +272,10 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
           _activePedido = null;
           _loading = false;
         });
-        await LocalCacheService.removerPedidoAtivo(usuarioId);
-        await LocalCacheService.removerSnapshotPedido(usuarioId);
+        if (widget.initialPedido == null) {
+          await LocalCacheService.removerPedidoAtivo(usuarioId);
+          await LocalCacheService.removerSnapshotPedido(usuarioId);
+        }
         _socketPedidoId = null;
         await _socket.desconectar();
       }
@@ -228,9 +288,11 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       }
     } finally {
       _refreshing = false;
-      if (_refreshPending && mounted) {
-        _refreshPending = false;
-        _loadActiveOrder();
+      if (_eventPending && mounted && _active) {
+        _eventPending = false;
+        _eventTimer?.cancel();
+        _eventTimer =
+            Timer(const Duration(milliseconds: 300), _loadActiveOrder);
       }
     }
   }
@@ -242,12 +304,12 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       _error = null;
     });
     final usuarioId = _usuarioId;
-    if (usuarioId != null && persistir)
+    if (usuarioId != null && persistir && widget.initialPedido == null)
       LocalCacheService.salvarSnapshotPedido(usuarioId, pedido);
-    if (_socketPedidoId != pedido.id) {
+    if (_active && _socketPedidoId != pedido.id) {
       _socketPedidoId = pedido.id;
       _socket.desconectar().then((_) {
-        if (!mounted || _socketPedidoId != pedido.id) return;
+        if (!mounted || !_active || _socketPedidoId != pedido.id) return;
         _socket.conectar(pedido.id);
       });
     }
@@ -255,16 +317,13 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     _tempoLojaPedidoId = pedido.id;
     _tempoLojaMin = null;
     _tempoLojaMax = null;
-    LojaRepository()
-        .buscarLoja(pedido.lojaId)
-        .then((loja) {
-          if (!mounted || _activePedido?.id != pedido.id) return;
-          setState(() {
-            _tempoLojaMin = loja?.dadosOperacionais?.tempoEntregaMin;
-            _tempoLojaMax = loja?.dadosOperacionais?.tempoEntregaMax;
-          });
-        })
-        .catchError((_) {});
+    LojaRepository().buscarLoja(pedido.lojaId).then((loja) {
+      if (!mounted || _activePedido?.id != pedido.id) return;
+      setState(() {
+        _tempoLojaMin = loja?.dadosOperacionais?.tempoEntregaMin;
+        _tempoLojaMax = loja?.dadosOperacionais?.tempoEntregaMax;
+      });
+    }).catchError((_) {});
   }
 
   String _estimativa(StatusPedido status) {
@@ -301,7 +360,7 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   @override
   Widget build(BuildContext context) {
     if (_activePedido == null) {
-      if (!_loading && _error == null) return const SizedBox.shrink();
+      if (_loading || _error == null) return const SizedBox.shrink();
       return Padding(
         padding: EdgeInsets.symmetric(horizontal: 20.w),
         child: Card(
@@ -349,12 +408,10 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     const totalStages = 4;
     final progress = stage / totalStages;
 
-    final imageUrl = pedido.itens.isNotEmpty
-        ? pedido.itens.first.imagemUrl
-        : '';
+    final imageUrl =
+        pedido.itens.isNotEmpty ? pedido.itens.first.imagemUrl : '';
 
-    final pagamentoPendente =
-        pedido.status == StatusPedido.pendente &&
+    final pagamentoPendente = pedido.status == StatusPedido.pendente &&
         (pedido.formaPagamento.toUpperCase() == 'PIX' ||
             pedido.formaPagamento.toUpperCase() == 'CARTAO' ||
             pedido.formaPagamento.toUpperCase() == 'STRIPE' ||

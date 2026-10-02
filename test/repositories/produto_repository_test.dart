@@ -11,6 +11,7 @@ void main() {
 
   setUp(() {
     dio = MockDio();
+    when(() => dio.options).thenReturn(BaseOptions());
     repository = ProdutoRepository(dio: dio);
   });
 
@@ -90,7 +91,8 @@ void main() {
 
   test('promoções exigem desconto real mesmo para produto barato', () async {
     when(
-      () => dio.get('/produtos', queryParameters: {'page': 0, 'size': 50}),
+      () => dio.get('/produtos/promocoes',
+          queryParameters: {'page': 0, 'size': 10, 'sort': 'id,asc'}),
     ).thenAnswer(
       (_) async => Response(
         requestOptions: RequestOptions(path: '/produtos'),

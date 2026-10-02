@@ -16,9 +16,13 @@ import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/services/pedido_status_socket_service.dart';
 
 class MockPedidoRepository extends Mock implements PedidoRepository {}
+
 class MockLojaRepository extends Mock implements LojaRepository {}
+
 class MockEntregaRepository extends Mock implements EntregaRepository {}
-class MockPedidoStatusSocketService extends Mock implements PedidoStatusSocketService {}
+
+class MockPedidoStatusSocketService extends Mock
+    implements PedidoStatusSocketService {}
 
 void main() {
   late MockPedidoRepository mockPedidoRepository;
@@ -37,6 +41,7 @@ void main() {
     mockEntregaRepository = MockEntregaRepository();
     mockSocket = MockPedidoStatusSocketService();
 
+    when(() => mockSocket.conectado).thenAnswer((_) => const Stream.empty());
     when(() => mockSocket.status).thenAnswer((_) => const Stream.empty());
     when(() => mockSocket.conectar(any())).thenAnswer((_) async {});
     when(() => mockSocket.dispose()).thenReturn(null);
@@ -47,9 +52,12 @@ void main() {
       categoria: 'Pizzaria',
       imagemUrl: '',
     );
-    when(() => mockLojaRepository.buscarLoja(any())).thenAnswer((_) async => loja);
-    when(() => mockEntregaRepository.buscarRota(any())).thenThrow(Exception('sem rota'));
-    when(() => mockEntregaRepository.buscarLocalizacaoEntregador(any())).thenAnswer((_) async => null);
+    when(() => mockLojaRepository.buscarLoja(any()))
+        .thenAnswer((_) async => loja);
+    when(() => mockEntregaRepository.buscarRota(any()))
+        .thenThrow(Exception('sem rota'));
+    when(() => mockEntregaRepository.buscarLocalizacaoEntregador(any()))
+        .thenAnswer((_) async => null);
   });
 
   final endereco = EnderecoModel(
@@ -122,50 +130,60 @@ void main() {
       totalAvaliacoes: 12,
     );
 
-    testWidgets('Preparando com entregador: exibe aceitou sua entrega e dados do entregador', (tester) async {
+    testWidgets(
+        'Preparando com entregador: exibe aceitou sua entrega e dados do entregador',
+        (tester) async {
       setupScreen(tester);
       final pedido = criarPedido(
         status: StatusPedido.preparando,
         entregador: entregador,
       );
-      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100')).thenAnswer((_) async => pedido);
+      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100'))
+          .thenAnswer((_) async => pedido);
 
       await tester.pumpWidget(createWidgetUnderTest('ped-100'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Carlos S. aceitou sua entrega'), findsOneWidget);
-      expect(find.byKey(const Key('cartao-entregador-rastreio')), findsOneWidget);
+      expect(
+          find.byKey(const Key('cartao-entregador-rastreio')), findsOneWidget);
       expect(find.text('Carlos S.'), findsOneWidget);
       expect(find.textContaining('CG 160'), findsOneWidget);
       expect(find.textContaining('ABC1D23'), findsOneWidget);
       expect(find.text('4.8 (12)'), findsOneWidget);
     });
 
-    testWidgets('Saiu para entrega com entregador: exibe está a caminho', (tester) async {
+    testWidgets('Saiu para entrega com entregador: exibe está a caminho',
+        (tester) async {
       setupScreen(tester);
       final pedido = criarPedido(
         status: StatusPedido.saiuEntrega,
         codigoEntrega: '1234',
         entregador: entregador,
       );
-      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100')).thenAnswer((_) async => pedido);
+      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100'))
+          .thenAnswer((_) async => pedido);
 
       await tester.pumpWidget(createWidgetUnderTest('ped-100'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Carlos S. está a caminho'), findsOneWidget);
-      expect(find.byKey(const Key('cartao-entregador-rastreio')), findsOneWidget);
+      expect(
+          find.byKey(const Key('cartao-entregador-rastreio')), findsOneWidget);
     });
 
-    testWidgets('Sem entregador: mantém status padrão e não exibe cartão de entregador', (tester) async {
+    testWidgets(
+        'Sem entregador: mantém status padrão e não exibe cartão de entregador',
+        (tester) async {
       setupScreen(tester);
       final pedido = criarPedido(
         status: StatusPedido.preparando,
         entregador: null,
       );
-      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100')).thenAnswer((_) async => pedido);
+      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100'))
+          .thenAnswer((_) async => pedido);
 
       await tester.pumpWidget(createWidgetUnderTest('ped-100'));
       await tester.pump();

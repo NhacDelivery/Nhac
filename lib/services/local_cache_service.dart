@@ -28,20 +28,33 @@ class LocalCacheService {
   }
 
   static String _keyPedidoAtivo(String usuarioId) => 'pedido_ativo_$usuarioId';
-  static String _keySnapshotPedido(String usuarioId) => 'pedido_snapshot_$usuarioId';
+  static String _keySnapshotPedido(String usuarioId) =>
+      'pedido_snapshot_$usuarioId';
   static const Duration retencaoHome = Duration(minutes: 15);
   static const String _keyCatalogoHome = 'catalogo_home_v1';
 
   static Future<void> salvarCatalogoHome() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyCatalogoHome, jsonEncode({
-      'salvoEm': DateTime.now().toUtc().toIso8601String(),
-      'necessidades': produtosNecessidadesCache?.cast<ProdutosModel>().map((p) => p.toMap()).toList() ?? [],
-      'promocoes': produtosPromocaoCache?.cast<ProdutosModel>().map((p) => p.toMap()).toList() ?? [],
-      'lojas': lojasCache?.cast<LojasModel>().map((l) => l.toMap()).toList() ?? [],
-      'paginaLojas': currentPageLojasCache,
-      'maisLojas': hasMoreLojasCache,
-    }));
+    await prefs.setString(
+        _keyCatalogoHome,
+        jsonEncode({
+          'salvoEm': DateTime.now().toUtc().toIso8601String(),
+          'necessidades': produtosNecessidadesCache
+                  ?.cast<ProdutosModel>()
+                  .map((p) => p.toMap())
+                  .toList() ??
+              [],
+          'promocoes': produtosPromocaoCache
+                  ?.cast<ProdutosModel>()
+                  .map((p) => p.toMap())
+                  .toList() ??
+              [],
+          'lojas':
+              lojasCache?.cast<LojasModel>().map((l) => l.toMap()).toList() ??
+                  [],
+          'paginaLojas': currentPageLojasCache,
+          'maisLojas': hasMoreLojasCache,
+        }));
   }
 
   static Future<void> restaurarCatalogoHome() async {
@@ -57,11 +70,16 @@ class LocalCacheService {
         return;
       }
       produtosNecessidadesCache = (data['necessidades'] as List)
-          .map((p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map))).toList();
+          .map(
+              (p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map)))
+          .toList();
       produtosPromocaoCache = (data['promocoes'] as List)
-          .map((p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map))).toList();
+          .map(
+              (p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map)))
+          .toList();
       lojasCache = (data['lojas'] as List)
-          .map((l) => LojasModel.fromMap(Map<String, dynamic>.from(l as Map))).toList();
+          .map((l) => LojasModel.fromMap(Map<String, dynamic>.from(l as Map)))
+          .toList();
       currentPageLojasCache = (data['paginaLojas'] as num).toInt();
       hasMoreLojasCache = data['maisLojas'] == true;
       ultimaAtualizacaoHome = salvoEm;
@@ -70,13 +88,16 @@ class LocalCacheService {
     }
   }
 
-  static Future<void> salvarSnapshotPedido(String usuarioId, PedidoModel pedido) async {
+  static Future<void> salvarSnapshotPedido(
+      String usuarioId, PedidoModel pedido) async {
     final prefs = await SharedPreferences.getInstance();
     final map = pedido.toMap()..remove('codigoEntrega');
-    await prefs.setString(_keySnapshotPedido(usuarioId), jsonEncode({
-      'salvoEm': DateTime.now().toUtc().toIso8601String(),
-      'pedido': map,
-    }));
+    await prefs.setString(
+        _keySnapshotPedido(usuarioId),
+        jsonEncode({
+          'salvoEm': DateTime.now().toUtc().toIso8601String(),
+          'pedido': map,
+        }));
   }
 
   static Future<PedidoModel?> carregarSnapshotPedido(String usuarioId) async {
@@ -90,8 +111,11 @@ class LocalCacheService {
         await prefs.remove(_keySnapshotPedido(usuarioId));
         return null;
       }
-      final pedido = PedidoModel.fromMap(Map<String, dynamic>.from(data['pedido'] as Map));
-      return pedido.usuarioId == usuarioId && !pedido.status.terminal ? pedido : null;
+      final pedido =
+          PedidoModel.fromMap(Map<String, dynamic>.from(data['pedido'] as Map));
+      return pedido.usuarioId == usuarioId && !pedido.status.terminal
+          ? pedido
+          : null;
     } catch (_) {
       await prefs.remove(_keySnapshotPedido(usuarioId));
       return null;
@@ -108,7 +132,8 @@ class LocalCacheService {
     return prefs.getString(_keyPedidoAtivo(usuarioId));
   }
 
-  static Future<void> salvarPedidoAtivo(String usuarioId, String pedidoId) async {
+  static Future<void> salvarPedidoAtivo(
+      String usuarioId, String pedidoId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyPedidoAtivo(usuarioId), pedidoId);
   }
@@ -118,7 +143,8 @@ class LocalCacheService {
     await prefs.remove(_keyPedidoAtivo(usuarioId));
   }
 
-  static String _keyPedidoEntregueVisto(String pedidoId) => 'pedido_entregue_visto_$pedidoId';
+  static String _keyPedidoEntregueVisto(String pedidoId) =>
+      'pedido_entregue_visto_$pedidoId';
 
   static Future<bool> isPedidoEntregueVisto(String pedidoId) async {
     try {
@@ -185,7 +211,6 @@ class LocalCacheService {
     }
   }
 
-
   static Future<void> salvarEnderecos(List<Map<String, dynamic>> lista) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -217,7 +242,6 @@ class LocalCacheService {
     }
   }
 
-
   static Future<void> salvarLocalizacaoGps(String endereco) async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -242,9 +266,11 @@ class LocalCacheService {
   static List<dynamic>? produtosNecessidadesCache;
   static List<dynamic>? produtosPromocaoCache;
   static DateTime? ultimaAtualizacaoHome;
-  static bool get cacheHomeVencido => ultimaAtualizacaoHome == null ||
-      DateTime.now().difference(ultimaAtualizacaoHome!) > const Duration(minutes: 2);
-  
+  static bool get cacheHomeVencido =>
+      ultimaAtualizacaoHome == null ||
+      DateTime.now().difference(ultimaAtualizacaoHome!) >
+          const Duration(minutes: 2);
+
   static List<dynamic>? lojasCache;
   static int currentPageLojasCache = 0;
   static bool hasMoreLojasCache = true;
@@ -258,7 +284,10 @@ class LocalCacheService {
     hasMoreLojasCache = true;
   }
 
-
+  static Future<void> removerPedidosHome(String usuarioId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('pedidos_home_$usuarioId');
+  }
 
   static Future<void> limparTudo() async {
     await Future.wait([
@@ -284,26 +313,30 @@ class LocalCacheService {
   static const String _keySearchResults = 'cache_search_results_v1';
   static const Duration retencaoBusca = Duration(minutes: 10);
 
-  static Future<void> salvarResultadosBusca(String termo, {
+  static Future<void> salvarResultadosBusca(
+    String termo, {
     required List<ProdutosModel> produtos,
     required List<LojasModel> lojas,
     required Map<String, bool> lojaAberta,
   }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_keySearchResults, jsonEncode({
-        'termo': termo.toLowerCase().trim(),
-        'salvoEm': DateTime.now().toUtc().toIso8601String(),
-        'produtos': produtos.map((p) => p.toMap()).toList(),
-        'lojas': lojas.map((l) => l.toMap()).toList(),
-        'lojaAberta': lojaAberta,
-      }));
+      await prefs.setString(
+          _keySearchResults,
+          jsonEncode({
+            'termo': termo.toLowerCase().trim(),
+            'salvoEm': DateTime.now().toUtc().toIso8601String(),
+            'produtos': produtos.map((p) => p.toMap()).toList(),
+            'lojas': lojas.map((l) => l.toMap()).toList(),
+            'lojaAberta': lojaAberta,
+          }));
     } catch (e) {
       debugPrint('LocalCacheService: erro ao salvar resultados de busca — $e');
     }
   }
 
-  static Future<Map<String, dynamic>?> carregarResultadosBusca(String termo) async {
+  static Future<Map<String, dynamic>?> carregarResultadosBusca(
+      String termo) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_keySearchResults);
@@ -319,7 +352,8 @@ class LocalCacheService {
       }
       return data;
     } catch (e) {
-      debugPrint('LocalCacheService: erro ao carregar resultados de busca — $e');
+      debugPrint(
+          'LocalCacheService: erro ao carregar resultados de busca — $e');
       return null;
     }
   }

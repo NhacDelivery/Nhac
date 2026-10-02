@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'package:nhac/services/home_order_route_observer.dart';
+import 'package:nhac/services/api_client.dart';
+import 'package:nhac/services/shared_get.dart';
 import 'package:nhac/components/home/home_category_chips.dart';
-import 'package:nhac/components/home/home_order_tracking_card.dart';
+import 'package:nhac/components/home/home_orders.dart';
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/utils/app_exceptions.dart' as api_errors;
 import 'package:nhac/models/loja/lojas.dart';
@@ -52,7 +55,30 @@ class HomeContent extends StatefulWidget {
   State<HomeContent> createState() => _HomeContentState();
 }
 
-class _HomeContentState extends State<HomeContent> {
+class _HomeContentState extends State<HomeContent>
+    with RouteAware, WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+  final _ordersKey = GlobalKey<HomeOrdersState>();
+  bool _visible = true;
+  bool _foreground = true;
+  bool get _active => widget.isActive && _visible && _foreground;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) homeOrderRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPushNext() => _visible = false;
+  @override
+  void didPopNext() => _visible = true;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) =>
+      _foreground = state == AppLifecycleState.resumed;
+
   String _currentAddress = 'Buscando localização...';
   static bool _jaCarregouUmaVez = false;
   late bool _isLoading;
@@ -87,10 +113,11 @@ class _HomeContentState extends State<HomeContent> {
     _produtoRepository = widget.produtoRepository ?? ProdutoRepository();
     _isLoading = !_jaCarregouUmaVez;
 
+    WidgetsBinding.instance.addObserver(this);
     _carregarCatalogoInicial();
     _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted &&
-          widget.isActive &&
+          _active &&
           LocalCacheService.cacheHomeVencido &&
           !_atualizandoCatalogo) {
         _atualizandoCatalogo = true;
@@ -119,6 +146,8 @@ class _HomeContentState extends State<HomeContent> {
 
   @override
   void dispose() {
+    homeOrderRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     _loadingTimer?.cancel();
     _refreshTimer?.cancel();
     super.dispose();
@@ -134,7 +163,14 @@ class _HomeContentState extends State<HomeContent> {
     await _carregarDadosIniciais();
   }
 
-  Future<void> _carregarDadosIniciais({bool isRefresh = false}) async {
+  Future<void>? _catalogoPendente;
+  Future<void> _carregarDadosIniciais({bool isRefresh = false}) {
+    return _catalogoPendente ??= _carregarCatalogo(isRefresh: isRefresh)
+        .whenComplete(() => _catalogoPendente = null);
+  }
+
+  Future<void> _carregarCatalogo({bool isRefresh = false}) async {
+    if (isRefresh) SharedGet.forClient(ApiClient().dio).invalidate();
     await Future.wait([
       _fetchProdutosNecessidades(isRefresh: isRefresh),
       _fetchProdutosPromocao(isRefresh: isRefresh),
@@ -249,6 +285,7 @@ class _HomeContentState extends State<HomeContent> {
 
     try {
       final produtos = await _produtoRepository.buscarNecessidades();
+      if (!mounted) return;
       LocalCacheService.produtosNecessidadesCache = List.from(produtos);
       if (mounted) {
         setState(() {
@@ -309,6 +346,7 @@ class _HomeContentState extends State<HomeContent> {
 
     try {
       final promocoes = await _produtoRepository.buscarPromocoes();
+      if (!mounted) return;
       LocalCacheService.produtosPromocaoCache = List.from(promocoes);
       if (mounted) {
         setState(() {
@@ -350,9 +388,8 @@ class _HomeContentState extends State<HomeContent> {
           _lojas.addAll(LocalCacheService.lojasCache!.cast<LojasModel>());
           _currentPageLojas = LocalCacheService.currentPageLojasCache;
           _hasMoreLojas = LocalCacheService.hasMoreLojasCache;
-          _estadoLojas = _lojas.isEmpty
-              ? EstadoConteudo.vazio
-              : EstadoConteudo.conteudo;
+          _estadoLojas =
+              _lojas.isEmpty ? EstadoConteudo.vazio : EstadoConteudo.conteudo;
         });
       }
       // Mesmo com cache, tenta buscar dados frescos em background
@@ -426,8 +463,8 @@ class _HomeContentState extends State<HomeContent> {
           _mensagemErroLojas = e is AppException
               ? e.message
               : e is api_errors.AppException
-              ? e.message
-              : 'Não foi possível carregar os restaurantes. Tente novamente.';
+                  ? e.message
+                  : 'Não foi possível carregar os restaurantes. Tente novamente.';
           // Se é refresh e já temos dados, mantém os dados (stale-while-revalidate)
           if (isRefresh && _lojas.isNotEmpty) {
             _estadoLojas = EstadoConteudo.conteudo;
@@ -565,37 +602,37 @@ class _HomeContentState extends State<HomeContent> {
                             LojaPage(loja: loja),
                         transitionsBuilder:
                             (context, animation, secondaryAnimation, child) {
-                              var curvedAnimation = CurvedAnimation(
-                                parent: animation,
-                                curve: Curves.easeOutQuart,
-                                reverseCurve: Curves.easeInQuart,
-                              );
+                          var curvedAnimation = CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutQuart,
+                            reverseCurve: Curves.easeInQuart,
+                          );
 
-                              var enterTween = Tween(
-                                begin: const Offset(1.0, 0.0),
-                                end: Offset.zero,
-                              );
+                          var enterTween = Tween(
+                            begin: const Offset(1.0, 0.0),
+                            end: Offset.zero,
+                          );
 
-                              Widget page = SlideTransition(
-                                position: enterTween.animate(curvedAnimation),
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: const Color(
-                                          0xFF5D201C,
-                                        ).withValues(alpha: 0.1),
-                                        blurRadius: 10,
-                                        spreadRadius: 2,
-                                      ),
-                                    ],
+                          Widget page = SlideTransition(
+                            position: enterTween.animate(curvedAnimation),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFF5D201C,
+                                    ).withValues(alpha: 0.1),
+                                    blurRadius: 10,
+                                    spreadRadius: 2,
                                   ),
-                                  child: child,
-                                ),
-                              );
+                                ],
+                              ),
+                              child: child,
+                            ),
+                          );
 
-                              return page;
-                            },
+                          return page;
+                        },
                         transitionDuration: const Duration(milliseconds: 400),
                         reverseTransitionDuration: const Duration(
                           milliseconds: 400,
@@ -670,8 +707,7 @@ class _HomeContentState extends State<HomeContent> {
                                       ),
                                       SizedBox(width: 4.w),
                                       Text(
-                                        (loja
-                                                    .dadosOperacionais
+                                        (loja.dadosOperacionais
                                                     ?.avaliacaoMedia ??
                                                 0.0)
                                             .toStringAsFixed(1),
@@ -720,19 +756,15 @@ class _HomeContentState extends State<HomeContent> {
                                     loja.dadosOperacionais?.taxaEntregaBase == 0
                                         ? 'Entrega Grátis'
                                         : loja.dadosOperacionais == null
-                                        ? 'Frete a confirmar'
-                                        : 'R\$ ${loja.dadosOperacionais!.taxaEntregaBase.toStringAsFixed(2)}',
+                                            ? 'Frete a confirmar'
+                                            : 'R\$ ${loja.dadosOperacionais!.taxaEntregaBase.toStringAsFixed(2)}',
                                     style: TextStyle(
-                                      color:
-                                          loja
-                                                  .dadosOperacionais
+                                      color: loja.dadosOperacionais
                                                   ?.taxaEntregaBase ==
                                               0
                                           ? Colors.green
                                           : Colors.grey.shade600,
-                                      fontWeight:
-                                          loja
-                                                  .dadosOperacionais
+                                      fontWeight: loja.dadosOperacionais
                                                   ?.taxaEntregaBase ==
                                               0
                                           ? FontWeight.bold
@@ -855,6 +887,7 @@ class _HomeContentState extends State<HomeContent> {
       context.read<UserProvider>().carregarDadosUsuario(),
       _carregarDadosIniciais(isRefresh: true),
     ]);
+    await _ordersKey.currentState?.refresh();
   }
 
   void _abrirSelecaoEndereco(BuildContext context) {
@@ -868,6 +901,7 @@ class _HomeContentState extends State<HomeContent> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final enderecoisPadrao = context.select<EnderecoProvider, EnderecoModel?>(
       (p) => p.enderecos.where((e) => e.isPadrao).firstOrNull,
     );
@@ -898,31 +932,29 @@ class _HomeContentState extends State<HomeContent> {
             refreshIndicatorExtent: 140.h,
             refreshTriggerPullDistance: 180.h,
             onRefresh: _onRefresh,
-            builder:
-                (
-                  context,
-                  refreshState,
-                  pulledExtent,
-                  refreshTriggerPullDistance,
-                  refreshIndicatorExtent,
-                ) {
-                  return Center(
-                    child: Opacity(
-                      opacity: (pulledExtent / refreshIndicatorExtent).clamp(
-                        0.0,
-                        1.0,
-                      ),
-                      child: Lottie.asset(
-                        'assets/animations/loading_nhac.json',
-                        width: 240.w,
-                        height: 240.h,
-                        animate:
-                            refreshState == RefreshIndicatorMode.refresh ||
-                            refreshState == RefreshIndicatorMode.armed,
-                      ),
-                    ),
-                  );
-                },
+            builder: (
+              context,
+              refreshState,
+              pulledExtent,
+              refreshTriggerPullDistance,
+              refreshIndicatorExtent,
+            ) {
+              return Center(
+                child: Opacity(
+                  opacity: (pulledExtent / refreshIndicatorExtent).clamp(
+                    0.0,
+                    1.0,
+                  ),
+                  child: Lottie.asset(
+                    'assets/animations/loading_nhac.json',
+                    width: 240.w,
+                    height: 240.h,
+                    animate: refreshState == RefreshIndicatorMode.refresh ||
+                        refreshState == RefreshIndicatorMode.armed,
+                  ),
+                ),
+              );
+            },
           ),
           SliverPadding(
             padding: EdgeInsets.all(24.w),
@@ -1053,24 +1085,23 @@ class _HomeContentState extends State<HomeContent> {
                               Navigator.push(
                                 context,
                                 PageRouteBuilder(
-                                  pageBuilder:
-                                      (
-                                        context,
-                                        animation,
-                                        secondaryAnimation,
-                                      ) => const SearchPage(),
-                                  transitionsBuilder:
-                                      (
-                                        context,
-                                        animation,
-                                        secondaryAnimation,
-                                        child,
-                                      ) {
-                                        return FadeTransition(
-                                          opacity: animation,
-                                          child: child,
-                                        );
-                                      },
+                                  pageBuilder: (
+                                    context,
+                                    animation,
+                                    secondaryAnimation,
+                                  ) =>
+                                      const SearchPage(),
+                                  transitionsBuilder: (
+                                    context,
+                                    animation,
+                                    secondaryAnimation,
+                                    child,
+                                  ) {
+                                    return FadeTransition(
+                                      opacity: animation,
+                                      child: child,
+                                    );
+                                  },
                                   transitionDuration: const Duration(
                                     milliseconds: 300,
                                   ),
@@ -1164,8 +1195,7 @@ class _HomeContentState extends State<HomeContent> {
                   ),
                 ),
                 SizedBox(height: 28.h),
-                HomeOrderTrackingCard(isActive: widget.isActive),
-                SizedBox(height: 28.h),
+                HomeOrders(key: _ordersKey, isActive: widget.isActive),
                 TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 800),
                   tween: Tween(begin: 0.0, end: 1.0),
@@ -1182,7 +1212,6 @@ class _HomeContentState extends State<HomeContent> {
                   child: const HomeCategoryChips(),
                 ),
                 SizedBox(height: 28.h),
-
                 TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 800),
                   tween: Tween(begin: 0.0, end: 1.0),
@@ -1498,8 +1527,8 @@ class _SelecaoEnderecoBottomSheet extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   onTap: () {
                     context.read<EnderecoProvider>().definirComoPadrao(
-                      endereco.id,
-                    );
+                          endereco.id,
+                        );
                     Navigator.pop(context);
                   },
                   leading: Container(
