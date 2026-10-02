@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:barcode_widget/barcode_widget.dart';
 import 'package:nhac/components/loading_nhac.dart';
+import 'package:nhac/components/nota_fiscal_pedido.dart';
 import 'package:nhac/models/usuario/cupom_model.dart';
 import 'package:nhac/repositories/cupom_repository.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -1156,216 +1156,41 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-  void _exibirSucessoEVoltar(String idGerado, CartProvider cartProvider) {
+  Future<void> _exibirSucessoEVoltar(
+    String idGerado,
+    CartProvider cartProvider,
+  ) async {
     _checkoutIdempotencyKey = null;
 
     final itens = cartProvider.itens.values.toList();
     final subtotal = cartProvider.valorTotal;
-    final total = subtotal + _taxaFrete;
-    final now = DateTime.now();
-    final dataFormatada = DateFormat(
-      "EEEE - d MMM. yyyy - HH:mm",
-      "pt_BR",
-    ).format(now);
+    final desconto = _subtotalValidado == subtotal
+        ? (_cupom?.descontoAplicado ?? 0).toDouble()
+        : 0.0;
+    // Snapshot local: usado só se a API não devolver o pedido a tempo.
+    final dadosLocais = NotaFiscalDados(
+      pedidoId: idGerado,
+      lojaNome: '',
+      data: DateTime.now(),
+      itens: itens
+          .map(
+            (i) => NotaFiscalItem(
+              nome: i.nome,
+              preco: i.preco,
+              quantidade: i.quantidade,
+            ),
+          )
+          .toList(),
+      taxaFrete: _taxaFrete,
+      desconto: desconto,
+      total: subtotal + _taxaFrete - desconto,
+    );
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (dialogContext) => Dialog(
-        key: E2EKeys.checkoutSuccess,
-        backgroundColor: Colors.transparent,
-        insetPadding: EdgeInsets.symmetric(horizontal: 20.w),
-        elevation: 0,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/nota-fiscal.png'),
-                    fit: BoxFit.fill,
-                  ),
-                ),
-                padding: EdgeInsets.only(
-                  top: 35.h,
-                  bottom: 35.h,
-                  left: 24.w,
-                  right: 24.w,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset('assets/nhac-preto-branco.png', height: 60.h),
-                    SizedBox(height: 8.h),
-                    FutureBuilder(
-                      future: LojaRepository().buscarLoja(cartProvider.lojaId),
-                      builder: (context, snapshot) {
-                        final nome = snapshot.data?.nome ?? 'Nhac Delivery';
-                        return Text(
-                          nome,
-                          style: TextStyle(
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF0C2444),
-                          ),
-                        );
-                      },
-                    ),
-                    SizedBox(height: 4.h),
-                    Text(
-                      dataFormatada,
-                      style: TextStyle(
-                        fontSize: 12.sp,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF0C2444),
-                      ),
-                    ),
-                    SizedBox(height: 24.h),
-                    ...itens.map(
-                      (item) => Padding(
-                        padding: EdgeInsets.only(bottom: 8.h),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              flex: 3,
-                              child: Text(
-                                item.nome,
-                                style: TextStyle(
-                                  fontSize: 14.sp,
-                                  fontWeight: FontWeight.bold,
-                                  color: const Color(0xFF0C2444),
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                '${currencyFormat.format(item.preco)} x ${item.quantidade}',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12.sp,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.grey.shade500,
-                                ),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 2,
-                              child: Text(
-                                currencyFormat.format(
-                                  item.preco * item.quantidade,
-                                ),
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  fontSize: 14.sp,
-                                  fontWeight: FontWeight.bold,
-                                  color: const Color(0xFF0C2444),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 16.h),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        return Flex(
-                          direction: Axis.horizontal,
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          mainAxisSize: MainAxisSize.max,
-                          children: List.generate(
-                            (constraints.constrainWidth() / 8).floor(),
-                            (index) => SizedBox(
-                              width: 4,
-                              height: 2,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF0C2444),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    SizedBox(height: 16.h),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Total',
-                          style: TextStyle(
-                            fontSize: 20.sp,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF0C2444),
-                          ),
-                        ),
-                        Text(
-                          currencyFormat.format(total),
-                          style: TextStyle(
-                            fontSize: 20.sp,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF0C2444),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 24.h),
-                    Row(
-                      children: [
-                        SizedBox(
-                          height: 30.h,
-                          width: 80.w,
-                          child: Semantics(
-                            key: E2EKeys.checkoutSuccessOrderId,
-                            value: idGerado,
-                            child: BarcodeWidget(
-                              barcode: Barcode.code128(),
-                              data: idGerado.length > 8
-                                  ? idGerado.substring(0, 8)
-                                  : idGerado,
-                              drawText: false,
-                              color: const Color(0xFF0C2444),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            'Volte sempre!',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 14.sp,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF0C2444),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 80.w),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 20.h),
-              BotaoLargoNhac(
-                key: E2EKeys.checkoutSuccessContinue,
-                texto: 'OK',
-                onPressed: () {
-                  cartProvider.esvaziarCarrinho();
-                  Navigator.of(dialogContext).pop();
-                  if (context.mounted)
-                    context.go('/rastreio?pedidoId=$idGerado');
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+    await mostrarNotaFiscalEVerPedido(
+      context,
+      pedidoId: idGerado,
+      dadosLocais: dadosLocais,
+      aoConcluir: cartProvider.esvaziarCarrinho,
     );
   }
 }

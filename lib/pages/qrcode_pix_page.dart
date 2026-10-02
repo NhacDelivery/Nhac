@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:nhac/components/loading_nhac.dart';
+import 'package:nhac/components/nota_fiscal_pedido.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -46,11 +47,12 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
   bool _verificando = false;
   bool _simulando = false;
   int _tentativas = 0;
-  static const int _maxTentativas = 84; // Após sete minutos, manter consulta até estado terminal.
+  static const int _maxTentativas =
+      84; // Após sete minutos, manter consulta até estado terminal.
   static const Duration _intervaloPolling = Duration(seconds: 5);
 
-  bool get _prazoVencido => widget.expiraEm != null &&
-      !DateTime.now().isBefore(widget.expiraEm!);
+  bool get _prazoVencido =>
+      widget.expiraEm != null && !DateTime.now().isBefore(widget.expiraEm!);
 
   @override
   void initState() {
@@ -82,7 +84,7 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
       _pollingTimer?.cancel();
       setState(() => _pagamentoConfirmado = true);
       await Future.delayed(const Duration(seconds: 1));
-      if (mounted) _navegarParaRastreio(sucesso: true);
+      if (mounted) await _navegarParaRastreio(sucesso: true);
     } else if (status == StatusPedido.cancelado) {
       _pollingTimer?.cancel();
       if (mounted) {
@@ -140,12 +142,27 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
     }
   }
 
-  void _navegarParaRastreio({bool sucesso = false}) {
+  bool _abrindoPedido = false;
+
+  Future<void> _navegarParaRastreio({bool sucesso = false}) async {
     if (sucesso) {
+      if (_abrindoPedido) return;
+      _abrindoPedido = true;
       context.showSuccess(
           'Pagamento PIX confirmado! Acompanhe o andamento do pedido.');
+      try {
+        await mostrarNotaFiscalEVerPedido(
+          context,
+          pedidoId: widget.paymentId,
+        );
+      } finally {
+        if (mounted) _abrindoPedido = false;
+      }
+      return;
     }
-    context.go('/rastreio?pedidoId=${widget.paymentId}');
+    context.go(
+      '/rastreio?pedidoId=${Uri.encodeQueryComponent(widget.paymentId)}',
+    );
   }
 
   Future<void> _simularPagamento() async {
@@ -155,7 +172,11 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
       await _pedidoRepository.simularPagamentoPix(widget.paymentId);
       if (mounted) await _verificarStatus(manual: true);
     } catch (_) {
-      if (mounted) context.showError('Não foi possível confirmar o teste. Tente novamente.');
+      if (mounted) {
+        context.showError(
+          'Não foi possível confirmar o teste. Tente novamente.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _simulando = false);
     }
@@ -371,13 +392,16 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
               ),
               if (widget.expiraEm != null) ...[
                 SizedBox(height: 8.h),
-                Text('Pague até ${TimeOfDay.fromDateTime(widget.expiraEm!.toLocal()).format(context)}',
-                    style: TextStyle(fontSize: 13.sp, color: const Color(0xFF5D201C))),
+                Text(
+                    'Pague até ${TimeOfDay.fromDateTime(widget.expiraEm!.toLocal()).format(context)}',
+                    style: TextStyle(
+                        fontSize: 13.sp, color: const Color(0xFF5D201C))),
               ],
               if (_prazoVencido)
                 const Padding(
                   padding: EdgeInsets.only(top: 8),
-                  child: Text('O prazo terminou. Estamos conferindo o estado do pedido.',
+                  child: Text(
+                      'O prazo terminou. Estamos conferindo o estado do pedido.',
                       textAlign: TextAlign.center),
                 ),
               SizedBox(height: 24.h),
@@ -389,7 +413,7 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
                 label:
                     'QR Code PIX. Valor de R\$ ${widget.valor.toStringAsFixed(2)}',
                 image: true,
-              child: AnimatedOpacity(
+                child: AnimatedOpacity(
                   opacity: _pagamentoConfirmado || _prazoVencido ? 0.4 : 1.0,
                   duration: const Duration(milliseconds: 500),
                   child: Container(
@@ -448,7 +472,7 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
               // Botao principal — muda conforme o status
               if (_pagamentoConfirmado)
                 BotaoLargoNhac(
-                  texto: 'Voltar ao Inicio',
+                  texto: 'Ver pedido',
                   onPressed: () => _navegarParaRastreio(sucesso: true),
                 )
               else
@@ -459,12 +483,15 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
                 ),
               SizedBox(height: 16.h),
               OutlinedButton(
-                onPressed: _prazoVencido ? null : () {
-                  final textToCopy = widget.pixCopiaECola ?? widget.pixQrCode;
-                  Clipboard.setData(ClipboardData(text: textToCopy));
+                onPressed: _prazoVencido
+                    ? null
+                    : () {
+                        final textToCopy =
+                            widget.pixCopiaECola ?? widget.pixQrCode;
+                        Clipboard.setData(ClipboardData(text: textToCopy));
 
-                  context.showSuccess('Codigo PIX copiado!');
-                },
+                        context.showSuccess('Codigo PIX copiado!');
+                      },
                 style: OutlinedButton.styleFrom(
                   minimumSize: Size(double.infinity, 50.h),
                 ),
@@ -474,10 +501,14 @@ class _QrCodePixPageState extends State<QrCodePixPage> {
                 ),
               ),
               SizedBox(height: 16.h),
-              if (widget.simulacaoDisponivel && !_pagamentoConfirmado && !_prazoVencido)
+              if (widget.simulacaoDisponivel &&
+                  !_pagamentoConfirmado &&
+                  !_prazoVencido)
                 TextButton(
                   onPressed: _simulando ? null : _simularPagamento,
-                  child: Text(_simulando ? 'Confirmando...' : 'Simular pagamento (teste)'),
+                  child: Text(_simulando
+                      ? 'Confirmando...'
+                      : 'Simular pagamento (teste)'),
                 ),
             ],
           ),
