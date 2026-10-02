@@ -15,7 +15,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter/material.dart';
-import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/components/home/home_banner_carousel.dart';
@@ -33,6 +32,7 @@ import 'package:provider/provider.dart';
 import 'package:nhac/components/fly_to_cart_overlay.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
 import 'package:nhac/globals/app_constants.dart';
+import 'package:nhac/components/estado_com_retry.dart';
 
 @NowaGenerated()
 class HomeContent extends StatefulWidget {
@@ -54,7 +54,6 @@ class _HomeContentState extends State<HomeContent> {
   Timer? _loadingTimer;
   Timer? _refreshTimer;
   bool _atualizandoCatalogo = false;
-  bool _erroProdutos = false;
 
   final List<LojasModel> _lojas = [];
   int _currentPageLojas = 0;
@@ -62,15 +61,17 @@ class _HomeContentState extends State<HomeContent> {
   bool _hasMoreLojas = true;
   bool _errorLojas = false;
   String _mensagemErroLojas = 'Ocorreu um erro ao carregar os restaurantes.';
+  EstadoConteudo _estadoLojas = EstadoConteudo.loading;
 
   late final LojaRepository _lojaRepository;
   late final ProdutoRepository _produtoRepository;
 
   final List<ProdutosModel> _produtosNecessidades = [];
-  bool _isLoadingProdutosNecessidades = true;
 
   final List<ProdutosModel> _produtosPromocao = [];
-  bool _isLoadingProdutosPromocao = true;
+
+  EstadoConteudo _estadoProdutosNecessidades = EstadoConteudo.loading;
+  EstadoConteudo _estadoProdutosPromocao = EstadoConteudo.loading;
 
   Map<String, bool> _lojaAbertaMap = {};
 
@@ -87,7 +88,8 @@ class _HomeContentState extends State<HomeContent> {
           widget.isActive &&
           LocalCacheService.cacheHomeVencido && !_atualizandoCatalogo) {
         _atualizandoCatalogo = true;
-        LocalCacheService.limparCacheHome();
+        // Não limpa o cache - mantém dados para stale-while-revalidate
+        LocalCacheService.ultimaAtualizacaoHome = null;
         _currentPageLojas = 0;
         _hasMoreLojas = true;
         _carregarDadosIniciais().whenComplete(() => _atualizandoCatalogo = false);
@@ -133,14 +135,13 @@ class _HomeContentState extends State<HomeContent> {
   }
 
   Future<void> _carregarDadosIniciais({bool persistir = true}) async {
-    _erroProdutos = false;
     await Future.wait([
       _fetchProdutosNecessidades(),
       _fetchProdutosPromocao(),
       _fetchLojas(),
     ]);
     _aplicarStatusLojas();
-    if (persistir && !_errorLojas && !_erroProdutos) {
+    if (persistir && !_errorLojas) {
       LocalCacheService.ultimaAtualizacaoHome = DateTime.now();
       try {
         await LocalCacheService.salvarCatalogoHome();
@@ -152,8 +153,6 @@ class _HomeContentState extends State<HomeContent> {
     if (mounted) {
       _loadingTimer?.cancel();
       setState(() {
-        _isLoadingProdutosNecessidades = false;
-        _isLoadingProdutosPromocao = false;
         if (_isLoading) {
           _isLoading = false;
           _jaCarregouUmaVez = true;
@@ -206,13 +205,29 @@ class _HomeContentState extends State<HomeContent> {
     });
   }
 
-  Future<void> _fetchProdutosNecessidades() async {
-    if (LocalCacheService.produtosNecessidadesCache != null) {
+  Future<void> _fetchProdutosNecessidades({bool isRefresh = false}) async {
+    if (!isRefresh) {
+      if (mounted) {
+        setState(() {
+          _estadoProdutosNecessidades = EstadoConteudo.loading;
+        });
+      }
+    }
+
+    // Carrega do cache primeiro (stale-while-revalidate)
+    if (LocalCacheService.produtosNecessidadesCache != null && !isRefresh) {
       if (mounted) {
         setState(() {
           _produtosNecessidades.clear();
           _produtosNecessidades.addAll(LocalCacheService.produtosNecessidadesCache!.cast<ProdutosModel>());
+          _estadoProdutosNecessidades = _produtosNecessidades.isEmpty
+              ? EstadoConteudo.vazio
+              : EstadoConteudo.conteudo;
         });
+      }
+      // Mesmo com cache, tenta buscar dados frescos em background
+      if (!isRefresh) {
+        _fetchProdutosNecessidades(isRefresh: true);
       }
       return;
     }
@@ -224,21 +239,51 @@ class _HomeContentState extends State<HomeContent> {
         setState(() {
           _produtosNecessidades.clear();
           _produtosNecessidades.addAll(produtos);
+          _estadoProdutosNecessidades = produtos.isEmpty
+              ? EstadoConteudo.vazio
+              : EstadoConteudo.conteudo;
         });
       }
     } catch (e) {
-      _erroProdutos = true;
       debugPrint("Erro ao buscar necessidades da API: $e");
+      if (mounted) {
+        // Se é refresh e já temos dados, mantém os dados (stale-while-revalidate)
+        if (isRefresh && _produtosNecessidades.isNotEmpty) {
+          setState(() {
+            _estadoProdutosNecessidades = EstadoConteudo.conteudo;
+          });
+        } else {
+          setState(() {
+            _estadoProdutosNecessidades = EstadoConteudo.erro;
+          });
+        }
+      }
     }
   }
 
-  Future<void> _fetchProdutosPromocao() async {
-    if (LocalCacheService.produtosPromocaoCache != null) {
+  Future<void> _fetchProdutosPromocao({bool isRefresh = false}) async {
+    if (!isRefresh) {
+      if (mounted) {
+        setState(() {
+          _estadoProdutosPromocao = EstadoConteudo.loading;
+        });
+      }
+    }
+
+    // Carrega do cache primeiro (stale-while-revalidate)
+    if (LocalCacheService.produtosPromocaoCache != null && !isRefresh) {
       if (mounted) {
         setState(() {
           _produtosPromocao.clear();
           _produtosPromocao.addAll(LocalCacheService.produtosPromocaoCache!.cast<ProdutosModel>());
+          _estadoProdutosPromocao = _produtosPromocao.isEmpty
+              ? EstadoConteudo.vazio
+              : EstadoConteudo.conteudo;
         });
+      }
+      // Mesmo com cache, tenta buscar dados frescos em background
+      if (!isRefresh) {
+        _fetchProdutosPromocao(isRefresh: true);
       }
       return;
     }
@@ -250,27 +295,55 @@ class _HomeContentState extends State<HomeContent> {
         setState(() {
           _produtosPromocao.clear();
           _produtosPromocao.addAll(promocoes);
+          _estadoProdutosPromocao = promocoes.isEmpty
+              ? EstadoConteudo.vazio
+              : EstadoConteudo.conteudo;
         });
       }
     } catch (e) {
-      _erroProdutos = true;
       debugPrint("Erro ao buscar promoções da API: $e");
+      if (mounted) {
+        // Se é refresh e já temos dados, mantém os dados (stale-while-revalidate)
+        if (isRefresh && _produtosPromocao.isNotEmpty) {
+          setState(() {
+            _estadoProdutosPromocao = EstadoConteudo.conteudo;
+          });
+        } else {
+          setState(() {
+            _estadoProdutosPromocao = EstadoConteudo.erro;
+          });
+        }
+      }
     }
   }
 
-  Future<void> _fetchLojas() async {
-    if (_isLoadingLojas || !_hasMoreLojas || !mounted) return;
+  Future<void> _fetchLojas({bool isRefresh = false}) async {
+    if (_isLoadingLojas || (!_hasMoreLojas && !isRefresh) || !mounted) return;
 
-    if (LocalCacheService.lojasCache != null && _currentPageLojas == 0) {
+    // Carrega do cache primeiro (stale-while-revalidate) - apenas na carga inicial
+    if (!isRefresh && LocalCacheService.lojasCache != null && _currentPageLojas == 0) {
       if (mounted) {
         setState(() {
           _lojas.clear();
           _lojas.addAll(LocalCacheService.lojasCache!.cast<LojasModel>());
           _currentPageLojas = LocalCacheService.currentPageLojasCache;
           _hasMoreLojas = LocalCacheService.hasMoreLojasCache;
+          _estadoLojas = _lojas.isEmpty ? EstadoConteudo.vazio : EstadoConteudo.conteudo;
         });
       }
+      // Mesmo com cache, tenta buscar dados frescos em background
+      if (_hasMoreLojas) {
+        _fetchLojas(isRefresh: true);
+      }
       return;
+    }
+
+    if (!isRefresh && _currentPageLojas == 0) {
+      if (mounted) {
+        setState(() {
+          _estadoLojas = EstadoConteudo.loading;
+        });
+      }
     }
 
     setState(() {
@@ -290,6 +363,9 @@ class _HomeContentState extends State<HomeContent> {
             _hasMoreLojas = false;
             _isLoadingLojas = false;
             LocalCacheService.hasMoreLojasCache = false;
+            if (_currentPageLojas == 0) {
+              _estadoLojas = EstadoConteudo.vazio;
+            }
           });
         }
         return;
@@ -306,6 +382,7 @@ class _HomeContentState extends State<HomeContent> {
           }
 
           _isLoadingLojas = false;
+          _estadoLojas = EstadoConteudo.conteudo;
 
           LocalCacheService.lojasCache = List.from(_lojas);
           LocalCacheService.currentPageLojasCache = _currentPageLojas;
@@ -323,86 +400,109 @@ class _HomeContentState extends State<HomeContent> {
               : e is api_errors.AppException
                   ? e.message
                   : 'Não foi possível carregar os restaurantes. Tente novamente.';
+          // Se é refresh e já temos dados, mantém os dados (stale-while-revalidate)
+          if (isRefresh && _lojas.isNotEmpty) {
+            _estadoLojas = EstadoConteudo.conteudo;
+            _errorLojas = false; // Não mostra erro inline se temos dados
+          } else if (_currentPageLojas == 0) {
+            _estadoLojas = EstadoConteudo.erro;
           }
-          );
+        });
       }
     }
   }
 
   Widget _buildListaDeLojas() {
-    if (_errorLojas && _lojas.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(24.w),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12.r),
+    // Para a primeira página, usa o padrão de estado com retry
+    if (_currentPageLojas == 0 || _lojas.isEmpty) {
+      return EstadoComRetry<List<LojasModel>>(
+        estado: _estadoLojas,
+        dados: _lojas,
+        aoTentarNovamente: () => _fetchLojas(isRefresh: true),
+        builderConteudo: (lojas) => _buildLojasList(lojas),
+        builderLoading: () => Column(
+          children: List.generate(
+              3,
+              (index) => Padding(
+                    padding: EdgeInsets.only(bottom: 16.h),
+                    child: _buildBoxSkeleton(
+                        width: double.infinity, height: 90.h, borderRadius: 12.r),
+                  )),
         ),
-        child: Column(
-          children: [
-            Icon(Icons.error_outline,
-                color: const Color(0xFFFF6961), size: 48.r),
-            SizedBox(height: 16.h),
-            Text(
-              _mensagemErroLojas,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 14.sp),
+        builderVazio: () => Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(24.w),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: const Center(
+            child: Text(
+              'Nenhum restaurante encontrado na região.',
+              style: TextStyle(color: Colors.grey),
             ),
-            SizedBox(height: 16.h),
-            ElevatedButton(
-              onPressed: _fetchLojas,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6961),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(50.r),
-                ),
-              ),
-              child: const Text('Tentar novamente'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_lojas.isEmpty && _isLoadingLojas) {
-      return Column(
-        children: List.generate(
-            3,
-            (index) => Padding(
-                  padding: EdgeInsets.only(bottom: 16.h),
-                  child: _buildBoxSkeleton(
-                      width: double.infinity, height: 90.h, borderRadius: 12.r),
-                )),
-      );
-    }
-
-    if (_lojas.isEmpty && !_isLoadingLojas) {
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(24.w),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12.r),
-        ),
-        child: const Center(
-          child: Text(
-            'Nenhum restaurante encontrado na região.',
-            style: TextStyle(color: Colors.grey),
           ),
         ),
+        builderErro: (erro, tentarNovamente) => Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(24.w),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.error_outline,
+                  color: const Color(0xFFFF6961), size: 48.r),
+              SizedBox(height: 16.h),
+              Text(
+                _mensagemErroLojas,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 14.sp),
+              ),
+              SizedBox(height: 16.h),
+              ElevatedButton(
+                onPressed: tentarNovamente,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF6961),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(50.r),
+                  ),
+                ),
+                child: const Text('Tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+        alturaMinima: 200.h,
       );
     }
 
+    // Para páginas subsequentes, mostra a lista com banner de erro inline se houver erro no refresh
+    return Column(
+      children: [
+        if (_errorLojas && _estadoLojas == EstadoConteudo.conteudo)
+          BannerErroInline(
+            mensagem: _mensagemErroLojas,
+            aoTentarNovamente: () => _fetchLojas(isRefresh: true),
+          ),
+        _buildLojasList(_lojas),
+      ],
+    );
+  }
+
+  Widget _buildLojasList(List<LojasModel> lojas) {
     return Column(
       children: [
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           padding: EdgeInsets.zero,
-          itemCount: _lojas.length,
+          itemCount: lojas.length,
           itemBuilder: (context, index) {
-            final loja = _lojas[index];
+            final loja = lojas[index];
 
             return Container(
                 margin: EdgeInsets.only(bottom: 16.h),
@@ -549,7 +649,7 @@ class _HomeContentState extends State<HomeContent> {
                                 Row(
                                   children: [
                                     Text(
-                                      '${loja.dadosOperacionais?.tempoEntregaMin}-${loja.dadosOperacionais?.tempoEntregaMax} min',
+                                      '\${loja.dadosOperacionais?.tempoEntregaMin}-\${loja.dadosOperacionais?.tempoEntregaMax} min',
                                       style: TextStyle(
                                           color: Colors.grey.shade600,
                                           fontSize: 12.sp),
@@ -565,7 +665,7 @@ class _HomeContentState extends State<HomeContent> {
                                       loja.dadosOperacionais?.taxaEntregaBase ==
                                               0
                                           ? 'Entrega Grátis'
-                                          : 'R\$ ${loja.dadosOperacionais?.taxaEntregaBase.toStringAsFixed(2)}',
+                                          : 'R\$ \${loja.dadosOperacionais?.taxaEntregaBase.toStringAsFixed(2)}',
                                       style: TextStyle(
                                         color: loja.dadosOperacionais
                                                     ?.taxaEntregaBase ==
@@ -681,11 +781,13 @@ class _HomeContentState extends State<HomeContent> {
   Future<void> _onRefresh() async {
     _currentPageLojas = 0;
     _hasMoreLojas = true;
-    LocalCacheService.limparCacheHome();
+    // Não limpa o cache - mantém dados para stale-while-revalidate
+    // Apenas invalida o timestamp para forçar refetch
+    LocalCacheService.ultimaAtualizacaoHome = null;
     await Future.wait([
       _pegarLocalizacaoUsuario(),
       context.read<UserProvider>().carregarDadosUsuario(),
-      _carregarDadosIniciais(),
+      _carregarDadosIniciais(persistir: true),
     ]);
   }
 
@@ -991,19 +1093,23 @@ class _HomeContentState extends State<HomeContent> {
                       ),
                     );
                   },
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 600),
-                    child: _isLoadingProdutosNecessidades
-                        ? _buildSectionSkeleton(
-                            key: const ValueKey('section1_skeleton'))
-                        : HomeProductSection(
-                            key: const ValueKey('section1_content'),
-                            title: 'Temos tudo que você precisa',
-                            onSeeAll: () => context.push('/search'),
-                            products: _produtosNecessidades,
-                            lojaAberta: _lojaAbertaMap,
-                            onFlyToCart: FlyToCartOverlay.of(context)?.fly,
-                          ),
+                  child: EstadoComRetry<List<ProdutosModel>>(
+                    estado: _estadoProdutosNecessidades,
+                    dados: _produtosNecessidades,
+                    aoTentarNovamente: () => _fetchProdutosNecessidades(isRefresh: true),
+                    builderConteudo: (produtos) => HomeProductSection(
+                      title: 'Temos tudo que você precisa',
+                      onSeeAll: () => context.push('/search'),
+                      products: produtos,
+                      lojaAberta: _lojaAbertaMap,
+                      onFlyToCart: FlyToCartOverlay.of(context)?.fly,
+                    ),
+                    builderLoading: () => _buildSectionSkeleton(),
+                    builderVazio: () => _buildEmptySection(
+                      titulo: 'Temos tudo que você precisa',
+                      mensagem: 'Nenhum produto essencial no momento. Volte mais tarde!',
+                    ),
+                    alturaMinima: 280.h,
                   ),
                 ),
                 SizedBox(height: 28.h),
@@ -1020,19 +1126,23 @@ class _HomeContentState extends State<HomeContent> {
                       ),
                     );
                   },
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 600),
-                    child: _isLoadingProdutosPromocao
-                        ? _buildSectionSkeleton(
-                            key: const ValueKey('section2_skeleton'))
-                        : HomeProductSection(
-                            key: const ValueKey('section2_content'),
-                            title: 'Tudo abaixo de R\$ 20',
-                            onSeeAll: () => context.push('/search'),
-                            products: _produtosPromocao,
-                            lojaAberta: _lojaAbertaMap,
-                            onFlyToCart: FlyToCartOverlay.of(context)?.fly,
-                          ),
+                  child: EstadoComRetry<List<ProdutosModel>>(
+                    estado: _estadoProdutosPromocao,
+                    dados: _produtosPromocao,
+                    aoTentarNovamente: () => _fetchProdutosPromocao(isRefresh: true),
+                    builderConteudo: (produtos) => HomeProductSection(
+                      title: 'Tudo abaixo de R\$ 20',
+                      onSeeAll: () => context.push('/search'),
+                      products: produtos,
+                      lojaAberta: _lojaAbertaMap,
+                      onFlyToCart: FlyToCartOverlay.of(context)?.fly,
+                    ),
+                    builderLoading: () => _buildSectionSkeleton(),
+                    builderVazio: () => _buildEmptySection(
+                      titulo: 'Tudo abaixo de R\$ 20',
+                      mensagem: 'Nenhuma promoção disponível no momento.',
+                    ),
+                    alturaMinima: 280.h,
                   ),
                 ),
                 SizedBox(height: 28.h),
@@ -1162,6 +1272,55 @@ class _HomeContentState extends State<HomeContent> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmptySection({required String titulo, required String mensagem}) {
+    return SizedBox(
+      height: 280.h,
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 32.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 140.w,
+                height: 140.h,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFE7E5),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.search_off_rounded,
+                  size: 64.r,
+                  color: const Color(0xFFFF6961).withValues(alpha: 0.5),
+                ),
+              ),
+              SizedBox(height: 24.h),
+              Text(
+                titulo,
+                style: TextStyle(
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF5D201C),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 8.h),
+              Text(
+                mensagem,
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  color: Colors.grey.shade600,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

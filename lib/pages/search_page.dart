@@ -5,7 +5,7 @@ import 'package:shimmer/shimmer.dart';
 import '../models/produto/produtos.dart';
 import '../models/loja/lojas.dart';
 import '../components/product_card.dart';
-import '../components/loading_nhac.dart';
+import '../components/estado_com_retry.dart';
 import '../repositories/produto_repository.dart';
 import '../repositories/loja_repository.dart';
 import '../services/local_cache_service.dart';
@@ -59,10 +59,15 @@ class _SearchPageState extends State<SearchPage>
   final ProdutoRepository _produtoRepository = ProdutoRepository();
   final LojaRepository _lojaRepository = LojaRepository();
 
-  Future<_ResultadoBusca>? _searchFuture;
   _FiltroBusca _filtro = _FiltroBusca.tudo;
   List<String> _historico = [];
   bool _temTexto = false;
+
+  // Estado para stale-while-revalidate
+  _ResultadoBusca? _ultimoResultado;
+  EstadoConteudo _estadoBusca = EstadoConteudo.conteudo;
+  String? _ultimoErro;
+  String? _termoAtual;
 
   @override
   void initState() {
@@ -136,14 +141,55 @@ class _SearchPageState extends State<SearchPage>
     _animationController.forward(from: 0.0);
     setState(() {
       _filtro = _FiltroBusca.tudo;
-      _searchFuture = _produtoRepository.buscarPorCategoria(categoria).then(
-            (produtos) async => _ResultadoBusca(
-              produtos: produtos,
-              lojas: const [],
-              lojaAberta: _statusDasLojas(produtos),
-            ),
-          );
+      _termoAtual = categoria;
+      _estadoBusca = EstadoConteudo.loading;
+      _buscarCategoriaComCache(categoria);
     });
+  }
+
+  /// Busca por categoria com suporte a stale-while-revalidate
+  Future<void> _buscarCategoriaComCache(String categoria) async {
+    final cache = await LocalCacheService.carregarResultadosBusca('categoria:$categoria');
+    if (cache != null && mounted) {
+      final produtos = (cache['produtos'] as List)
+          .map((p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map))).toList();
+
+      _ultimoResultado = _ResultadoBusca(
+        produtos: produtos,
+        lojas: const [],
+        lojaAberta: _statusDasLojas(produtos),
+      );
+      _estadoBusca = EstadoConteudo.conteudo;
+    }
+
+    try {
+      final produtos = await _produtoRepository.buscarPorCategoria(categoria);
+      if (!mounted) return;
+
+      await LocalCacheService.salvarResultadosBusca(
+        'categoria:$categoria',
+        produtos: produtos,
+        lojas: const [],
+        lojaAberta: _statusDasLojas(produtos),
+      );
+
+      _ultimoResultado = _ResultadoBusca(
+        produtos: produtos,
+        lojas: const [],
+        lojaAberta: _statusDasLojas(produtos),
+      );
+      _estadoBusca = EstadoConteudo.conteudo;
+      _ultimoErro = null;
+    } catch (e) {
+      if (!mounted) return;
+      if (_ultimoResultado != null) {
+        _estadoBusca = EstadoConteudo.erro;
+      } else {
+        _estadoBusca = EstadoConteudo.erro;
+        _ultimoResultado = null;
+      }
+      _ultimoErro = e.toString();
+    }
   }
 
   /// Constrói o mapa de status aberta/fechada a partir do campo `lojaAberta`
@@ -167,10 +213,63 @@ class _SearchPageState extends State<SearchPage>
     _animationController.forward(from: 0.0);
     setState(() {
       _filtro = _FiltroBusca.tudo;
-      _searchFuture = _buscarTudo(termoLimpo);
+      _buscarTudo(termoLimpo);
     });
   }
 
+  /// Busca com suporte a stale-while-revalidate:
+  /// 1. Tenta carregar cache imediatamente
+  /// 2. Faz fetch em background
+  /// 3. Se fetch falhar, mantém cache (stale) com banner de retry
+  Future<void> _buscarComCache(String termo) async {
+    // 1. Carrega cache imediatamente se existir
+    final cache = await LocalCacheService.carregarResultadosBusca(termo);
+    if (cache != null && mounted) {
+      final produtos = (cache['produtos'] as List)
+          .map((p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map))).toList();
+      final lojas = (cache['lojas'] as List)
+          .map((l) => LojasModel.fromMap(Map<String, dynamic>.from(l as Map))).toList();
+      final lojaAberta = Map<String, bool>.from(cache['lojaAberta'] as Map);
+
+      _ultimoResultado = _ResultadoBusca(
+        produtos: produtos,
+        lojas: lojas,
+        lojaAberta: lojaAberta,
+      );
+      _estadoBusca = EstadoConteudo.conteudo;
+    }
+
+    // 2. Faz fetch em background
+    try {
+      final resultado = await _buscarTudo(termo);
+      if (!mounted) return;
+
+      // Salva no cache
+      await LocalCacheService.salvarResultadosBusca(
+        termo,
+        produtos: resultado.produtos,
+        lojas: resultado.lojas,
+        lojaAberta: resultado.lojaAberta,
+      );
+
+      _ultimoResultado = resultado;
+      _estadoBusca = EstadoConteudo.conteudo;
+      _ultimoErro = null;
+    } catch (e) {
+      if (!mounted) return;
+
+      // Se temos cache, mantém (stale) com estado de erro para banner
+      if (_ultimoResultado != null) {
+        _estadoBusca = EstadoConteudo.erro;
+      } else {
+        _estadoBusca = EstadoConteudo.erro;
+        _ultimoResultado = null;
+      }
+      _ultimoErro = e.toString();
+    }
+  }
+
+  /// Busca real que propaga exceções (sem catchError que engole erros)
   Future<_ResultadoBusca> _buscarTudo(String termo) async {
     // O filtro de categoria no backend é por valor exato (ex: "Pizza"), então
     // digitar "pizza" (minúsculo) batia só na busca por nome. Aqui a gente
@@ -179,18 +278,12 @@ class _SearchPageState extends State<SearchPage>
     final categoriaParaBuscar = _resolverCategoria(termo);
 
     final resultados = await Future.wait([
-      _produtoRepository
-          .buscarProdutosPorNome(termo)
-          .catchError((_) => <ProdutosModel>[]),
+      _produtoRepository.buscarProdutosPorNome(termo),
       if (categoriaParaBuscar != null)
-        _produtoRepository
-            .buscarPorCategoria(categoriaParaBuscar)
-            .catchError((_) => <ProdutosModel>[])
+        _produtoRepository.buscarPorCategoria(categoriaParaBuscar)
       else
         Future.value(<ProdutosModel>[]),
-      _lojaRepository
-          .buscarLojasPorNome(termo)
-          .catchError((_) => <LojasModel>[]),
+      _lojaRepository.buscarLojasPorNome(termo),
     ]);
 
     final produtosPorNome = resultados[0] as List<ProdutosModel>;
@@ -235,7 +328,6 @@ class _SearchPageState extends State<SearchPage>
   void _limparBusca() {
     setState(() {
       _searchController.clear();
-      _searchFuture = null;
       _filtro = _FiltroBusca.tudo;
     });
   }
@@ -291,7 +383,7 @@ class _SearchPageState extends State<SearchPage>
             AnimatedSize(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOut,
-              child: _searchFuture != null
+              child: _termoAtual != null
                   ? _buildFiltros()
                   : const SizedBox(width: double.infinity),
             ),
@@ -310,48 +402,32 @@ class _SearchPageState extends State<SearchPage>
                     child: child,
                   ),
                 ),
-                child: _searchFuture == null
+                child: _termoAtual == null
                     ? _buildEstadoInicial()
-                    : FutureBuilder<_ResultadoBusca>(
-                        key: ValueKey(_searchFuture),
-                        future: _searchFuture,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return const Center(
-                              key: ValueKey('loading'),
-                                child:
-                                  LoadingNhac(telaCheia: false, tamanho: 40),
-                            );
-                          }
-                          if (snapshot.hasError) {
-                            return _buildMensagemEstado(
-                              key: const ValueKey('erro'),
-                              icone: Icons.error_outline_rounded,
-                              titulo: 'Ops, algo deu errado',
-                              subtitulo:
-                                  'Não foi possível concluir a busca. Tente novamente.',
-                            );
-                          }
-                          if (!snapshot.hasData || snapshot.data!.vazio) {
-                            return _buildMensagemEstado(
-                              key: const ValueKey('vazio'),
-                              icone: Icons.search_off_rounded,
-                              titulo: 'Nada encontrado',
-                              subtitulo: 'Tente pesquisar com outras palavras.',
-                            );
-                          }
-
-                          return KeyedSubtree(
-                            key: const ValueKey('resultados'),
-                            child: _buildResultados(snapshot.data!),
-                          );
-                        },
-                      ),
+                    : _buildResultadosComEstado(),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildResultadosComEstado() {
+    return EstadoComRetry<_ResultadoBusca>(
+      estado: _estadoBusca,
+      dados: _ultimoResultado,
+      mensagemErro: _ultimoErro,
+      aoTentarNovamente: _termoAtual != null ? () => _buscarComCache(_termoAtual!) : null,
+      builderVazio: () => _buildMensagemEstado(
+        key: const ValueKey('vazio'),
+        icone: Icons.search_off_rounded,
+        titulo: 'Nada encontrado',
+        subtitulo: 'Tente pesquisar com outras palavras.',
+      ),
+      builderConteudo: (resultado) => KeyedSubtree(
+        key: const ValueKey('resultados'),
+        child: _buildResultados(resultado),
       ),
     );
   }

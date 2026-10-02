@@ -161,9 +161,10 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage> {
       if (pedido.status.terminal) {
         _refreshTimer?.cancel();
         await _statusSocket.desconectar();
-        if (!AppConstants.e2eMode)
+        if (!AppConstants.e2eMode) {
           LiveNotificationService.cancelLiveNotification(
               pedidoId: pedido.id);
+        }
         if (mounted) {
           context.pushReplacement(
             '/pedido-detalhes?pedidoId=${Uri.encodeQueryComponent(pedido.id)}',

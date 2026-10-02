@@ -48,10 +48,13 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
         _temMais = novos.length == 20;
       });
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() => _erro = 'Não foi possível carregar seus pedidos.');
+      }
     } finally {
-      if (mounted) setState(() => _carregando = false);
+      if (mounted) {
+        setState(() => _carregando = false);
+      }
     }
   }
 

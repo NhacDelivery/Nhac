@@ -279,4 +279,57 @@ class LocalCacheService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyCatalogoHome);
   }
+
+  /// Cache para resultados de busca (stale-while-revalidate)
+  static const String _keySearchResults = 'cache_search_results_v1';
+  static const Duration retencaoBusca = Duration(minutes: 10);
+
+  static Future<void> salvarResultadosBusca(String termo, {
+    required List<ProdutosModel> produtos,
+    required List<LojasModel> lojas,
+    required Map<String, bool> lojaAberta,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_keySearchResults, jsonEncode({
+        'termo': termo.toLowerCase().trim(),
+        'salvoEm': DateTime.now().toUtc().toIso8601String(),
+        'produtos': produtos.map((p) => p.toMap()).toList(),
+        'lojas': lojas.map((l) => l.toMap()).toList(),
+        'lojaAberta': lojaAberta,
+      }));
+    } catch (e) {
+      debugPrint('LocalCacheService: erro ao salvar resultados de busca — $e');
+    }
+  }
+
+  static Future<Map<String, dynamic>?> carregarResultadosBusca(String termo) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_keySearchResults);
+      if (raw == null) return null;
+      final data = Map<String, dynamic>.from(jsonDecode(raw) as Map);
+      final termoSalvo = data['termo'] as String;
+      final termoBusca = termo.toLowerCase().trim();
+      if (termoSalvo != termoBusca) return null;
+      final salvoEm = DateTime.parse(data['salvoEm'] as String);
+      if (DateTime.now().difference(salvoEm) > retencaoBusca) {
+        await prefs.remove(_keySearchResults);
+        return null;
+      }
+      return data;
+    } catch (e) {
+      debugPrint('LocalCacheService: erro ao carregar resultados de busca — $e');
+      return null;
+    }
+  }
+
+  static Future<void> limparResultadosBusca() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_keySearchResults);
+    } catch (e) {
+      debugPrint('LocalCacheService: erro ao limpar resultados de busca — $e');
+    }
+  }
 }

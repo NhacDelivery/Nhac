@@ -69,10 +69,11 @@ class _NotificacoesPageState extends State<NotificacoesPage>
         body: FutureBuilder<List<NotificacaoRegistrada>>(
           future: _avisos,
           builder: (context, snapshot) {
-            if (!snapshot.hasData && !snapshot.hasError)
+            if (!snapshot.hasData && !snapshot.hasError) {
               return const Center(
                 child: CircularProgressIndicator(color: Color(0xFFFF6961)),
               );
+            }
             final avisos = snapshot.data ?? [];
             return RefreshIndicator(
               color: const Color(0xFFFF6961),

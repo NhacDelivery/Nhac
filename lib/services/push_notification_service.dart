@@ -175,7 +175,9 @@ class PushNotificationService {
           usuarioId ?? await SessionStorageService().obterUsuarioId();
       final destinatario = message.data['usuarioId']?.toString();
       if (contaAtual == null ||
-          (destinatario != null && destinatario != contaAtual)) return;
+          (destinatario != null && destinatario != contaAtual)) {
+        return;
+      }
       final pedidoId = message.data['pedidoId']?.toString();
       final status = StatusPedido.fromApi(message.data['status']?.toString());
       final titulo = message.notification?.title ??
