@@ -36,7 +36,7 @@ class ProdutoDetalhesPage extends StatefulWidget {
 
 class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   int _quantidade = 1;
-  
+
   late Future<_RelatedProducts> _produtosRelacionadosFuture;
   Future<LojasModel?>? _lojaFuture;
   Future<List<ProdutosModel>>? _produtosDaLojaFuture;
@@ -51,7 +51,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   @override
   void initState() {
     super.initState();
-    
+
     _produtosRelacionadosFuture = _buscarRelacionados();
 
     _lojaFuture = widget.produto.lojaId.isNotEmpty
@@ -59,24 +59,40 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
         : Future.value(null);
     _produtosDaLojaFuture = null;
 
-    _resumoAvaliacoesFuture = _avaliacaoRepository.buscarResumoAvaliacoes(widget.produto.id);
-    _avaliacoesFuture = _avaliacaoRepository.buscarAvaliacoes(widget.produto.lojaId);
+    _resumoAvaliacoesFuture = _avaliacaoRepository.buscarResumoAvaliacoes(
+      widget.produto.id,
+    );
+    _avaliacoesFuture = _avaliacaoRepository.buscarAvaliacoes(
+      widget.produto.lojaId,
+    );
   }
 
   Future<_RelatedProducts> _buscarRelacionados() async {
-    final products = await _produtoRepository.buscarPorCategoria(widget.produto.categoriaMenu);
-    final storeIds = products.map((p) => p.lojaId).where((id) => id.isNotEmpty).toSet();
-    final stores = await Future.wait(storeIds.map((id) async {
-      try {
-        final loja = await _lojaRepository.buscarLoja(id);
-        return MapEntry(id, loja?.isAberto ?? false);
-      } catch (_) {
-        return MapEntry(id, false);
-      }
-    }));
+    final products = await _produtoRepository.buscarPorCategoria(
+      widget.produto.categoriaMenu,
+    );
+    final storeIds = products
+        .map((p) => p.lojaId)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final stores = await Future.wait(
+      storeIds.map((id) async {
+        try {
+          final loja = await _lojaRepository.buscarLoja(id);
+          return MapEntry(id, loja?.isAberto ?? false);
+        } catch (_) {
+          return MapEntry(id, false);
+        }
+      }),
+    );
     return _RelatedProducts(
-      products.where((p) => p.id != widget.produto.id &&
-          stores.any((entry) => entry.key == p.lojaId && entry.value)).toList(),
+      products
+          .where(
+            (p) =>
+                p.id != widget.produto.id &&
+                stores.any((entry) => entry.key == p.lojaId && entry.value),
+          )
+          .toList(),
       Map.fromEntries(stores),
     );
   }
@@ -90,13 +106,17 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
         context.showError('Não foi possível abrir a conversa com esta loja.');
         return;
       }
-      context.push('/chat-loja', extra: {
-        'lojaId': loja.id,
-        'lojaNome': loja.nome,
-        'produto': widget.produto,
-      });
+      context.push(
+        '/chat-loja',
+        extra: {
+          'lojaId': loja.id,
+          'lojaNome': loja.nome,
+          'produto': widget.produto,
+        },
+      );
     } catch (_) {
-      if (mounted) context.showError('Não foi possível abrir a conversa com esta loja.');
+      if (mounted)
+        context.showError('Não foi possível abrir a conversa com esta loja.');
     }
   }
 
@@ -118,7 +138,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
 
   void _abrirLojaProfile() async {
     if (_isNavigatingToLoja || _lojaFuture == null) return;
-    
+
     dynamic loja;
     try {
       loja = await _lojaFuture;
@@ -128,7 +148,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
       }
       return;
     }
-    
+
     if (loja == null) return;
 
     setState(() {
@@ -141,12 +161,19 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (context, animation, secondaryAnimation) => LojaPage(loja: loja),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            LojaPage(loja: loja),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(1.0, 0.0);
           const end = Offset.zero;
-          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeOutCubic));
-          return SlideTransition(position: animation.drive(tween), child: child);
+          var tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: Curves.easeOutCubic));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
         },
       ),
     );
@@ -160,7 +187,10 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+    final currencyFormat = NumberFormat.currency(
+      locale: 'pt_BR',
+      symbol: 'R\$',
+    );
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -185,8 +215,11 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: Icon(Icons.arrow_back_ios_new,
-                          color: const Color(0xFF5D201C), size: 20.r),
+                      icon: Icon(
+                        Icons.arrow_back_ios_new,
+                        color: const Color(0xFF5D201C),
+                        size: 20.r,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),
@@ -200,11 +233,15 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
-                        icon: Icon(Icons.share_outlined,
-                            color: const Color(0xFF5D201C), size: 20.r),
+                        icon: Icon(
+                          Icons.share_outlined,
+                          color: const Color(0xFF5D201C),
+                          size: 20.r,
+                        ),
                         onPressed: () {
                           // Mudou de uid para id
-                          final link = 'https://nhac.app/produto/${widget.produto.id}';
+                          final link =
+                              'https://nhac.app/produto/${widget.produto.id}';
                           Share.share(
                             'Confira este produto no Nhac!\n\n'
                             '${widget.produto.nome}\n'
@@ -224,9 +261,14 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
-                        icon: Icon(Icons.more_horiz,
-                            color: const Color(0xFF5D201C), size: 20.r),
-                        onPressed: () {},
+                        icon: Icon(
+                          Icons.more_horiz,
+                          color: const Color(0xFF5D201C),
+                          size: 20.r,
+                        ),
+                        onPressed: () => context.showError(
+                          'Mais opções indisponíveis no momento.',
+                        ),
                       ),
                     ),
                   ),
@@ -241,19 +283,28 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                             placeholder: (context, url) => Container(
                               color: const Color(0xFFF5F5F5),
                               child: const Center(
-                                child: LoadingNhac(telaCheia: false, tamanho: 40),
+                                child: LoadingNhac(
+                                  telaCheia: false,
+                                  tamanho: 40,
+                                ),
                               ),
                             ),
                             errorWidget: (context, url, error) => Container(
                               color: const Color(0xFFF5F5F5),
-                              child: Icon(Icons.fastfood,
-                                  size: 80.r, color: Colors.grey),
+                              child: Icon(
+                                Icons.fastfood,
+                                size: 80.r,
+                                color: Colors.grey,
+                              ),
                             ),
                           )
                         : Container(
                             color: const Color(0xFFF5F5F5),
-                            child: Icon(Icons.fastfood,
-                                size: 80.r, color: Colors.grey),
+                            child: Icon(
+                              Icons.fastfood,
+                              size: 80.r,
+                              color: Colors.grey,
+                            ),
                           ),
                   ),
                 ),
@@ -272,8 +323,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Padding(
-                        padding:
-                            EdgeInsets.fromLTRB(20.w, 24.h, 20.w, 10.h),
+                        padding: EdgeInsets.fromLTRB(20.w, 24.h, 20.w, 10.h),
                         child: Text(
                           widget.produto.nome,
                           textAlign: TextAlign.center,
@@ -301,14 +351,22 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                 color: const Color(0xFFFF6961),
                                 letterSpacing: -1.5,
                                 shadows: const [
-                                  Shadow(offset: Offset(-0.8, -0.8),
-                                      color: Color(0xFFFF6961)),
-                                  Shadow(offset: Offset(0.8, -0.8),
-                                      color: Color(0xFFFF6961)),
-                                  Shadow(offset: Offset(0.8, 0.8),
-                                      color: Color(0xFFFF6961)),
-                                  Shadow(offset: Offset(-0.8, 0.8),
-                                      color: Color(0xFFFF6961)),
+                                  Shadow(
+                                    offset: Offset(-0.8, -0.8),
+                                    color: Color(0xFFFF6961),
+                                  ),
+                                  Shadow(
+                                    offset: Offset(0.8, -0.8),
+                                    color: Color(0xFFFF6961),
+                                  ),
+                                  Shadow(
+                                    offset: Offset(0.8, 0.8),
+                                    color: Color(0xFFFF6961),
+                                  ),
+                                  Shadow(
+                                    offset: Offset(-0.8, 0.8),
+                                    color: Color(0xFFFF6961),
+                                  ),
                                 ],
                               ),
                             ),
@@ -328,25 +386,35 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           child: Column(
                             children: [
                               _buildServiceRow(
-                                  Icons.bolt, 'Envio imediato após a compra'),
-                              Padding(
-                                padding: EdgeInsets.symmetric(vertical: 8.h),
-                                child: const Divider(
-                                    height: 1, color: Color(0xFFEEEEEE)),
+                                Icons.bolt,
+                                'Envio imediato após a compra',
                               ),
-                              _buildServiceRow(Icons.check_circle_outline,
-                                  'Garantia de reembolso em caso de problemas'),
                               Padding(
                                 padding: EdgeInsets.symmetric(vertical: 8.h),
                                 child: const Divider(
-                                    height: 1, color: Color(0xFFEEEEEE)),
+                                  height: 1,
+                                  color: Color(0xFFEEEEEE),
+                                ),
+                              ),
+                              _buildServiceRow(
+                                Icons.check_circle_outline,
+                                'Garantia de reembolso em caso de problemas',
+                              ),
+                              Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8.h),
+                                child: const Divider(
+                                  height: 1,
+                                  color: Color(0xFFEEEEEE),
+                                ),
                               ),
                               FutureBuilder<LojasModel?>(
                                 future: _lojaFuture,
                                 builder: (context, snapshot) {
                                   String nomeLoja = 'Loja Parceira';
-                                  if (snapshot.connectionState == ConnectionState.done) {
-                                    if (snapshot.hasData && snapshot.data != null) {
+                                  if (snapshot.connectionState ==
+                                      ConnectionState.done) {
+                                    if (snapshot.hasData &&
+                                        snapshot.data != null) {
                                       nomeLoja = snapshot.data!.nome;
                                     } else {
                                       // Busca terminou sem retornar a loja
@@ -358,8 +426,9 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                     }
                                   }
                                   return _buildServiceRow(
-                                      Icons.storefront_outlined,
-                                      'Vendido por: $nomeLoja');
+                                    Icons.storefront_outlined,
+                                    'Vendido por: $nomeLoja',
+                                  );
                                 },
                               ),
                             ],
@@ -399,7 +468,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                       ),
 
                       SizedBox(height: 24.h),
-                      
+
                       _buildReviewsSection(),
 
                       _buildStoreProfileSection(),
@@ -421,16 +490,18 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                             ),
                             Container(
                               decoration: BoxDecoration(
-                                border: Border.all(
-                                    color: Colors.grey.shade300),
+                                border: Border.all(color: Colors.grey.shade300),
                                 borderRadius: BorderRadius.circular(30.r),
                               ),
                               child: Row(
                                 children: [
                                   IconButton(
                                     onPressed: _decrementarQuantidade,
-                                    icon: Icon(Icons.remove,
-                                        size: 20.r, color: Colors.black54),
+                                    icon: Icon(
+                                      Icons.remove,
+                                      size: 20.r,
+                                      color: Colors.black54,
+                                    ),
                                   ),
                                   SizedBox(
                                     width: 40.w,
@@ -445,8 +516,11 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                   ),
                                   IconButton(
                                     onPressed: _incrementarQuantidade,
-                                    icon: Icon(Icons.add,
-                                        size: 20.r, color: Colors.black54),
+                                    icon: Icon(
+                                      Icons.add,
+                                      size: 20.r,
+                                      color: Colors.black54,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -463,15 +537,19 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           future: _produtosRelacionadosFuture,
                           builder: (context, snapshot) {
                             if (snapshot.connectionState ==
-                                    ConnectionState.waiting) {
+                                ConnectionState.waiting) {
                               return const SizedBox.shrink();
                             }
 
-                            if (snapshot.hasError || !snapshot.hasData || snapshot.data!.products.isEmpty) {
+                            if (snapshot.hasError ||
+                                !snapshot.hasData ||
+                                snapshot.data!.products.isEmpty) {
                               return const SizedBox.shrink();
                             }
 
-                            final produtosRelacionados = snapshot.data!.products.take(5).toList();
+                            final produtosRelacionados = snapshot.data!.products
+                                .take(5)
+                                .toList();
 
                             if (produtosRelacionados.isEmpty) {
                               return const SizedBox.shrink();
@@ -481,7 +559,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                               title: 'Produtos Relacionados',
                               products: produtosRelacionados,
                               lojaAberta: snapshot.data!.storesOpen,
-                            );                          
+                            );
                           },
                         ),
                       ),
@@ -517,10 +595,13 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               ),
               child: Row(
                 children: [
-
                   InkWell(
                     onTap: _abrirChat,
-                    child: _buildIconAction(Icons.chat_bubble_outline, 'Chat', ''),
+                    child: _buildIconAction(
+                      Icons.chat_bubble_outline,
+                      'Chat',
+                      '',
+                    ),
                   ),
                   SizedBox(width: 24.w),
                   Expanded(
@@ -529,64 +610,78 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                       builder: (context, lojaSnapshot) {
                         final loja = lojaSnapshot.data;
                         final aindaCarregando =
-                            lojaSnapshot.connectionState != ConnectionState.done;
+                            lojaSnapshot.connectionState !=
+                            ConnectionState.done;
                         final lojaFechada =
                             aindaCarregando || loja == null || !loja.isAberto;
                         return ElevatedButton(
                           key: E2EKeys.productAdd,
-                      onPressed: aindaCarregando
-                          ? null
-                          : lojaFechada
-                          ? () {
-                              context.showError('Esta loja está fechada no momento.');
-                            }
-                          : () async {
-                        try {
-                          final cartProvider = Provider.of<CartProvider>(context, listen: false);
-                          await cartProvider.adicionarItemComQuantidade(
-                            idProduto: widget.produto.id, 
-                            nome: widget.produto.nome,
-                            preco: widget.produto.preco,
-                            imagemUrl: widget.produto.imagemUrl,
-                            lojaId: widget.produto.lojaId,
-                            quantidade: _quantidade,
-                          );
-                          if (context.mounted) {
-                            showAppNotification(
-                              context,
-                              type: NotificationType.success,
-                              imageUrl: widget.produto.imagemUrl,
-                              message: '$_quantidade x ${widget.produto.nome}',
-                            );
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            context.showError(e.toString().replaceAll('Exception: ', ''));
-                          }
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: lojaFechada
-                            ? Colors.grey.shade400
-                            : const Color(0xFFFF6961),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: EdgeInsets.symmetric(vertical: 16.h),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(50.r),
-                        ),
-                      ),
-                      child: Text(
-                        aindaCarregando
-                            ? 'Carregando...'
-                            : lojaFechada
-                            ? 'Loja fechada'
-                            : 'Adicionar  ${currencyFormat.format(widget.produto.preco * _quantidade)}',
-                        style: TextStyle(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                          onPressed: aindaCarregando
+                              ? null
+                              : lojaFechada
+                              ? () {
+                                  context.showError(
+                                    'Esta loja está fechada no momento.',
+                                  );
+                                }
+                              : () async {
+                                  try {
+                                    final cartProvider =
+                                        Provider.of<CartProvider>(
+                                          context,
+                                          listen: false,
+                                        );
+                                    await cartProvider
+                                        .adicionarItemComQuantidade(
+                                          idProduto: widget.produto.id,
+                                          nome: widget.produto.nome,
+                                          preco: widget.produto.preco,
+                                          imagemUrl: widget.produto.imagemUrl,
+                                          lojaId: widget.produto.lojaId,
+                                          quantidade: _quantidade,
+                                        );
+                                    if (context.mounted) {
+                                      showAppNotification(
+                                        context,
+                                        type: NotificationType.success,
+                                        imageUrl: widget.produto.imagemUrl,
+                                        message:
+                                            '$_quantidade x ${widget.produto.nome}',
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      context.showError(
+                                        e.toString().replaceAll(
+                                          'Exception: ',
+                                          '',
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: lojaFechada
+                                ? Colors.grey.shade400
+                                : const Color(0xFFFF6961),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: EdgeInsets.symmetric(vertical: 16.h),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(50.r),
+                            ),
+                          ),
+                          child: Text(
+                            aindaCarregando
+                                ? 'Carregando...'
+                                : lojaFechada
+                                ? 'Loja fechada'
+                                : 'Adicionar  ${currencyFormat.format(widget.produto.preco * _quantidade)}',
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         );
                       },
                     ),
@@ -596,14 +691,15 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
             ),
           ),
           Positioned(
-            right: 25.w, 
+            right: 25.w,
             top: 0,
             bottom: 0,
             width: 150.w,
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onHorizontalDragEnd: (details) {
-                if (details.primaryVelocity != null && details.primaryVelocity! < -300) {
+                if (details.primaryVelocity != null &&
+                    details.primaryVelocity! < -300) {
                   _abrirLojaProfile();
                 }
               },
@@ -628,10 +724,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
         Expanded(
           child: Text(
             text,
-            style: TextStyle(
-              fontSize: 14.sp,
-              color: const Color(0xFF555555),
-            ),
+            style: TextStyle(fontSize: 14.sp, color: const Color(0xFF555555)),
           ),
         ),
         Icon(Icons.chevron_right, size: 20.r, color: const Color(0xFFCCCCCC)),
@@ -639,7 +732,12 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
     );
   }
 
-  Widget _buildIconAction(IconData icon, String label, String count, {Color? iconColor}) {
+  Widget _buildIconAction(
+    IconData icon,
+    String label,
+    String count, {
+    Color? iconColor,
+  }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -647,10 +745,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
         SizedBox(height: 4.h),
         Text(
           count.isNotEmpty ? count : label,
-          style: TextStyle(
-            fontSize: 11.sp,
-            color: const Color(0xFF888888),
-          ),
+          style: TextStyle(fontSize: 11.sp, color: const Color(0xFF888888)),
         ),
       ],
     );
@@ -677,16 +772,13 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                       color: const Color(0xFF5D201C),
                     ),
                   );
-                }
+                },
               ),
               Row(
                 children: [
                   Text(
                     'Ver todas',
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      color: Colors.black54,
-                    ),
+                    style: TextStyle(fontSize: 14.sp, color: Colors.black54),
                   ),
                   Icon(Icons.chevron_right, size: 20.r, color: Colors.black54),
                 ],
@@ -703,7 +795,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                 total = snapshot.data!['total'] ?? 0;
               }
               return _buildRatingSummary(rating, total);
-            }
+            },
           ),
           SizedBox(height: 12.h),
           Row(
@@ -719,8 +811,17 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
           FutureBuilder<List<AvaliacoesModel>>(
             future: _avaliacoesFuture,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: LoadingNhac(telaCheia: false, tamanho: 40));
-              if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) return Text('Sem avaliações ainda.', style: TextStyle(color: Colors.grey.shade600));
+              if (snapshot.connectionState == ConnectionState.waiting)
+                return const Center(
+                  child: LoadingNhac(telaCheia: false, tamanho: 40),
+                );
+              if (snapshot.hasError ||
+                  !snapshot.hasData ||
+                  snapshot.data!.isEmpty)
+                return Text(
+                  'Sem avaliações ainda.',
+                  style: TextStyle(color: Colors.grey.shade600),
+                );
 
               return Column(
                 children: snapshot.data!.take(3).map((avaliacao) {
@@ -737,14 +838,18 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                   );
                 }).toList(),
               );
-            }
+            },
           ),
         ],
       ),
     );
   }
 
-  Widget _buildReviewFilterTag(String text, {bool isSelected = false, IconData? icon}) {
+  Widget _buildReviewFilterTag(
+    String text, {
+    bool isSelected = false,
+    IconData? icon,
+  }) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
       decoration: BoxDecoration(
@@ -755,7 +860,11 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            Icon(icon, size: 14.r, color: isSelected ? Colors.white : Colors.black54),
+            Icon(
+              icon,
+              size: 14.r,
+              color: isSelected ? Colors.white : Colors.black54,
+            ),
             SizedBox(width: 4.w),
           ],
           Text(
@@ -795,10 +904,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               SizedBox(width: 8.w),
               Text(
                 name,
-                style: TextStyle(
-                  fontSize: 14.sp,
-                  color: Colors.black54,
-                ),
+                style: TextStyle(fontSize: 14.sp, color: Colors.black54),
               ),
               const Spacer(),
               Container(
@@ -837,10 +943,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
           SizedBox(height: 8.h),
           Text(
             '$date  $location',
-            style: TextStyle(
-              fontSize: 12.sp,
-              color: Colors.black38,
-            ),
+            style: TextStyle(fontSize: 12.sp, color: Colors.black38),
           ),
         ],
       ),
@@ -971,13 +1074,17 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                         separatorBuilder: (_, __) => SizedBox(width: 12.w),
                         itemBuilder: (context, index) {
                           final prod = produtosLoja[index];
-                          final currencyFormat = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+                          final currencyFormat = NumberFormat.currency(
+                            locale: 'pt_BR',
+                            symbol: 'R\$',
+                          );
                           return GestureDetector(
                             onTap: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => ProdutoDetalhesPage(produto: prod),
+                                  builder: (context) =>
+                                      ProdutoDetalhesPage(produto: prod),
                                 ),
                               );
                             },
@@ -999,26 +1106,36 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                                 )
                                               : Container(
                                                   color: Colors.grey.shade200,
-                                                  child: Icon(Icons.fastfood, color: Colors.grey),
+                                                  child: Icon(
+                                                    Icons.fastfood,
+                                                    color: Colors.grey,
+                                                  ),
                                                 ),
                                           Positioned(
                                             bottom: 0,
                                             left: 0,
                                             right: 0,
                                             child: Container(
-                                              padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 4.h),
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal: 6.w,
+                                                vertical: 4.h,
+                                              ),
                                               decoration: BoxDecoration(
                                                 gradient: LinearGradient(
                                                   begin: Alignment.bottomCenter,
                                                   end: Alignment.topCenter,
                                                   colors: [
-                                                    Colors.black.withValues(alpha: 0.7),
+                                                    Colors.black.withValues(
+                                                      alpha: 0.7,
+                                                    ),
                                                     Colors.transparent,
                                                   ],
                                                 ),
                                               ),
                                               child: Text(
-                                                currencyFormat.format(prod.preco),
+                                                currencyFormat.format(
+                                                  prod.preco,
+                                                ),
                                                 style: TextStyle(
                                                   color: Colors.white,
                                                   fontWeight: FontWeight.bold,
@@ -1102,7 +1219,11 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                     ),
                   ),
                   SizedBox(width: 4.w),
-                  Icon(Icons.info_outline, size: 14.r, color: Colors.grey.shade400),
+                  Icon(
+                    Icons.info_outline,
+                    size: 14.r,
+                    color: Colors.grey.shade400,
+                  ),
                 ],
               ),
             ],
@@ -1140,7 +1261,9 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               (index) => Icon(
                 Icons.star,
                 size: 8.r,
-                color: index < starCount ? const Color(0xFF5D201C) : Colors.transparent,
+                color: index < starCount
+                    ? const Color(0xFF5D201C)
+                    : Colors.transparent,
               ),
             ),
           ),

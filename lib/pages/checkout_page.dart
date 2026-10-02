@@ -38,8 +38,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final TextEditingController _cpfController = TextEditingController();
 
   bool _mostrarCampoTroco = true;
-  final NumberFormat currencyFormat =
-      NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+  final NumberFormat currencyFormat = NumberFormat.currency(
+    locale: 'pt_BR',
+    symbol: 'R\$',
+  );
   bool _isLoading = true;
   bool _isSubmitting = false;
 
@@ -78,7 +80,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cartProvider = context.read<CartProvider>();
     if (cartProvider.lojaId.isEmpty) return;
     final versao = ++_freteVersao;
-    setState(() { _freteConfirmado = false; _entregaLatitude = null; _entregaLongitude = null; });
+    setState(() {
+      _freteConfirmado = false;
+      _entregaLatitude = null;
+      _entregaLongitude = null;
+    });
 
     try {
       double latitude;
@@ -96,7 +102,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
           endereco.cep,
         ].where((v) => v.trim().isNotEmpty).join(', ');
         final locais = await locationFromAddress(enderecoCompleto);
-        if (locais.isEmpty) throw StateError('Endereço não encontrado no mapa.');
+        if (locais.isEmpty)
+          throw StateError('Endereço não encontrado no mapa.');
         latitude = locais.first.latitude;
         longitude = locais.first.longitude;
       }
@@ -116,13 +123,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
     } catch (e) {
       debugPrint('Não foi possível recalcular o frete: $e');
       if (!mounted || versao != _freteVersao) return;
-      final loja = await LojaRepository().buscarLoja(cartProvider.lojaId);
-      if (loja != null && mounted && versao == _freteVersao) {
-        setState(() {
-          _taxaFrete = loja.dadosOperacionais?.taxaEntregaBase ?? 0.0;
-          _tempoEstimadoMinutos = loja.dadosOperacionais?.tempoEntregaMax;
-        });
-      }
+      context.showError(
+        'Não foi possível confirmar o frete. Seu endereço foi mantido. Tente calcular novamente.',
+      );
+      // Não apresenta a taxa base como se fosse um frete calculado.
+      setState(() {
+        _taxaFrete = 0;
+        _tempoEstimadoMinutos = null;
+      });
     }
   }
 
@@ -158,8 +166,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(24.r)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24.r),
+        ),
         backgroundColor: Colors.white,
         title: Row(
           children: [
@@ -168,9 +177,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
             Text(
               'Número da casa',
               style: TextStyle(
-                  fontSize: 20.sp,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF5D201C)),
+                fontSize: 20.sp,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFF5D201C),
+              ),
             ),
           ],
         ),
@@ -181,8 +191,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
             children: [
               Text(
                 'Para completar seu endereço, informe o número da casa.',
-                style:
-                    TextStyle(fontSize: 14.sp, color: const Color(0xFF5D201C)),
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  color: const Color(0xFF5D201C),
+                ),
               ),
               SizedBox(height: 16.h),
               TextFormField(
@@ -191,9 +203,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 decoration: InputDecoration(
                   hintText: 'Número (ex: 123, S/N)',
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12.r)),
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+                    borderRadius: BorderRadius.circular(12.r),
+                  ),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 16.w,
+                    vertical: 12.h,
+                  ),
                 ),
                 validator: (value) => value == null || value.trim().isEmpty
                     ? 'Campo obrigatório'
@@ -205,8 +220,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child:
-                Text('Cancelar', style: TextStyle(color: Colors.grey.shade600)),
+            child: Text(
+              'Cancelar',
+              style: TextStyle(color: Colors.grey.shade600),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -215,7 +232,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 final enderecoAtualizado = endereco.copyWith(numero: numero);
 
                 await context.read<EnderecoProvider>().atualizarEndereco(
-                    enderecoAtualizado.id, enderecoAtualizado);
+                  enderecoAtualizado.id,
+                  enderecoAtualizado,
+                );
 
                 if (!mounted) return;
                 Navigator.pop(context);
@@ -224,7 +243,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFE645C),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(50.r)),
+                borderRadius: BorderRadius.circular(50.r),
+              ),
             ),
             child: const Text('Salvar'),
           ),
@@ -259,7 +279,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final subtotal = cartProvider.valorTotal;
     final frete = _taxaFrete;
 
-    final desconto = _subtotalValidado == subtotal ? (_cupom?.descontoAplicado ?? 0) : 0.0;
+    final desconto = _subtotalValidado == subtotal
+        ? (_cupom?.descontoAplicado ?? 0)
+        : 0.0;
     final total = subtotal + frete - desconto;
     final tempoEntrega = _tempoEstimadoMinutos == null
         ? 'Tempo calculado no fechamento'
@@ -273,8 +295,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
         backgroundColor: const Color(0xFFFFE7E5),
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new,
-              color: const Color(0xFF5D201C), size: 20.r),
+          icon: Icon(
+            Icons.arrow_back_ios_new,
+            color: const Color(0xFF5D201C),
+            size: 20.r,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -307,8 +332,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       color: const Color(0xFFFF6961).withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.location_on_outlined,
-                        color: const Color(0xFFFF6961), size: 20.r),
+                    child: Icon(
+                      Icons.location_on_outlined,
+                      color: const Color(0xFFFF6961),
+                      size: 20.r,
+                    ),
                   ),
                   SizedBox(width: 16.w),
                   Expanded(
@@ -330,7 +358,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           Text(
                             '${enderecoisPadrao.bairro} - ${enderecoisPadrao.cidade}/${enderecoisPadrao.estado}',
                             style: TextStyle(
-                                color: Colors.grey.shade600, fontSize: 12.sp),
+                              color: Colors.grey.shade600,
+                              fontSize: 12.sp,
+                            ),
                           ),
                         ],
                       ],
@@ -341,8 +371,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     child: Text(
                       'Alterar',
                       style: TextStyle(
-                          color: const Color(0xFFFF6961),
-                          fontWeight: FontWeight.w600),
+                        color: const Color(0xFFFF6961),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -373,9 +404,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     Text(
                       'CPF para pagamento PIX',
                       style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14.sp,
-                          color: const Color(0xFF5D201C)),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14.sp,
+                        color: const Color(0xFF5D201C),
+                      ),
                     ),
                     SizedBox(height: 8.h),
                     TextField(
@@ -384,9 +416,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       decoration: InputDecoration(
                         hintText: 'Digite seu CPF (obrigatório)',
                         hintStyle: TextStyle(
-                            color: Colors.grey.shade400, fontSize: 14.sp),
-                        prefixIcon: Icon(Icons.person,
-                            size: 20.r, color: Colors.grey.shade600),
+                          color: Colors.grey.shade400,
+                          fontSize: 14.sp,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.person,
+                          size: 20.r,
+                          color: Colors.grey.shade600,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12.r),
                           borderSide: BorderSide.none,
@@ -410,9 +447,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     Text(
                       'Precisa de troco?',
                       style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14.sp,
-                          color: const Color(0xFF5D201C)),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14.sp,
+                        color: const Color(0xFF5D201C),
+                      ),
                     ),
                     SizedBox(height: 8.h),
                     TextField(
@@ -421,9 +459,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       decoration: InputDecoration(
                         hintText: 'Valor para troco (ex: 50,00)',
                         hintStyle: TextStyle(
-                            color: Colors.grey.shade400, fontSize: 14.sp),
-                        prefixIcon: Icon(Icons.money,
-                            size: 20.r, color: Colors.grey.shade600),
+                          color: Colors.grey.shade400,
+                          fontSize: 14.sp,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.money,
+                          size: 20.r,
+                          color: Colors.grey.shade600,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12.r),
                           borderSide: BorderSide.none,
@@ -501,12 +544,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             _cupom == null
                                 ? 'Veja seus cupons e economize neste pedido'
                                 : (_subtotalValidado == subtotal
-                                    ? 'Desconto de ${currencyFormat.format(desconto)} aplicado'
-                                    : 'Carrinho alterado. Selecione o cupom novamente.'),
+                                      ? 'Desconto de ${currencyFormat.format(desconto)} aplicado'
+                                      : 'Carrinho alterado. Selecione o cupom novamente.'),
                             style: TextStyle(
                               fontSize: 12.sp,
-                              color: const Color(0xFF5D201C)
-                                  .withValues(alpha: 0.58),
+                              color: const Color(
+                                0xFF5D201C,
+                              ).withValues(alpha: 0.58),
                             ),
                           ),
                         ],
@@ -523,9 +567,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         onPressed: _isSubmitting
                             ? null
                             : () => setState(() {
-                                  _cupom = null;
-                                  _subtotalValidado = null;
-                                }),
+                                _cupom = null;
+                                _subtotalValidado = null;
+                              }),
                         icon: const Icon(
                           Icons.close_rounded,
                           color: Color(0xFFFF6961),
@@ -543,47 +587,59 @@ class _CheckoutPageState extends State<CheckoutPage> {
               decoration: _cardDecoration(),
               child: Column(
                 children: [
-                  ...cartProvider.itens.values.map((item) => Padding(
-                        padding: EdgeInsets.only(bottom: 12.h),
-                        child: Row(
-                          children: [
-                            Text(
-                              '${item.quantidade}x',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 14.sp),
+                  ...cartProvider.itens.values.map(
+                    (item) => Padding(
+                      padding: EdgeInsets.only(bottom: 12.h),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${item.quantidade}x',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14.sp,
                             ),
-                            SizedBox(width: 12.w),
-                            Expanded(
-                              child: Text(
-                                item.nome,
-                                style: TextStyle(
-                                    fontSize: 14.sp, color: Colors.black87),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                          ),
+                          SizedBox(width: 12.w),
+                          Expanded(
+                            child: Text(
+                              item.nome,
+                              style: TextStyle(
+                                fontSize: 14.sp,
+                                color: Colors.black87,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            Text(
-                              currencyFormat
-                                  .format(item.preco * item.quantidade),
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 14.sp),
+                          ),
+                          Text(
+                            currencyFormat.format(item.preco * item.quantidade),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14.sp,
                             ),
-                          ],
-                        ),
-                      )),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   if (cartProvider.observacao.isNotEmpty) ...[
                     Divider(height: 24.h, color: Colors.grey.shade200),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.note_outlined,
-                            size: 18.r, color: Colors.grey.shade600),
+                        Icon(
+                          Icons.note_outlined,
+                          size: 18.r,
+                          color: Colors.grey.shade600,
+                        ),
                         SizedBox(width: 8.w),
                         Expanded(
                           child: Text(
                             'Observações: ${cartProvider.observacao}',
                             style: TextStyle(
-                                fontSize: 13.sp, color: Colors.grey.shade700),
+                              fontSize: 13.sp,
+                              color: Colors.grey.shade700,
+                            ),
                           ),
                         ),
                       ],
@@ -594,11 +650,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Subtotal',
-                            style: TextStyle(
-                                color: Colors.grey.shade700, fontSize: 14.sp)),
-                        Text(currencyFormat.format(subtotal),
-                            style: TextStyle(fontSize: 14.sp)),
+                        Text(
+                          'Subtotal',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontSize: 14.sp,
+                          ),
+                        ),
+                        Text(
+                          currencyFormat.format(subtotal),
+                          style: TextStyle(fontSize: 14.sp),
+                        ),
                       ],
                     ),
                   ),
@@ -618,9 +680,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(_freteConfirmado ? 'Frete confirmado' : 'Frete estimado',
-                            style: TextStyle(
-                                color: Colors.grey.shade700, fontSize: 14.sp)),
+                        Text(
+                          _freteConfirmado
+                              ? 'Frete confirmado'
+                              : 'Frete estimado',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontSize: 14.sp,
+                          ),
+                        ),
                         Text(
                           currencyFormat.format(frete),
                           style: TextStyle(
@@ -634,8 +702,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   SizedBox(height: 12.h),
                   if (!_freteConfirmado)
                     TextButton(
-                      onPressed: enderecoisPadrao == null ? null : () => _recalcularFrete(enderecoisPadrao),
-                      child: const Text('Frete ainda não confirmado para este endereço. Tentar novamente'),
+                      onPressed: enderecoisPadrao == null
+                          ? null
+                          : () => _recalcularFrete(enderecoisPadrao),
+                      child: const Text(
+                        'Frete ainda não confirmado para este endereço. Tentar novamente',
+                      ),
                     ),
                   MergeSemantics(
                     child: Row(
@@ -644,9 +716,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         Text(
                           'Total',
                           style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16.sp,
-                              color: const Color(0xFF5D201C)),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16.sp,
+                            color: const Color(0xFF5D201C),
+                          ),
                         ),
                         Semantics(
                           key: E2EKeys.checkoutTotal,
@@ -654,9 +727,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           child: Text(
                             currencyFormat.format(total),
                             style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18.sp,
-                                color: const Color(0xFFFF6961)),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18.sp,
+                              color: const Color(0xFFFF6961),
+                            ),
                           ),
                         ),
                       ],
@@ -673,15 +747,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
               decoration: _cardDecoration(),
               child: Row(
                 children: [
-                  Icon(Icons.timer_outlined,
-                      color: const Color(0xFFFF6961), size: 24.r),
+                  Icon(
+                    Icons.timer_outlined,
+                    color: const Color(0xFFFF6961),
+                    size: 24.r,
+                  ),
                   SizedBox(width: 12.w),
                   Text(
                     tempoEntrega,
                     style: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w500,
-                        color: const Color(0xFF5D201C)),
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF5D201C),
+                    ),
                   ),
                 ],
               ),
@@ -745,27 +823,34 @@ class _CheckoutPageState extends State<CheckoutPage> {
           padding: EdgeInsets.symmetric(vertical: 12.h),
           child: Row(
             children: [
-              Icon(icon,
-                  size: 24.r,
-                  color: isSelected
-                      ? const Color(0xFFFF6961)
-                      : Colors.grey.shade500),
+              Icon(
+                icon,
+                size: 24.r,
+                color: isSelected
+                    ? const Color(0xFFFF6961)
+                    : Colors.grey.shade500,
+              ),
               SizedBox(width: 16.w),
               Expanded(
                 child: Text(
                   title,
                   style: TextStyle(
                     fontSize: 15.sp,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color:
-                        isSelected ? const Color(0xFFFF6961) : Colors.black87,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                    color: isSelected
+                        ? const Color(0xFFFF6961)
+                        : Colors.black87,
                   ),
                 ),
               ),
               if (isSelected)
-                Icon(Icons.check_circle,
-                    color: const Color(0xFFFF6961), size: 20.r),
+                Icon(
+                  Icons.check_circle,
+                  color: const Color(0xFFFF6961),
+                  size: 20.r,
+                ),
             ],
           ),
         ),
@@ -792,7 +877,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (!mounted || !context.mounted) return;
     if (enderecoProvider.enderecos.isEmpty) {
       _freteVersao++;
-      setState(() { _freteConfirmado = false; _entregaLatitude = null; _entregaLongitude = null; });
+      setState(() {
+        _freteConfirmado = false;
+        _entregaLatitude = null;
+        _entregaLongitude = null;
+      });
       _mostrarDialogEnderecoVazio(context);
       return;
     }
@@ -809,13 +898,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
       context: context,
       barrierDismissible: true,
       builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(24.r)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24.r),
+        ),
         backgroundColor: Colors.white,
         title: Row(
           children: [
-            Icon(Icons.location_off_outlined,
-                color: const Color(0xFFFF6961), size: 28.r),
+            Icon(
+              Icons.location_off_outlined,
+              color: const Color(0xFFFF6961),
+              size: 28.r,
+            ),
             SizedBox(width: 12.w),
             Text(
               'Sem endereço',
@@ -837,7 +930,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
             child: Text(
               'Cancelar',
               style: TextStyle(
-                  color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           ElevatedButton(
@@ -849,7 +944,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               backgroundColor: const Color(0xFFFE645C),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(50.r)),
+                borderRadius: BorderRadius.circular(50.r),
+              ),
             ),
             child: const Text('Adicionar endereço'),
           ),
@@ -871,10 +967,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Future<void> _confirmarPedido(
-      BuildContext context, double total, CartProvider cartProvider) async {
+    BuildContext context,
+    double total,
+    CartProvider cartProvider,
+  ) async {
     if (_isSubmitting) return;
-    if (!_freteConfirmado || _entregaLatitude == null || _entregaLongitude == null) {
-      context.showError('Confirme o frete para este endereço antes de finalizar.');
+    if (!_freteConfirmado ||
+        _entregaLatitude == null ||
+        _entregaLongitude == null) {
+      context.showError(
+        'Confirme o frete para este endereço antes de finalizar.',
+      );
       return;
     }
     setState(() => _isSubmitting = true);
@@ -915,13 +1018,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     if (_cupom != null) {
       try {
-        final validado = await CupomRepository().validarCupom(_cupom!.id, cartProvider.valorTotal);
+        final validado = await CupomRepository().validarCupom(
+          _cupom!.id,
+          cartProvider.valorTotal,
+        );
         if (!context.mounted) return;
         setState(() {
           _cupom = validado;
           _subtotalValidado = cartProvider.valorTotal;
         });
-        total = cartProvider.valorTotal + _taxaFrete - validado.descontoAplicado;
+        total =
+            cartProvider.valorTotal + _taxaFrete - validado.descontoAplicado;
       } catch (e) {
         if (!context.mounted) return;
         setState(() => _isSubmitting = false);
@@ -965,7 +1072,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
         _mostrarAvisoPedidoAtivo(ativo.id);
         return;
       }
-    } catch (_) { /* O POST ainda garante a regra no servidor. */ }
+    } catch (_) {
+      /* O POST ainda garante a regra no servidor. */
+    }
 
     final navigator = Navigator.of(context, rootNavigator: true);
 
@@ -973,10 +1082,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (dialogContext) => const LoadingNhac(
-          telaCheia: false,
-          tamanho: 100,
-        ),
+        builder: (dialogContext) =>
+            const LoadingNhac(telaCheia: false, tamanho: 100),
       );
 
       _checkoutIdempotencyKey ??= const Uuid().v4();
@@ -1035,10 +1142,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
       showDialog(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-          title: Text(e.title,
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16.r),
+          ),
+          title: Text(
+            e.title,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1046,10 +1156,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
               Text(e.message),
               if (e.suggestions != null && e.suggestions!.isNotEmpty) ...[
                 SizedBox(height: 16.h),
-                const Text('Sugestões:',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'Sugestões:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 ...e.suggestions!.map((s) => Text('• $s')),
-              ]
+              ],
             ],
           ),
           actions: [
@@ -1074,8 +1186,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-        title: const Text('Pedido em andamento', style: TextStyle(fontWeight: FontWeight.bold)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16.r),
+        ),
+        title: const Text(
+          'Pedido em andamento',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
         content: const Text('Finalize seu pedido atual antes de fazer outro.'),
         actions: [
           TextButton(
@@ -1102,7 +1219,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final subtotal = cartProvider.valorTotal;
     final total = subtotal + _taxaFrete;
     final now = DateTime.now();
-    final dataFormatada = DateFormat("EEEE - d MMM. yyyy - HH:mm", "pt_BR").format(now);
+    final dataFormatada = DateFormat(
+      "EEEE - d MMM. yyyy - HH:mm",
+      "pt_BR",
+    ).format(now);
 
     showDialog(
       context: context,
@@ -1148,7 +1268,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             color: const Color(0xFF0C2444),
                           ),
                         );
-                      }
+                      },
                     ),
                     SizedBox(height: 4.h),
                     Text(
@@ -1160,49 +1280,53 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       ),
                     ),
                     SizedBox(height: 24.h),
-                    ...itens.map((item) => Padding(
-                          padding: EdgeInsets.only(bottom: 8.h),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  item.nome,
-                                  style: TextStyle(
-                                    fontSize: 14.sp,
-                                    fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF0C2444),
-                                  ),
+                    ...itens.map(
+                      (item) => Padding(
+                        padding: EdgeInsets.only(bottom: 8.h),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              flex: 3,
+                              child: Text(
+                                item.nome,
+                                style: TextStyle(
+                                  fontSize: 14.sp,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF0C2444),
                                 ),
                               ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  '${currencyFormat.format(item.preco)} x ${item.quantidade}',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 12.sp,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade500,
-                                  ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                '${currencyFormat.format(item.preco)} x ${item.quantidade}',
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontSize: 12.sp,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey.shade500,
                                 ),
                               ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  currencyFormat.format(item.preco * item.quantidade),
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(
-                                    fontSize: 14.sp,
-                                    fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF0C2444),
-                                  ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                currencyFormat.format(
+                                  item.preco * item.quantidade,
+                                ),
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                  fontSize: 14.sp,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF0C2444),
                                 ),
                               ),
-                            ],
-                          ),
-                        )),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                     SizedBox(height: 16.h),
                     LayoutBuilder(
                       builder: (context, constraints) {
@@ -1216,7 +1340,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               width: 4,
                               height: 2,
                               child: DecoratedBox(
-                                decoration: BoxDecoration(color: const Color(0xFF0C2444)),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0C2444),
+                                ),
                               ),
                             ),
                           ),
@@ -1256,7 +1382,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             value: idGerado,
                             child: BarcodeWidget(
                               barcode: Barcode.code128(),
-                              data: idGerado.length > 8 ? idGerado.substring(0, 8) : idGerado,
+                              data: idGerado.length > 8
+                                  ? idGerado.substring(0, 8)
+                                  : idGerado,
                               drawText: false,
                               color: const Color(0xFF0C2444),
                             ),
@@ -1273,7 +1401,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             ),
                           ),
                         ),
-                        SizedBox(width: 80.w), 
+                        SizedBox(width: 80.w),
                       ],
                     ),
                   ],
@@ -1286,7 +1414,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 onPressed: () {
                   cartProvider.esvaziarCarrinho();
                   Navigator.of(dialogContext).pop();
-                  if (context.mounted) context.go('/rastreio?pedidoId=$idGerado');
+                  if (context.mounted)
+                    context.go('/rastreio?pedidoId=$idGerado');
                 },
               ),
             ],
@@ -1316,8 +1445,9 @@ class _AddressSelectionSheet extends StatelessWidget {
             width: 40.w,
             height: 4.h,
             decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2.r)),
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2.r),
+            ),
           ),
           SizedBox(height: 24.h),
           Padding(
@@ -1327,16 +1457,18 @@ class _AddressSelectionSheet extends StatelessWidget {
               child: Text(
                 'Selecione o endereço de entrega',
                 style: TextStyle(
-                    fontSize: 20.sp,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF5D201C)),
+                  fontSize: 20.sp,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF5D201C),
+                ),
               ),
             ),
           ),
           SizedBox(height: 16.h),
           ConstrainedBox(
             constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.5),
+              maxHeight: MediaQuery.of(context).size.height * 0.5,
+            ),
             child: ListView.separated(
               shrinkWrap: true,
               padding: EdgeInsets.symmetric(horizontal: 24.w),
@@ -1347,9 +1479,9 @@ class _AddressSelectionSheet extends StatelessWidget {
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   onTap: () async {
-                    await context
-                        .read<EnderecoProvider>()
-                        .definirComoPadrao(endereco.id);
+                    await context.read<EnderecoProvider>().definirComoPadrao(
+                      endereco.id,
+                    );
                     if (context.mounted) Navigator.pop(context);
                   },
                   leading: Container(
@@ -1371,8 +1503,10 @@ class _AddressSelectionSheet extends StatelessWidget {
                   ),
                   title: Text(
                     '${endereco.rua}, ${endereco.numero}',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 15.sp),
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15.sp,
+                    ),
                   ),
                   subtitle: Text(
                     '${endereco.bairro}${(endereco.complemento?.isNotEmpty ?? false) ? ' - ${endereco.complemento}' : ''}',
@@ -1381,8 +1515,11 @@ class _AddressSelectionSheet extends StatelessWidget {
                     style: TextStyle(fontSize: 13.sp),
                   ),
                   trailing: endereco.isPadrao
-                      ? Icon(Icons.check_circle,
-                          color: const Color(0xFFFF6961), size: 22.r)
+                      ? Icon(
+                          Icons.check_circle,
+                          color: const Color(0xFFFF6961),
+                          size: 22.r,
+                        )
                       : null,
                 );
               },
@@ -1405,16 +1542,19 @@ class _AddressSelectionSheet extends StatelessWidget {
                     Container(
                       padding: EdgeInsets.all(8.w),
                       decoration: BoxDecoration(
-                          color: Colors.grey.shade100, shape: BoxShape.circle),
+                        color: Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                      ),
                       child: Icon(Icons.add, color: Colors.grey, size: 20.r),
                     ),
                     SizedBox(width: 16.w),
                     Text(
                       'Adicionar novo endereço',
                       style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15.sp,
-                          color: Colors.grey),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15.sp,
+                        color: Colors.grey,
+                      ),
                     ),
                   ],
                 ),

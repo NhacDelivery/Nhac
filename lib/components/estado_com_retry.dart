@@ -78,10 +78,27 @@ class EstadoComRetry<T> extends StatelessWidget {
       case EstadoConteudo.vazio:
         return _buildVazio();
       case EstadoConteudo.erro:
+        final anteriores = dados;
+        if (anteriores != null &&
+            (anteriores is! Iterable || anteriores.isNotEmpty)) {
+          return Column(
+            children: [
+              BannerErroInline(
+                mensagem:
+                    mensagemErro ??
+                    'Não foi possível atualizar. Exibindo dados anteriores.',
+                aoTentarNovamente: aoTentarNovamente,
+              ),
+              builderConteudo(anteriores),
+            ],
+          );
+        }
         return _buildErro();
       case EstadoConteudo.conteudo:
         final T? currentDados = dados;
-        return currentDados != null ? builderConteudo(currentDados) : _buildVazio();
+        return currentDados != null
+            ? builderConteudo(currentDados)
+            : _buildVazio();
     }
   }
 
@@ -90,7 +107,10 @@ class EstadoComRetry<T> extends StatelessWidget {
       return builderLoading!();
     }
 
-    return _ShimmerPlaceholder(alturaMinima: alturaMinima, usarShimmer: usarShimmer);
+    return _ShimmerPlaceholder(
+      alturaMinima: alturaMinima,
+      usarShimmer: usarShimmer,
+    );
   }
 
   Widget _buildVazio() {
@@ -103,7 +123,10 @@ class EstadoComRetry<T> extends StatelessWidget {
 
   Widget _buildErro() {
     if (builderErro != null) {
-      final erroWidget = builderErro!(mensagemErro ?? 'Erro desconhecido', _tentarNovamente);
+      final erroWidget = builderErro!(
+        mensagemErro ?? 'Erro desconhecido',
+        _tentarNovamente,
+      );
       if (alturaMinima != null) {
         return SizedBox(height: alturaMinima, child: erroWidget);
       }
@@ -129,10 +152,7 @@ class _ShimmerPlaceholder extends StatefulWidget {
   final double? alturaMinima;
   final bool usarShimmer;
 
-  const _ShimmerPlaceholder({
-    this.alturaMinima,
-    this.usarShimmer = true,
-  });
+  const _ShimmerPlaceholder({this.alturaMinima, this.usarShimmer = true});
 
   @override
   State<_ShimmerPlaceholder> createState() => _ShimmerPlaceholderState();
@@ -151,9 +171,10 @@ class _ShimmerPlaceholderState extends State<_ShimmerPlaceholder>
       vsync: this,
     )..repeat(reverse: true);
 
-    _animation = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
+    _animation = Tween<double>(
+      begin: 0.4,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
   }
 
   @override
@@ -292,10 +313,7 @@ class _EstadoVazioPadrao extends StatelessWidget {
               SizedBox(height: 8.h),
               Text(
                 'Nenhum item encontrado. Volte mais tarde!',
-                style: TextStyle(
-                  fontSize: 14.sp,
-                  color: Colors.grey.shade600,
-                ),
+                style: TextStyle(fontSize: 14.sp, color: Colors.grey.shade600),
                 textAlign: TextAlign.center,
               ),
             ],
@@ -356,10 +374,7 @@ class _EstadoErroPadrao extends StatelessWidget {
               SizedBox(height: 6.h),
               Text(
                 mensagem,
-                style: TextStyle(
-                  fontSize: 13.sp,
-                  color: Colors.grey.shade600,
-                ),
+                style: TextStyle(fontSize: 13.sp, color: Colors.grey.shade600),
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
@@ -510,7 +525,9 @@ class EstadoComRetryCompacto<T> extends StatelessWidget {
               );
       case EstadoConteudo.conteudo:
         final T? currentDados = dados;
-        return currentDados != null ? builderConteudo(currentDados) : const SizedBox.shrink();
+        return currentDados != null
+            ? builderConteudo(currentDados)
+            : const SizedBox.shrink();
     }
   }
 

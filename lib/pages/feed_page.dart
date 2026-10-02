@@ -72,22 +72,31 @@ class _FeedPageState extends State<FeedPage>
             refreshIndicatorExtent: 120.h,
             refreshTriggerPullDistance: 160.h,
             onRefresh: () => _carregarPosts(_categorias[_tabController.index]),
-            builder: (context, refreshState, pulledExtent,
-                refreshTriggerPullDistance, refreshIndicatorExtent) {
-              return Center(
-                child: Opacity(
-                  opacity:
-                      (pulledExtent / refreshIndicatorExtent).clamp(0.0, 1.0),
-                  child: Lottie.asset(
-                    'assets/animations/loading_nhac.json',
-                    width: 180.w,
-                    height: 180.h,
-                    animate: refreshState == RefreshIndicatorMode.refresh ||
-                        refreshState == RefreshIndicatorMode.armed,
-                  ),
-                ),
-              );
-            },
+            builder:
+                (
+                  context,
+                  refreshState,
+                  pulledExtent,
+                  refreshTriggerPullDistance,
+                  refreshIndicatorExtent,
+                ) {
+                  return Center(
+                    child: Opacity(
+                      opacity: (pulledExtent / refreshIndicatorExtent).clamp(
+                        0.0,
+                        1.0,
+                      ),
+                      child: Lottie.asset(
+                        'assets/animations/loading_nhac.json',
+                        width: 180.w,
+                        height: 180.h,
+                        animate:
+                            refreshState == RefreshIndicatorMode.refresh ||
+                            refreshState == RefreshIndicatorMode.armed,
+                      ),
+                    ),
+                  );
+                },
           ),
 
           // ── Header: localização + search bar + carrossel ──────────────────
@@ -109,8 +118,11 @@ class _FeedPageState extends State<FeedPage>
                           color: const Color(0xFF5D201C),
                         ),
                       ),
-                      Icon(Icons.notifications_none_outlined,
-                          color: const Color(0xFF5D201C), size: 26.r),
+                      Icon(
+                        Icons.notifications_none_outlined,
+                        color: const Color(0xFF5D201C),
+                        size: 26.r,
+                      ),
                     ],
                   ),
                   SizedBox(height: 16.h),
@@ -121,16 +133,17 @@ class _FeedPageState extends State<FeedPage>
                       Navigator.push(
                         context,
                         PageRouteBuilder(
-                          pageBuilder: (context, animation,
-                                  secondaryAnimation) =>
-                              const SearchPage(),
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const SearchPage(),
                           transitionsBuilder:
                               (context, animation, secondaryAnimation, child) {
-                            return FadeTransition(
-                                opacity: animation, child: child);
-                          },
-                          transitionDuration:
-                              const Duration(milliseconds: 300),
+                                return FadeTransition(
+                                  opacity: animation,
+                                  child: child,
+                                );
+                              },
+                          transitionDuration: const Duration(milliseconds: 300),
                         ),
                       );
                     },
@@ -144,8 +157,9 @@ class _FeedPageState extends State<FeedPage>
                         borderRadius: BorderRadius.circular(50.r),
                         boxShadow: [
                           BoxShadow(
-                            color:
-                                const Color(0xFF5D201C).withValues(alpha: 0.05),
+                            color: const Color(
+                              0xFF5D201C,
+                            ).withValues(alpha: 0.05),
                             blurRadius: 10.r,
                             offset: const Offset(0.0, 4.0),
                           ),
@@ -159,7 +173,9 @@ class _FeedPageState extends State<FeedPage>
                             child: Text(
                               'Procurar',
                               style: TextStyle(
-                                  color: Colors.grey.shade400, fontSize: 16.sp),
+                                color: Colors.grey.shade400,
+                                fontSize: 16.sp,
+                              ),
                             ),
                           ),
                           Icon(Icons.tune, color: Colors.grey, size: 22.r),
@@ -219,7 +235,10 @@ class _FeedPageState extends State<FeedPage>
             SliverList(
               delegate: SliverChildBuilderDelegate(
                 (context, index) => Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 16.w,
+                    vertical: 6.h,
+                  ),
                   child: _buildSkeletonCard(),
                 ),
                 childCount: 4,
@@ -231,13 +250,18 @@ class _FeedPageState extends State<FeedPage>
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.newspaper_outlined,
-                        size: 56.r, color: Colors.grey.shade300),
+                    Icon(
+                      Icons.newspaper_outlined,
+                      size: 56.r,
+                      color: Colors.grey.shade300,
+                    ),
                     SizedBox(height: 12.h),
                     Text(
-                      'Nenhum post por aqui ainda.',
+                      'Feed indisponível no momento.\nPublicações, comentários e curtidas\nserão liberados quando estiverem disponíveis.',
                       style: TextStyle(
-                          color: Colors.grey.shade400, fontSize: 15.sp),
+                        color: Colors.grey.shade400,
+                        fontSize: 15.sp,
+                      ),
                     ),
                   ],
                 ),
@@ -277,131 +301,140 @@ class _FeedPageState extends State<FeedPage>
             decoration: BoxDecoration(
               color: Colors.white,
               borderRadius: BorderRadius.circular(20.r),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF5D201C).withValues(alpha: 0.05),
-            blurRadius: 10.r,
-            offset: Offset(0, 4.h),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20.r),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Padding(
-              padding: EdgeInsets.fromLTRB(14.w, 14.h, 14.w, 8.h),
-              child: Row(
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF5D201C).withValues(alpha: 0.05),
+                  blurRadius: 10.r,
+                  offset: Offset(0, 4.h),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20.r),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildAvatar(post.avatarUrl),
-                  SizedBox(width: 10.w),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  // Header
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(14.w, 14.h, 14.w, 8.h),
+                    child: Row(
                       children: [
-                        Text(
-                          post.nomeUsuario,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14.sp,
-                            color: const Color(0xFF5D201C),
+                        _buildAvatar(post.avatarUrl),
+                        SizedBox(width: 10.w),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                post.nomeUsuario,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14.sp,
+                                  color: const Color(0xFF5D201C),
+                                ),
+                              ),
+                              if (post.badge != null) ...[
+                                SizedBox(height: 2.h),
+                                Text(
+                                  post.badge!,
+                                  style: TextStyle(
+                                    fontSize: 11.sp,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                        if (post.badge != null) ...[
-                          SizedBox(height: 2.h),
-                          Text(
-                            post.badge!,
-                            style: TextStyle(
-                              fontSize: 11.sp,
-                              color: Colors.grey.shade500,
-                            ),
-                          ),
-                        ],
+                        Icon(
+                          Icons.keyboard_arrow_down,
+                          color: Colors.grey.shade400,
+                          size: 20.r,
+                        ),
                       ],
                     ),
                   ),
-                  Icon(Icons.keyboard_arrow_down,
-                      color: Colors.grey.shade400, size: 20.r),
+
+                  // Sponsor badge
+                  if (post.isPatrocinado && post.sponsorLabel != null)
+                    Padding(
+                      padding: EdgeInsets.only(left: 14.w, bottom: 8.h),
+                      child: Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8.w,
+                          vertical: 3.h,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFFFF6961,
+                          ).withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(4.r),
+                        ),
+                        child: Text(
+                          post.sponsorLabel!,
+                          style: TextStyle(
+                            fontSize: 11.sp,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFFFF6961),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                  // Content text
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 14.w),
+                    child: _buildRichText(post.conteudo, post.hashTags),
+                  ),
+
+                  // Images
+                  if (post.imagens.isNotEmpty) ...[
+                    SizedBox(height: 10.h),
+                    _buildImagesGrid(post.imagens),
+                  ],
+
+                  // Top Comment
+                  if (post.topComment != null)
+                    _buildTopComment(post.topComment!),
+
+                  // Footer (likes, comments, share)
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: 12.w,
+                      vertical: 12.h,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerRight,
+                            child: _buildFooterAction(
+                              icon: Icons.thumb_up_alt_outlined,
+                              label: _formatCount(post.curtidas),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 56.w),
+                        _buildFooterAction(
+                          icon: Icons.chat_bubble_outline,
+                          label: _formatCount(post.comentarios),
+                        ),
+                        SizedBox(width: 56.w),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: _buildFooterAction(
+                              icon: Icons.share_outlined,
+                              label: '',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-
-            // Sponsor badge
-            if (post.isPatrocinado && post.sponsorLabel != null)
-              Padding(
-                padding: EdgeInsets.only(left: 14.w, bottom: 8.h),
-                child: Container(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 8.w, vertical: 3.h),
-                  decoration: BoxDecoration(
-                    color:
-                        const Color(0xFFFF6961).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(4.r),
-                  ),
-                  child: Text(
-                    post.sponsorLabel!,
-                    style: TextStyle(
-                      fontSize: 11.sp,
-                      fontWeight: FontWeight.w600,
-                      color: const Color(0xFFFF6961),
-                    ),
-                  ),
-                ),
-              ),
-
-            // Content text
-            Padding(
-              padding: EdgeInsets.symmetric(horizontal: 14.w),
-              child: _buildRichText(post.conteudo, post.hashTags),
-            ),
-
-          // Images
-            if (post.imagens.isNotEmpty) ...[
-              SizedBox(height: 10.h),
-              _buildImagesGrid(post.imagens),
-            ],
-
-            // Top Comment
-            if (post.topComment != null) _buildTopComment(post.topComment!),
-
-            // Footer (likes, comments, share)
-            Padding(
-              padding:
-                  EdgeInsets.symmetric(horizontal: 12.w, vertical: 12.h),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: _buildFooterAction(
-                        icon: Icons.thumb_up_alt_outlined,
-                        label: _formatCount(post.curtidas),
-                      ),
-                    ),
-                  ),
-                  SizedBox(width: 56.w),
-                  _buildFooterAction(
-                    icon: Icons.chat_bubble_outline,
-                    label: _formatCount(post.comentarios),
-                  ),
-                  SizedBox(width: 56.w),
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _buildFooterAction(
-                        icon: Icons.share_outlined,
-                        label: '',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
           ),
         ),
       ),
@@ -419,7 +452,12 @@ class _FeedPageState extends State<FeedPage>
       child: Stack(
         children: [
           Padding(
-            padding: EdgeInsets.only(left: 12.w, right: 12.w, top: 28.h, bottom: 12.h),
+            padding: EdgeInsets.only(
+              left: 12.w,
+              right: 12.w,
+              top: 28.h,
+              bottom: 12.h,
+            ),
             child: RichText(
               text: TextSpan(
                 children: [
@@ -504,18 +542,17 @@ class _FeedPageState extends State<FeedPage>
 
     for (final word in words) {
       final isHash = hashTags.contains(word);
-      spans.add(TextSpan(
-        text: '$word ',
-        style: TextStyle(
-          color: isHash
-              ? const Color(0xFFFF6961)
-              : const Color(0xFF5D201C),
-          fontWeight:
-              isHash ? FontWeight.w600 : FontWeight.normal,
-          fontSize: 14.sp,
-          height: 1.5,
+      spans.add(
+        TextSpan(
+          text: '$word ',
+          style: TextStyle(
+            color: isHash ? const Color(0xFFFF6961) : const Color(0xFF5D201C),
+            fontWeight: isHash ? FontWeight.w600 : FontWeight.normal,
+            fontSize: 14.sp,
+            height: 1.5,
+          ),
         ),
-      ));
+      );
     }
 
     return RichText(text: TextSpan(children: spans));
@@ -527,8 +564,11 @@ class _FeedPageState extends State<FeedPage>
         padding: EdgeInsets.symmetric(horizontal: 14.w),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12.r),
-          child: _buildNetworkImage(imagens[0],
-              height: 220.h, width: double.infinity),
+          child: _buildNetworkImage(
+            imagens[0],
+            height: 220.h,
+            width: double.infinity,
+          ),
         ),
       );
     }
@@ -547,8 +587,11 @@ class _FeedPageState extends State<FeedPage>
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12.r),
-                  child: _buildNetworkImage(imagens[i],
-                      height: 190.h, width: double.infinity),
+                  child: _buildNetworkImage(
+                    imagens[i],
+                    height: 190.h,
+                    width: double.infinity,
+                  ),
                 ),
               ),
             );
@@ -558,8 +601,11 @@ class _FeedPageState extends State<FeedPage>
     );
   }
 
-  Widget _buildNetworkImage(String url,
-      {required double height, required double width}) {
+  Widget _buildNetworkImage(
+    String url, {
+    required double height,
+    required double width,
+  }) {
     return CachedNetworkImage(
       imageUrl: url,
       height: height,
@@ -568,20 +614,20 @@ class _FeedPageState extends State<FeedPage>
       placeholder: (_, __) => Shimmer.fromColors(
         baseColor: Colors.grey.shade200,
         highlightColor: Colors.grey.shade100,
-        child:
-            Container(color: Colors.white, height: height, width: width),
+        child: Container(color: Colors.white, height: height, width: width),
       ),
       errorWidget: (_, __, ___) => Container(
         height: height,
         color: const Color(0xFFFFF0EE),
-        child: Icon(Icons.image_not_supported_outlined,
-            color: Colors.grey.shade300),
+        child: Icon(
+          Icons.image_not_supported_outlined,
+          color: Colors.grey.shade300,
+        ),
       ),
     );
   }
 
-  Widget _buildFooterAction(
-      {required IconData icon, required String label}) {
+  Widget _buildFooterAction({required IconData icon, required String label}) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -590,8 +636,7 @@ class _FeedPageState extends State<FeedPage>
           SizedBox(width: 5.w),
           Text(
             label,
-            style: TextStyle(
-                fontSize: 13.sp, color: Colors.grey.shade600),
+            style: TextStyle(fontSize: 13.sp, color: Colors.grey.shade600),
           ),
         ],
       ],
@@ -617,24 +662,28 @@ class _FeedPageState extends State<FeedPage>
               children: [
                 ClipOval(
                   child: Container(
-                      width: 40.w, height: 40.w, color: Colors.white),
+                    width: 40.w,
+                    height: 40.w,
+                    color: Colors.white,
+                  ),
                 ),
                 SizedBox(width: 10.w),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                        width: 120.w, height: 12.h, color: Colors.white),
+                    Container(width: 120.w, height: 12.h, color: Colors.white),
                     SizedBox(height: 6.h),
-                    Container(
-                        width: 80.w, height: 10.h, color: Colors.white),
+                    Container(width: 80.w, height: 10.h, color: Colors.white),
                   ],
                 ),
               ],
             ),
             SizedBox(height: 12.h),
             Container(
-                width: double.infinity, height: 12.h, color: Colors.white),
+              width: double.infinity,
+              height: 12.h,
+              color: Colors.white,
+            ),
             SizedBox(height: 6.h),
             Container(width: 240.w, height: 12.h, color: Colors.white),
             SizedBox(height: 12.h),
@@ -652,7 +701,11 @@ class _FeedPageState extends State<FeedPage>
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerRight,
-                    child: Container(width: 50.w, height: 14.h, color: Colors.white),
+                    child: Container(
+                      width: 50.w,
+                      height: 14.h,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
                 SizedBox(width: 56.w),
@@ -661,7 +714,11 @@ class _FeedPageState extends State<FeedPage>
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Container(width: 20.w, height: 14.h, color: Colors.white),
+                    child: Container(
+                      width: 20.w,
+                      height: 14.h,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
@@ -695,7 +752,10 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return child;
   }
 

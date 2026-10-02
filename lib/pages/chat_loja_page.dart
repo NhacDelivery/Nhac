@@ -24,8 +24,15 @@ class ChatLojaPage extends StatefulWidget {
   final String lojaId;
   final String lojaNome;
   final ProdutosModel? produtoReferencia;
+  final String? pedidoReferencia;
 
-  const ChatLojaPage({super.key, required this.lojaId, required this.lojaNome, this.produtoReferencia});
+  const ChatLojaPage({
+    super.key,
+    required this.lojaId,
+    required this.lojaNome,
+    this.produtoReferencia,
+    this.pedidoReferencia,
+  });
 
   @override
   State<ChatLojaPage> createState() => _ChatLojaPageState();
@@ -82,16 +89,20 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
       _repository.marcarComoLida(conversaId);
 
       _inscricoes.add(_socket.mensagens.listen(_aoReceberMensagem));
-      _inscricoes.add(_socket.conectado.listen((valor) {
-        if (mounted) setState(() => _conectado = valor);
-        if (valor) _atualizarHistorico(conversaId);
-      }));
-      _inscricoes.add(_socket.erros.listen((mensagem) {
-        if (mounted) {
-          if (_pendenteId != null) setState(() => _envioIncerto = true);
-          context.showError(mensagem);
-        }
-      }));
+      _inscricoes.add(
+        _socket.conectado.listen((valor) {
+          if (mounted) setState(() => _conectado = valor);
+          if (valor) _atualizarHistorico(conversaId);
+        }),
+      );
+      _inscricoes.add(
+        _socket.erros.listen((mensagem) {
+          if (mounted) {
+            if (_pendenteId != null) setState(() => _envioIncerto = true);
+            context.showError(mensagem);
+          }
+        }),
+      );
 
       await _socket.conectar(conversaId);
       _irParaOFim();
@@ -154,7 +165,10 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
     if (id == null || !_temMensagensAntigas || _carregandoAntigas) return;
     setState(() => _carregandoAntigas = true);
     try {
-      final anteriores = await _repository.historico(id, pagina: _paginaHistorico);
+      final anteriores = await _repository.historico(
+        id,
+        pagina: _paginaHistorico,
+      );
       if (!mounted || _conversaId != id) return;
       final ids = _mensagens.map((m) => m.id).toSet();
       setState(() {
@@ -163,7 +177,10 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
         _temMensagensAntigas = anteriores.length == 30;
       });
     } catch (_) {
-      if (mounted) context.showError('Não foi possível carregar mensagens antigas. Tente novamente.');
+      if (mounted)
+        context.showError(
+          'Não foi possível carregar mensagens antigas. Tente novamente.',
+        );
     } finally {
       if (mounted) setState(() => _carregandoAntigas = false);
     }
@@ -183,17 +200,25 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
   void _enviar() {
     final texto = _campoController.text.trim();
     final produto = widget.produtoReferencia;
-    final anexar = produto != null && !_referenciaEnviada;
+    final anexar =
+        (produto != null || widget.pedidoReferencia != null) &&
+        !_referenciaEnviada;
     if (texto.isEmpty && !anexar && _pendenteId == null) return;
     if (_pendenteId != null && !_envioIncerto) return;
     final id = _pendenteId ?? const Uuid().v4();
     final referencia = produto != null && !_referenciaEnviada
         ? 'Produto: ${produto.nome}\nID: ${produto.id}\nPreço: ${NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$').format(produto.preco)}${produto.imagemUrl.isEmpty ? '' : '\nImagem: ${produto.imagemUrl}'}'
+        : !_referenciaEnviada
+        ? widget.pedidoReferencia ?? ''
         : '';
-    final mensagem = _pendenteTexto ?? [referencia, texto].where((parte) => parte.isNotEmpty).join('\n\n');
+    final mensagem =
+        _pendenteTexto ??
+        [referencia, texto].where((parte) => parte.isNotEmpty).join('\n\n');
     final enviou = _socket.enviar(mensagem, id);
     if (!enviou) {
-      context.showError('Sem conexão com o chat. Tente novamente quando conectar.');
+      context.showError(
+        'Sem conexão com o chat. Tente novamente quando conectar.',
+      );
       return;
     }
     setState(() {
@@ -241,7 +266,7 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
               ),
             ),
             Text(
-              _conectado ? 'online' : 'conectando...',
+              _conectado ? 'Conectado ao chat' : 'conectando...',
               style: TextStyle(
                 color: _conectado ? const Color(0xFF3BA55D) : Colors.grey,
                 fontSize: 12.0,
@@ -267,13 +292,19 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.chat_bubble_outline,
-                  size: 48.0, color: Color(0xFFC9BCBC)),
+              const Icon(
+                Icons.chat_bubble_outline,
+                size: 48.0,
+                color: Color(0xFFC9BCBC),
+              ),
               const SizedBox(height: 16.0),
               Text(
                 _erroFatal!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Color(0xFF5D201C), fontSize: 15.0),
+                style: const TextStyle(
+                  color: Color(0xFF5D201C),
+                  fontSize: 15.0,
+                ),
               ),
               const SizedBox(height: 16.0),
               TextButton(
@@ -284,8 +315,10 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
                   });
                   _iniciar();
                 },
-                child: const Text('Tentar novamente',
-                    style: TextStyle(color: Color(0xFFFF6961))),
+                child: const Text(
+                  'Tentar novamente',
+                  style: TextStyle(color: Color(0xFFFF6961)),
+                ),
               ),
             ],
           ),
@@ -303,23 +336,36 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
                     child: Text(
                       'Ainda não há mensagens.\nMande a primeira para a loja.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Color(0xFF8A8A8A), fontSize: 15.0),
+                      style: TextStyle(
+                        color: Color(0xFF8A8A8A),
+                        fontSize: 15.0,
+                      ),
                     ),
                   ),
                 )
               : ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0, vertical: 12.0),
+                    horizontal: 16.0,
+                    vertical: 12.0,
+                  ),
                   itemCount: _mensagens.length + (_temMensagensAntigas ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (_temMensagensAntigas && index == 0) {
                       return TextButton(
-                        onPressed: _carregandoAntigas ? null : _carregarMensagensAntigas,
-                        child: Text(_carregandoAntigas ? 'Carregando...' : 'Ver mensagens anteriores'),
+                        onPressed: _carregandoAntigas
+                            ? null
+                            : _carregarMensagensAntigas,
+                        child: Text(
+                          _carregandoAntigas
+                              ? 'Carregando...'
+                              : 'Ver mensagens anteriores',
+                        ),
                       );
                     }
-                    return _balao(_mensagens[index - (_temMensagensAntigas ? 1 : 0)]);
+                    return _balao(
+                      _mensagens[index - (_temMensagensAntigas ? 1 : 0)],
+                    );
                   },
                 ),
         ),
@@ -337,8 +383,7 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         margin: const EdgeInsets.only(bottom: 10.0),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+        padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
         decoration: BoxDecoration(
           color: doCliente ? const Color(0xFFFF6961) : Colors.white,
           borderRadius: BorderRadius.only(
@@ -356,17 +401,11 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
           ],
         ),
         child: Column(
-          crossAxisAlignment:
-              doCliente ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: doCliente
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
           children: [
-            Text(
-              mensagem.conteudo,
-              style: TextStyle(
-                color: doCliente ? Colors.white : const Color(0xFF5D201C),
-                fontSize: 15.0,
-                height: 1.3,
-              ),
-            ),
+            _conteudoMensagem(mensagem.conteudo, doCliente),
             const SizedBox(height: 4.0),
             Text(
               DateFormat('HH:mm').format(mensagem.enviadaEm),
@@ -381,43 +420,152 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
     );
   }
 
+  Widget _conteudoMensagem(String conteudo, bool doCliente) {
+    // O contexto viaja no texto já persistido pelo backend. Também lê referências antigas.
+    final referencia = RegExp(
+      r'^Produto: ([^\n]+)\nID: ([^\n]+)\nPreço: ([^\n]+)(?:\nImagem: ([^\n]+))?(?:\n\n([\s\S]*))?$',
+    ).firstMatch(conteudo);
+    final cor = doCliente ? Colors.white : const Color(0xFF5D201C);
+    if (referencia == null)
+      return Text(
+        conteudo,
+        style: TextStyle(color: cor, fontSize: 15, height: 1.3),
+      );
+    final imagem = referencia.group(4);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              if (imagem != null && Uri.tryParse(imagem)?.scheme == 'https')
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: imagem,
+                    width: 56,
+                    height: 56,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) =>
+                        const Icon(Icons.image_not_supported_outlined),
+                  ),
+                ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      referencia.group(1)!,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF5D201C),
+                      ),
+                    ),
+                    Text(
+                      referencia.group(3)!,
+                      style: const TextStyle(color: Color(0xFF5D201C)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (referencia.group(5)?.isNotEmpty == true) ...[
+          const SizedBox(height: 8),
+          Text(
+            referencia.group(5)!,
+            style: TextStyle(color: cor, fontSize: 15, height: 1.3),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _barraDeEnvio() {
     return Container(
       padding: const EdgeInsets.fromLTRB(12.0, 8.0, 12.0, 12.0),
       decoration: const BoxDecoration(
         color: Colors.white,
-        boxShadow: [
-          BoxShadow(color: Color(0x0F000000), blurRadius: 6.0),
-        ],
+        boxShadow: [BoxShadow(color: Color(0x0F000000), blurRadius: 6.0)],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (widget.pedidoReferencia != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                widget.pedidoReferencia!,
+                style: const TextStyle(color: Color(0xFF5D201C)),
+              ),
+            ),
           if (widget.produtoReferencia case final produto?)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
-              child: Column(children: [
-                Row(children: [
-                  if (produto.imagemUrl.isNotEmpty)
-                    CachedNetworkImage(imageUrl: produto.imagemUrl, width: 48, height: 48, fit: BoxFit.cover),
-                  const SizedBox(width: 10),
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(produto.nome, maxLines: 1, overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                    Text(NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$').format(produto.preco)),
-                    Text(_referenciaEnviada ? 'Referência enviada à loja' : 'Referência incluída na próxima mensagem',
-                        style: const TextStyle(fontSize: 11, color: Color(0xFF5D201C))),
-                  ])),
-                ]),
-                if (!_referenciaEnviada)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: _conectado && (_pendenteId == null || _envioIncerto) ? _enviar : null,
-                      child: const Text('Enviar produto à loja'),
-                    ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      if (produto.imagemUrl.isNotEmpty)
+                        CachedNetworkImage(
+                          imageUrl: produto.imagemUrl,
+                          width: 48,
+                          height: 48,
+                          fit: BoxFit.cover,
+                        ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              produto.nome,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              NumberFormat.currency(
+                                locale: 'pt_BR',
+                                symbol: 'R\$',
+                              ).format(produto.preco),
+                            ),
+                            Text(
+                              _referenciaEnviada
+                                  ? 'Referência enviada à loja'
+                                  : 'Referência incluída na próxima mensagem',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF5D201C),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-              ]),
+                  if (!_referenciaEnviada)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed:
+                            _conectado && (_pendenteId == null || _envioIncerto)
+                            ? _enviar
+                            : null,
+                        child: const Text('Enviar produto à loja'),
+                      ),
+                    ),
+                ],
+              ),
             ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -438,7 +586,9 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
                     filled: true,
                     fillColor: const Color(0x33C9BCBC),
                     contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16.0, vertical: 12.0),
+                      horizontal: 16.0,
+                      vertical: 12.0,
+                    ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(24.0),
                       borderSide: BorderSide.none,
@@ -451,10 +601,17 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
                 color: const Color(0xFFFF6961),
                 shape: const CircleBorder(),
                 child: IconButton(
-                  tooltip: _envioIncerto ? 'Reenviar mensagem' : 'Enviar mensagem',
-                  onPressed: _pendenteId != null && !_envioIncerto ? null : _enviar,
-                  icon: Icon(_envioIncerto ? Icons.refresh : Icons.send_rounded,
-                      color: Colors.white, size: 22),
+                  tooltip: _envioIncerto
+                      ? 'Reenviar mensagem'
+                      : 'Enviar mensagem',
+                  onPressed: _pendenteId != null && !_envioIncerto
+                      ? null
+                      : _enviar,
+                  icon: Icon(
+                    _envioIncerto ? Icons.refresh : Icons.send_rounded,
+                    color: Colors.white,
+                    size: 22,
+                  ),
                 ),
               ),
             ],
@@ -468,7 +625,10 @@ class _ChatLojaPageState extends State<ChatLojaPage> {
                   _envioIncerto
                       ? 'Sem confirmação. Confira a conversa ou toque em enviar para reenviar.'
                       : 'Aguardando confirmação da mensagem...',
-                  style: const TextStyle(color: Color(0xFF5D201C), fontSize: 12),
+                  style: const TextStyle(
+                    color: Color(0xFF5D201C),
+                    fontSize: 12,
+                  ),
                 ),
               ),
             ),

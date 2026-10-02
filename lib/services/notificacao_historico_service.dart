@@ -10,6 +10,7 @@ class NotificacaoRegistrada {
   final DateTime recebidaEm;
   final String? pedidoId;
   final StatusPedido? status;
+  final bool lida;
   const NotificacaoRegistrada(
     this.id,
     this.titulo,
@@ -17,6 +18,7 @@ class NotificacaoRegistrada {
     this.recebidaEm, {
     this.pedidoId,
     this.status,
+    this.lida = false,
   });
 
   factory NotificacaoRegistrada.fromJson(Map<String, dynamic> json) =>
@@ -27,18 +29,20 @@ class NotificacaoRegistrada {
         DateTime.tryParse(json['recebidaEm']?.toString() ?? '') ??
             DateTime.now(),
         pedidoId: json['pedidoId']?.toString(),
+        lida: json['lida'] == true,
         status: json['status'] == null
             ? null
             : StatusPedido.fromApi(json['status'].toString()),
       );
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'titulo': titulo,
-        'corpo': corpo,
-        'recebidaEm': recebidaEm.toIso8601String(),
-        if (pedidoId != null) 'pedidoId': pedidoId,
-        if (status != null) 'status': status!.apiValue,
-      };
+    'id': id,
+    'lida': lida,
+    'titulo': titulo,
+    'corpo': corpo,
+    'recebidaEm': recebidaEm.toIso8601String(),
+    if (pedidoId != null) 'pedidoId': pedidoId,
+    if (status != null) 'status': status!.apiValue,
+  };
 }
 
 class NotificacaoHistoricoService {
@@ -52,15 +56,16 @@ class NotificacaoHistoricoService {
       (await _listarTodos(usuarioId)).take(50).toList();
 
   static Future<List<NotificacaoRegistrada>> _listarTodos(
-      String usuarioId) async {
+    String usuarioId,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     // O FCM usa outro isolate. Recarregar evita ler a cópia antiga em memória.
     await prefs.reload();
     final registros = <String>[
       ...?prefs.getStringList(_chave(usuarioId)),
       for (final key in prefs.getKeys().where(
-            (key) => key.startsWith(_prefixo(usuarioId)),
-          ))
+        (key) => key.startsWith(_prefixo(usuarioId)),
+      ))
         if (prefs.getString(key) != null) prefs.getString(key)!,
     ];
     final porId = <String, NotificacaoRegistrada>{};
@@ -95,6 +100,18 @@ class NotificacaoHistoricoService {
         '${_prefixo(usuarioId)}${Uri.encodeComponent(antigo.id)}',
       );
     }
+    _alteracoes.add(usuarioId);
+  }
+
+  static Future<void> marcarComoLida(
+    String usuarioId,
+    NotificacaoRegistrada aviso,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      '${_prefixo(usuarioId)}${Uri.encodeComponent(aviso.id)}',
+      jsonEncode({...aviso.toJson(), 'lida': true}),
+    );
     _alteracoes.add(usuarioId);
   }
 

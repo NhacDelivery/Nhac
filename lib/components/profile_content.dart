@@ -29,7 +29,7 @@ class _ProfileContentState extends State<ProfileContent> {
   Map<String, dynamic> _estatisticas = {
     'totalPedidos': 0,
     'lojasFavoritadas': 0,
-    'cuponsResgatados': 0
+    'cuponsResgatados': 0,
   };
   bool _carregandoEstatisticas = true;
 
@@ -55,6 +55,54 @@ class _ProfileContentState extends State<ProfileContent> {
     }
   }
 
+  Future<bool> _confirmarIdentidade() async {
+    if (await BiometricService.authenticate()) return true;
+    if (!mounted) return false;
+    final auth = context.read<AuthService>();
+    final email = context.read<UserProvider>().usuario?.email;
+    if (email == null || email.isEmpty) {
+      context.showError(
+        'Não foi possível obter o e-mail da conta. Atualize o perfil e tente novamente.',
+      );
+      return false;
+    }
+    final controller = TextEditingController();
+    final senha = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Confirme sua identidade'),
+        content: TextField(
+          controller: controller,
+          obscureText: true,
+          decoration: const InputDecoration(labelText: 'Senha da conta'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    // Aguarda a animação do diálogo antes de descartar o controller.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    controller.dispose();
+    if (senha == null || senha.isEmpty || !mounted) return false;
+    try {
+      return await auth.confirmarSenha(email: email, senha: senha);
+    } catch (_) {
+      if (mounted)
+        context.showError(
+          'Não foi possível confirmar a senha. Confira os dados e a conexão.',
+        );
+      return false;
+    }
+  }
+
   void _logoutUsuario(BuildContext context) async {
     final authService = context.read<AuthService>();
     Navigator.pop(context);
@@ -74,10 +122,14 @@ class _ProfileContentState extends State<ProfileContent> {
           const begin = Offset(0.0, 1.0);
           const end = Offset.zero;
           const curve = Curves.fastOutSlowIn;
-          var tween =
-              Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          var tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: curve));
           return SlideTransition(
-              position: animation.drive(tween), child: child);
+            position: animation.drive(tween),
+            child: child,
+          );
         },
       ),
     );
@@ -101,12 +153,27 @@ class _ProfileContentState extends State<ProfileContent> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Opções da Conta',
-                  style:
-                      TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold)),
+              Text(
+                'Opções da Conta',
+                style: TextStyle(fontSize: 22.sp, fontWeight: FontWeight.bold),
+              ),
               SizedBox(height: 32.h),
               InkWell(
-                onTap: () {},
+                onTap: () => showDialog<void>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Ajuda'),
+                    content: const Text(
+                      'Para dúvidas sobre um pedido, abra Meus pedidos e use o chat da loja. Para problemas de acesso, use Recuperar senha na tela de login.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Fechar'),
+                      ),
+                    ],
+                  ),
+                ),
                 child: Padding(
                   padding: EdgeInsets.symmetric(vertical: 8.h),
                   child: Row(
@@ -116,11 +183,14 @@ class _ProfileContentState extends State<ProfileContent> {
                         children: [
                           Icon(Icons.help_outline, color: Colors.grey.shade700),
                           SizedBox(width: 12.w),
-                          Text('Ajuda',
-                              style: TextStyle(
-                                  fontSize: 16.sp,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.grey.shade700)),
+                          Text(
+                            'Ajuda',
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
                         ],
                       ),
                       Icon(Icons.chevron_right, color: Colors.grey.shade400),
@@ -140,11 +210,14 @@ class _ProfileContentState extends State<ProfileContent> {
                         children: [
                           Icon(Icons.logout, color: Colors.grey.shade700),
                           SizedBox(width: 12.w),
-                          Text('Sair da conta',
-                              style: TextStyle(
-                                  fontSize: 16.sp,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.grey.shade700)),
+                          Text(
+                            'Sair da conta',
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
                         ],
                       ),
                       Icon(Icons.chevron_right, color: Colors.grey.shade400),
@@ -161,14 +234,18 @@ class _ProfileContentState extends State<ProfileContent> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF6961),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28.r)),
+                      borderRadius: BorderRadius.circular(28.r),
+                    ),
                     elevation: 0,
                   ),
-                  child: Text('Voltar',
-                      style: TextStyle(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white)),
+                  child: Text(
+                    'Voltar',
+                    style: TextStyle(
+                      fontSize: 16.sp,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
                 ),
               ),
               SizedBox(height: 16.h),
@@ -184,8 +261,9 @@ class _ProfileContentState extends State<ProfileContent> {
     final userProvider = context.watch<UserProvider>();
     final usuario = userProvider.usuario;
     final enderecoProvider = context.watch<EnderecoProvider>();
-    final enderecoisPadrao =
-        enderecoProvider.enderecos.where((e) => e.isPadrao).firstOrNull;
+    final enderecoisPadrao = enderecoProvider.enderecos
+        .where((e) => e.isPadrao)
+        .firstOrNull;
     final String textoEndereco = enderecoisPadrao != null
         ? '${enderecoisPadrao.rua}, ${enderecoisPadrao.numero}${(enderecoisPadrao.complemento?.isNotEmpty ?? false) ? ' - ${enderecoisPadrao.complemento}' : ''}'
         : 'Nenhum endereço selecionado';
@@ -194,8 +272,11 @@ class _ProfileContentState extends State<ProfileContent> {
       return Container(
         color: const Color(0xFFFFE7E5),
         child: Center(
-          child: Lottie.asset('assets/animations/loading_nhac.json',
-              width: 340.w, height: 340.h),
+          child: Lottie.asset(
+            'assets/animations/loading_nhac.json',
+            width: 340.w,
+            height: 340.h,
+          ),
         ),
       );
     }
@@ -206,29 +287,39 @@ class _ProfileContentState extends State<ProfileContent> {
         bottom: false,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(
-              parent: BouncingScrollPhysics()),
+            parent: BouncingScrollPhysics(),
+          ),
           slivers: [
             CupertinoSliverRefreshControl(
               refreshIndicatorExtent: 140.h,
               refreshTriggerPullDistance: 180.h,
               onRefresh: () async =>
                   await context.read<UserProvider>().carregarDadosUsuario(),
-              builder: (context, refreshState, pulledExtent,
-                  refreshTriggerPullDistance, refreshIndicatorExtent) {
-                return Center(
-                  child: Opacity(
-                    opacity:
-                        (pulledExtent / refreshIndicatorExtent).clamp(0.0, 1.0),
-                    child: Lottie.asset(
-                      'assets/animations/loading_nhac.json',
-                      width: 240.w,
-                      height: 240.h,
-                      animate: refreshState == RefreshIndicatorMode.refresh ||
-                          refreshState == RefreshIndicatorMode.armed,
-                    ),
-                  ),
-                );
-              },
+              builder:
+                  (
+                    context,
+                    refreshState,
+                    pulledExtent,
+                    refreshTriggerPullDistance,
+                    refreshIndicatorExtent,
+                  ) {
+                    return Center(
+                      child: Opacity(
+                        opacity: (pulledExtent / refreshIndicatorExtent).clamp(
+                          0.0,
+                          1.0,
+                        ),
+                        child: Lottie.asset(
+                          'assets/animations/loading_nhac.json',
+                          width: 240.w,
+                          height: 240.h,
+                          animate:
+                              refreshState == RefreshIndicatorMode.refresh ||
+                              refreshState == RefreshIndicatorMode.armed,
+                        ),
+                      ),
+                    );
+                  },
             ),
             SliverPadding(
               padding: EdgeInsets.symmetric(horizontal: 24.w),
@@ -245,27 +336,36 @@ class _ProfileContentState extends State<ProfileContent> {
                           width: 40.w,
                           height: 40.h,
                           decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              shape: BoxShape.circle),
-                          child: const Icon(Icons.notifications_none,
-                              color: Color(0xFF5D201C)),
+                            color: Colors.white.withValues(alpha: 0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.notifications_none,
+                            color: Color(0xFF5D201C),
+                          ),
                         ),
                       ),
-                      Text('Perfil',
-                          style: TextStyle(
-                              fontSize: 18.sp,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF5D201C))),
+                      Text(
+                        'Perfil',
+                        style: TextStyle(
+                          fontSize: 18.sp,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF5D201C),
+                        ),
+                      ),
                       GestureDetector(
                         onTap: () => _mostrarOpcoesConta(context),
                         child: Container(
                           width: 40.w,
                           height: 40.h,
                           decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              shape: BoxShape.circle),
-                          child: const Icon(Icons.more_horiz,
-                              color: Color(0xFF5D201C)),
+                            color: Colors.white.withValues(alpha: 0.6),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.more_horiz,
+                            color: Color(0xFF5D201C),
+                          ),
                         ),
                       ),
                     ],
@@ -287,29 +387,37 @@ class _ProfileContentState extends State<ProfileContent> {
                                 color: Colors.white,
                                 boxShadow: [
                                   BoxShadow(
-                                      color: const Color(0xFF5D201C)
-                                          .withValues(alpha: 0.1),
-                                      blurRadius: 10.r,
-                                      offset: Offset(0, 4.h))
+                                    color: const Color(
+                                      0xFF5D201C,
+                                    ).withValues(alpha: 0.1),
+                                    blurRadius: 10.r,
+                                    offset: Offset(0, 4.h),
+                                  ),
                                 ],
                               ),
                               child: _isUploading
                                   ? Center(
                                       child: Lottie.asset(
-                                          'assets/animations/loading_nhac.json',
-                                          width: 40.w,
-                                          height: 40.h))
+                                        'assets/animations/loading_nhac.json',
+                                        width: 40.w,
+                                        height: 40.h,
+                                      ),
+                                    )
                                   : ClipOval(
                                       child: CachedNetworkImage(
                                         imageUrl: usuario.imagemUrl ?? '',
                                         fit: BoxFit.cover,
                                         placeholder: (context, url) =>
-                                          const LoadingNhac(
-                                            telaCheia: false, tamanho: 40),
+                                            const LoadingNhac(
+                                              telaCheia: false,
+                                              tamanho: 40,
+                                            ),
                                         errorWidget: (context, url, error) =>
-                                            Icon(Icons.person,
-                                                size: 48.r,
-                                                color: Colors.grey.shade400),
+                                            Icon(
+                                              Icons.person,
+                                              size: 48.r,
+                                              color: Colors.grey.shade400,
+                                            ),
                                       ),
                                     ),
                             ),
@@ -323,7 +431,8 @@ class _ProfileContentState extends State<ProfileContent> {
                                   : () async {
                                       final picker = ImagePicker();
                                       final pickedFile = await picker.pickImage(
-                                          source: ImageSource.gallery);
+                                        source: ImageSource.gallery,
+                                      );
                                       if (pickedFile != null && mounted) {
                                         setState(() => _isUploading = true);
                                         try {
@@ -331,17 +440,20 @@ class _ProfileContentState extends State<ProfileContent> {
                                             await context
                                                 .read<UserProvider>()
                                                 .atualizarFotoPerfil(
-                                                    File(pickedFile.path));
+                                                  File(pickedFile.path),
+                                                );
                                           }
                                         } catch (e) {
                                           if (context.mounted) {
                                             context.showError(
-                                                'Erro ao carregar imagem: $e');
+                                              'Erro ao carregar imagem: $e',
+                                            );
                                           }
                                         } finally {
                                           if (mounted) {
                                             setState(
-                                                () => _isUploading = false);
+                                              () => _isUploading = false,
+                                            );
                                           }
                                         }
                                       }
@@ -349,21 +461,28 @@ class _ProfileContentState extends State<ProfileContent> {
                               child: Container(
                                 padding: EdgeInsets.all(4.w),
                                 decoration: const BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle),
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                ),
                                 child: Container(
                                   padding: EdgeInsets.all(4.w),
                                   decoration: const BoxDecoration(
-                                      color: Color(0xFF5D201C),
-                                      shape: BoxShape.circle),
+                                    color: Color(0xFF5D201C),
+                                    shape: BoxShape.circle,
+                                  ),
                                   child: _isUploading
                                       ? SizedBox(
                                           width: 12.w,
                                           height: 12.h,
                                           child: Lottie.asset(
-                                              'assets/animations/loading_nhac.json'))
-                                      : const Icon(Icons.edit,
-                                          size: 12, color: Colors.white),
+                                            'assets/animations/loading_nhac.json',
+                                          ),
+                                        )
+                                      : const Icon(
+                                          Icons.edit,
+                                          size: 12,
+                                          color: Colors.white,
+                                        ),
                                 ),
                               ),
                             ),
@@ -376,25 +495,34 @@ class _ProfileContentState extends State<ProfileContent> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             RichText(
-                                text: TextSpan(
-                                    text: usuario.nome,
-                                    style: TextStyle(
-                                        fontSize: 22.sp,
-                                        fontWeight: FontWeight.bold,
-                                        color: const Color(0xFF5D201C)))),
+                              text: TextSpan(
+                                text: usuario.nome,
+                                style: TextStyle(
+                                  fontSize: 22.sp,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF5D201C),
+                                ),
+                              ),
+                            ),
                             SizedBox(height: 4.h),
                             Row(
                               children: [
-                                Icon(Icons.location_on_outlined,
-                                    size: 14.r, color: Colors.grey.shade600),
+                                Icon(
+                                  Icons.location_on_outlined,
+                                  size: 14.r,
+                                  color: Colors.grey.shade600,
+                                ),
                                 SizedBox(width: 4.w),
                                 Expanded(
-                                  child: Text(textoEndereco,
-                                      style: TextStyle(
-                                          color: Colors.grey.shade700,
-                                          fontSize: 12.sp),
-                                      overflow: TextOverflow.ellipsis,
-                                      maxLines: 1),
+                                  child: Text(
+                                    textoEndereco,
+                                    style: TextStyle(
+                                      color: Colors.grey.shade700,
+                                      fontSize: 12.sp,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
                                 ),
                               ],
                             ),
@@ -412,11 +540,13 @@ class _ProfileContentState extends State<ProfileContent> {
                           ? const LoadingNhac(telaCheia: false, tamanho: 24)
                           : _buildStatItem(
                               '${_estatisticas['totalPedidos'] ?? 0}',
-                              'Pedidos'),
+                              'Pedidos',
+                            ),
                       Container(
-                          height: 30.h,
-                          width: 1.w,
-                          color: Colors.grey.shade300),
+                        height: 30.h,
+                        width: 1.w,
+                        color: Colors.grey.shade300,
+                      ),
                       _carregandoEstatisticas
                           ? const LoadingNhac(telaCheia: false, tamanho: 24)
                           : _buildStatItem(
@@ -424,9 +554,10 @@ class _ProfileContentState extends State<ProfileContent> {
                               'Favoritos',
                             ),
                       Container(
-                          height: 30.h,
-                          width: 1.w,
-                          color: Colors.grey.shade300),
+                        height: 30.h,
+                        width: 1.w,
+                        color: Colors.grey.shade300,
+                      ),
                       _carregandoEstatisticas
                           ? const LoadingNhac(telaCheia: false, tamanho: 24)
                           : _buildStatItem(
@@ -436,11 +567,14 @@ class _ProfileContentState extends State<ProfileContent> {
                     ],
                   ),
                   SizedBox(height: 40.h),
-                  Text('Sua Conta',
-                      style: TextStyle(
-                          fontSize: 18.sp,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF5D201C))),
+                  Text(
+                    'Sua Conta',
+                    style: TextStyle(
+                      fontSize: 18.sp,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF5D201C),
+                    ),
+                  ),
                   SizedBox(height: 16.h),
                   Container(
                     decoration: BoxDecoration(
@@ -448,10 +582,12 @@ class _ProfileContentState extends State<ProfileContent> {
                       borderRadius: BorderRadius.circular(24.r),
                       boxShadow: [
                         BoxShadow(
-                            color:
-                                const Color(0xFF5D201C).withValues(alpha: 0.03),
-                            blurRadius: 15.r,
-                            offset: Offset(0, 5.h))
+                          color: const Color(
+                            0xFF5D201C,
+                          ).withValues(alpha: 0.03),
+                          blurRadius: 15.r,
+                          offset: Offset(0, 5.h),
+                        ),
                       ],
                     ),
                     child: Column(
@@ -463,29 +599,34 @@ class _ProfileContentState extends State<ProfileContent> {
                           subtitle: 'Acompanhe pedidos atuais e anteriores',
                           onTap: () => context.push('/meus-pedidos'),
                         ),
-                        Divider(height: 1, color: Colors.grey.shade100, indent: 64.w),
+                        Divider(
+                          height: 1,
+                          color: Colors.grey.shade100,
+                          indent: 64.w,
+                        ),
                         _buildAccountRow(
                           icon: Icons.person_outline,
                           iconColor: const Color(0xFFFF6961),
                           title: 'Dados Pessoais',
                           subtitle: 'Nome, e-mail, telefone...',
                           onTap: () async {
-                            final autenticado =
-                                await BiometricService.authenticate();
+                            final autenticado = await _confirmarIdentidade();
                             if (!context.mounted) return;
 
                             if (!autenticado) {
                               context.showError(
-                                  'Autenticação biométrica necessária');
+                                'Confirme sua identidade para continuar',
+                              );
                               return;
                             }
                             context.push('/dados-pessoais');
                           },
                         ),
                         Divider(
-                            height: 1,
-                            color: Colors.grey.shade100,
-                            indent: 64.w),
+                          height: 1,
+                          color: Colors.grey.shade100,
+                          indent: 64.w,
+                        ),
                         _buildAccountRow(
                           icon: Icons.location_on_outlined,
                           iconColor: const Color(0xFFFF6961),
@@ -494,9 +635,10 @@ class _ProfileContentState extends State<ProfileContent> {
                           onTap: () => context.push('/enderecos-salvos'),
                         ),
                         Divider(
-                            height: 1,
-                            color: Colors.grey.shade100,
-                            indent: 64.w),
+                          height: 1,
+                          color: Colors.grey.shade100,
+                          indent: 64.w,
+                        ),
                         _buildAccountRow(
                           icon: Icons.credit_card_outlined,
                           iconColor: const Color(0xFFFF6961),
@@ -508,11 +650,14 @@ class _ProfileContentState extends State<ProfileContent> {
                     ),
                   ),
                   SizedBox(height: 32.h),
-                  Text('Preferências de Comida',
-                      style: TextStyle(
-                          fontSize: 18.sp,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF5D201C))),
+                  Text(
+                    'Preferências de comida (em breve)',
+                    style: TextStyle(
+                      fontSize: 18.sp,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF5D201C),
+                    ),
+                  ),
                   SizedBox(height: 16.h),
                   Container(
                     padding: EdgeInsets.symmetric(vertical: 20.h),
@@ -522,10 +667,12 @@ class _ProfileContentState extends State<ProfileContent> {
                       border: Border.all(color: Colors.white, width: 2),
                       boxShadow: [
                         BoxShadow(
-                            color:
-                                const Color(0xFF5D201C).withValues(alpha: 0.03),
-                            blurRadius: 15.r,
-                            offset: Offset(0, 5.h))
+                          color: const Color(
+                            0xFF5D201C,
+                          ).withValues(alpha: 0.03),
+                          blurRadius: 15.r,
+                          offset: Offset(0, 5.h),
+                        ),
                       ],
                     ),
                     child: SingleChildScrollView(
@@ -535,19 +682,34 @@ class _ProfileContentState extends State<ProfileContent> {
                       child: Row(
                         children: [
                           _buildPreferenceItem(
-                              Icons.local_pizza, 'Pizza', true),
+                            Icons.local_pizza,
+                            'Pizza',
+                            false,
+                          ),
                           SizedBox(width: 20.w),
                           _buildPreferenceItem(
-                              Icons.ramen_dining, 'Vegetariana', false),
+                            Icons.ramen_dining,
+                            'Vegetariana',
+                            false,
+                          ),
                           SizedBox(width: 20.w),
                           _buildPreferenceItem(
-                              Icons.fastfood, 'Salgados', false),
+                            Icons.fastfood,
+                            'Salgados',
+                            false,
+                          ),
                           SizedBox(width: 20.w),
                           _buildPreferenceItem(
-                              Icons.bakery_dining, 'Padarias', false),
+                            Icons.bakery_dining,
+                            'Padarias',
+                            false,
+                          ),
                           SizedBox(width: 20.w),
                           _buildPreferenceItem(
-                              Icons.set_meal, 'Frutos do mar', false),
+                            Icons.set_meal,
+                            'Frutos do mar',
+                            false,
+                          ),
                           SizedBox(width: 20.w),
                           _buildPreferenceItem(Icons.cake, 'Doces', false),
                         ],
@@ -565,20 +727,29 @@ class _ProfileContentState extends State<ProfileContent> {
   }
 
   Widget _buildStatItem(String value, String label) {
-    return Column(
-      children: [
-        Text(value,
+    return InkWell(
+      onTap: label == 'Cupons' ? () => context.push('/cupons') : null,
+      child: Column(
+        children: [
+          Text(
+            value,
             style: TextStyle(
-                fontSize: 24.sp,
-                color: const Color(0xFF5D201C),
-                fontWeight: FontWeight.w300)),
-        SizedBox(height: 4.h),
-        Text(label,
+              fontSize: 24.sp,
+              color: const Color(0xFF5D201C),
+              fontWeight: FontWeight.w300,
+            ),
+          ),
+          SizedBox(height: 4.h),
+          Text(
+            label,
             style: TextStyle(
-                fontSize: 12.sp,
-                color: const Color(0xFF5D201C),
-                fontWeight: FontWeight.w600)),
-      ],
+              fontSize: 12.sp,
+              color: const Color(0xFF5D201C),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -598,8 +769,9 @@ class _ProfileContentState extends State<ProfileContent> {
             Container(
               padding: EdgeInsets.all(10.w),
               decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.1),
-                  shape: BoxShape.circle),
+                color: iconColor.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
               child: Icon(icon, color: iconColor, size: 24.r),
             ),
             SizedBox(width: 16.w),
@@ -607,13 +779,18 @@ class _ProfileContentState extends State<ProfileContent> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15.sp,
-                          color: const Color(0xFF5D201C))),
-                  Text(subtitle,
-                      style: TextStyle(color: Colors.grey, fontSize: 12.sp)),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15.sp,
+                      color: const Color(0xFF5D201C),
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: TextStyle(color: Colors.grey, fontSize: 12.sp),
+                  ),
                 ],
               ),
             ),
@@ -638,24 +815,30 @@ class _ProfileContentState extends State<ProfileContent> {
             boxShadow: isSelected
                 ? [
                     BoxShadow(
-                        color: const Color(0xFFFF6961).withValues(alpha: 0.2),
-                        blurRadius: 8.r,
-                        offset: Offset(0, 4.h))
+                      color: const Color(0xFFFF6961).withValues(alpha: 0.2),
+                      blurRadius: 8.r,
+                      offset: Offset(0, 4.h),
+                    ),
                   ]
                 : null,
           ),
-          child: Icon(icon,
-              color: isSelected
-                  ? const Color(0xFFFF6961)
-                  : const Color(0xFF5D201C),
-              size: 28.r),
+          child: Icon(
+            icon,
+            color: isSelected
+                ? const Color(0xFFFF6961)
+                : const Color(0xFF5D201C),
+            size: 28.r,
+          ),
         ),
         SizedBox(height: 8.h),
-        Text(label,
-            style: TextStyle(
-                fontSize: 11.sp,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: const Color(0xFF5D201C))),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.sp,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            color: const Color(0xFF5D201C),
+          ),
+        ),
       ],
     );
   }
@@ -680,18 +863,23 @@ class _ProfileContentState extends State<ProfileContent> {
                   image: (fotoUrl != null && fotoUrl.isNotEmpty)
                       ? DecorationImage(
                           image: CachedNetworkImageProvider(fotoUrl),
-                          fit: BoxFit.cover)
+                          fit: BoxFit.cover,
+                        )
                       : null,
                   boxShadow: [
                     BoxShadow(
-                        color: const Color(0xFF5D201C).withValues(alpha: 0.3),
-                        blurRadius: 30.r,
-                        offset: Offset(0, 10.h))
+                      color: const Color(0xFF5D201C).withValues(alpha: 0.3),
+                      blurRadius: 30.r,
+                      offset: Offset(0, 10.h),
+                    ),
                   ],
                 ),
                 child: (fotoUrl == null || fotoUrl.isEmpty)
-                    ? Icon(Icons.person,
-                        size: 160.r, color: Colors.grey.shade300)
+                    ? Icon(
+                        Icons.person,
+                        size: 160.r,
+                        color: Colors.grey.shade300,
+                      )
                     : null,
               ),
             ),

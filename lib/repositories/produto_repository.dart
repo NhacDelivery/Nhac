@@ -13,12 +13,23 @@ class ProdutoRepository {
     try {
       final promocoes = <ProdutosModel>[];
       for (var pagina = 0; pagina < 20; pagina++) {
-        final response = await _dio.get('/produtos',
-            queryParameters: {'page': pagina, 'size': 50});
+        final response = await _dio.get(
+          '/produtos',
+          queryParameters: {'page': pagina, 'size': 50},
+        );
         final List<dynamic> conteudo = extrairLista(response.data);
-        promocoes.addAll(conteudo.map((map) => ProdutosModel.fromMap(map))
-            .where((produto) => produto.percentualDesconto > 0));
-        if (promocoes.length >= 10 || conteudo.isEmpty ||
+        promocoes.addAll(
+          conteudo
+              .map((map) => ProdutosModel.fromMap(map))
+              .where(
+                (produto) =>
+                    produto.percentualDesconto > 0 &&
+                    produto.preco < 20 &&
+                    produto.lojaAberta,
+              ),
+        );
+        if (promocoes.length >= 10 ||
+            conteudo.isEmpty ||
             (response.data is Map && response.data['last'] != false)) {
           break;
         }
@@ -31,8 +42,10 @@ class ProdutoRepository {
 
   Future<List<ProdutosModel>> buscarNecessidades() async {
     try {
-      final response =
-          await _dio.get('/produtos', queryParameters: {'size': 50});
+      final response = await _dio.get(
+        '/produtos',
+        queryParameters: {'size': 50},
+      );
       final List<dynamic> conteudo = extrairLista(response.data);
       return conteudo.map((map) => ProdutosModel.fromMap(map)).toList();
     } catch (e) {
@@ -42,13 +55,15 @@ class ProdutoRepository {
 
   Future<List<ProdutosModel>> buscarPorCategoria(String categoria) async {
     try {
-      final response = await _dio.get('/produtos',
-          queryParameters: {'categoriaMenu': categoria, 'size': 50});
+      final response = await _dio.get(
+        '/produtos',
+        queryParameters: {'categoriaMenu': categoria, 'size': 50},
+      );
       final List<dynamic> conteudo = extrairLista(response.data);
       return conteudo.map((map) => ProdutosModel.fromMap(map)).toList();
     } catch (e) {
       debugPrint("Erro ao buscar por categoria: $e");
-      return [];
+      rethrow;
     }
   }
 
@@ -57,12 +72,15 @@ class ProdutoRepository {
       final produtos = <ProdutosModel>[];
       var pagina = 0;
       while (true) {
-        final response = await _dio.get('/produtos', queryParameters: {
-          'lojaId': lojaId,
-          'page': pagina,
-          'size': 50,
-          'sort': 'id,asc',
-        });
+        final response = await _dio.get(
+          '/produtos',
+          queryParameters: {
+            'lojaId': lojaId,
+            'page': pagina,
+            'size': 50,
+            'sort': 'id,asc',
+          },
+        );
         final conteudo = extrairLista(response.data);
         produtos.addAll(conteudo.map((map) => ProdutosModel.fromMap(map)));
         final data = response.data;
@@ -73,19 +91,21 @@ class ProdutoRepository {
       }
     } catch (e) {
       debugPrint("Erro ao buscar produtos da loja: $e");
-      return [];
+      rethrow;
     }
   }
 
   Future<List<ProdutosModel>> buscarProdutosPorNome(String termo) async {
     try {
-      final response = await _dio
-          .get('/produtos', queryParameters: {'nome': termo, 'size': 20});
+      final response = await _dio.get(
+        '/produtos',
+        queryParameters: {'nome': termo, 'size': 20},
+      );
       final List<dynamic> conteudo = extrairLista(response.data);
       return conteudo.map((map) => ProdutosModel.fromMap(map)).toList();
     } catch (e) {
       debugPrint("Erro ao buscar produtos: $e");
-      return [];
+      rethrow;
     }
   }
 }

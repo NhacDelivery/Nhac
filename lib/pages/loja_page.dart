@@ -54,8 +54,10 @@ class _LojaPageState extends State<LojaPage>
 
       final auth = context.read<AuthService>();
       if (auth.usuarioId != null) {
-        final seguindo =
-            await _lojaRepository.estaSeguindo(auth.usuarioId!, widget.loja.id);
+        final seguindo = await _lojaRepository.estaSeguindo(
+          auth.usuarioId!,
+          widget.loja.id,
+        );
         if (mounted) setState(() => _isSeguindo = seguindo);
       }
     } finally {
@@ -105,7 +107,8 @@ class _LojaPageState extends State<LojaPage>
       backgroundColor: const Color(0xFFFFE7E5),
       body: NestedScrollView(
         physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics()),
+          parent: BouncingScrollPhysics(),
+        ),
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
             SliverToBoxAdapter(
@@ -149,11 +152,15 @@ class _LojaPageState extends State<LojaPage>
                   child: TabBar(
                     controller: _tabController,
                     labelColor: Colors.black87,
-                    labelStyle:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16.sp),
+                    labelStyle: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16.sp,
+                    ),
                     unselectedLabelColor: Colors.grey.shade600,
                     unselectedLabelStyle: TextStyle(
-                        fontWeight: FontWeight.normal, fontSize: 16.sp),
+                      fontWeight: FontWeight.normal,
+                      fontSize: 16.sp,
+                    ),
                     indicatorColor: const Color(0xFFFF6961),
                     indicatorSize: TabBarIndicatorSize.label,
                     isScrollable: true,
@@ -199,11 +206,11 @@ class _LojaPageState extends State<LojaPage>
           AppConstants.e2eMode
               ? Container(color: const Color(0xFF42567A))
               : CachedNetworkImage(
-            imageUrl: "https://picsum.photos/seed/picsum/800/400",
-            fit: BoxFit.cover,
-            errorWidget: (context, url, error) =>
-                Container(color: const Color(0xFF42567A)),
-          ),
+                  imageUrl: "https://picsum.photos/seed/picsum/800/400",
+                  fit: BoxFit.cover,
+                  errorWidget: (context, url, error) =>
+                      Container(color: const Color(0xFF42567A)),
+                ),
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -238,9 +245,10 @@ class _LojaPageState extends State<LojaPage>
                   border: Border.all(color: Colors.white, width: 3.w),
                   boxShadow: [
                     BoxShadow(
-                        color: const Color(0xFF5D201C).withValues(alpha: 0.1),
-                        blurRadius: 10.r,
-                        offset: Offset(0, 4.h))
+                      color: const Color(0xFF5D201C).withValues(alpha: 0.1),
+                      blurRadius: 10.r,
+                      offset: Offset(0, 4.h),
+                    ),
                   ],
                 ),
                 child: CircleAvatar(
@@ -265,7 +273,7 @@ class _LojaPageState extends State<LojaPage>
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
                         shadows: const [
-                          Shadow(color: Colors.black45, blurRadius: 4)
+                          Shadow(color: Colors.black45, blurRadius: 4),
                         ],
                       ),
                       maxLines: 1,
@@ -278,17 +286,20 @@ class _LojaPageState extends State<LojaPage>
                       runSpacing: 4.h,
                       children: [
                         _buildBadge(
-                            widget.loja.categoria, const Color(0xFF5D201C)),
+                          widget.loja.categoria,
+                          const Color(0xFF5D201C),
+                        ),
                         Text(
                           _carregandoSeguidores
                               ? "Carregando..."
                               : "$_seguidores seguidores",
                           style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 10.sp,
-                              shadows: const [
-                                Shadow(color: Colors.black45, blurRadius: 4)
-                              ]),
+                            color: Colors.white,
+                            fontSize: 10.sp,
+                            shadows: const [
+                              Shadow(color: Colors.black45, blurRadius: 4),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -298,24 +309,32 @@ class _LojaPageState extends State<LojaPage>
               ElevatedButton(
                 onPressed: _carregandoSeguidores ? null : _toggleSeguir,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      _isSeguindo ? Colors.white : const Color(0xFFFF6961),
-                  foregroundColor:
-                      _isSeguindo ? const Color(0xFFFF6961) : Colors.white,
+                  backgroundColor: _isSeguindo
+                      ? Colors.white
+                      : const Color(0xFFFF6961),
+                  foregroundColor: _isSeguindo
+                      ? const Color(0xFFFF6961)
+                      : Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20)),
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 16.w, vertical: 6.h),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 16.w,
+                    vertical: 6.h,
+                  ),
                 ),
                 child: Text(
-                    _carregandoSeguidores
-                        ? "..."
-                        : _isSeguindo
-                            ? "Seguindo"
-                            : "Seguir",
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 12.sp)),
+                  _carregandoSeguidores
+                      ? "..."
+                      : _isSeguindo
+                      ? "Seguindo"
+                      : "Seguir",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12.sp,
+                  ),
+                ),
               ),
             ],
           ),
@@ -325,9 +344,10 @@ class _LojaPageState extends State<LojaPage>
                 ? widget.loja.descricao
                 : "Bem-vindo à nossa loja! Confira nossos produtos.",
             style: TextStyle(
-                color: Colors.white,
-                fontSize: 11.sp,
-                shadows: const [Shadow(color: Colors.black45, blurRadius: 2)]),
+              color: Colors.white,
+              fontSize: 11.sp,
+              shadows: const [Shadow(color: Colors.black45, blurRadius: 2)],
+            ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
@@ -343,11 +363,14 @@ class _LojaPageState extends State<LojaPage>
         color: color,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(text,
-          style: TextStyle(
-              color: Colors.white,
-              fontSize: 10.sp,
-              fontWeight: FontWeight.bold)),
+      child: Text(
+        text,
+        style: TextStyle(
+          color: Colors.white,
+          fontSize: 10.sp,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
     );
   }
 
@@ -361,26 +384,29 @@ class _LojaPageState extends State<LojaPage>
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha: 0.05),
-                blurRadius: 10,
-                offset: const Offset(0, 4)),
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
           ],
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _buildStatItem(
-                "Avaliação",
-                (widget.loja.dadosOperacionais?.avaliacaoMedia ?? 0.0)
-                    .toStringAsFixed(1),
-                "Excelente",
-                const Color(0xFF5D201C)),
+              "Avaliação",
+              (widget.loja.dadosOperacionais?.avaliacaoMedia ?? 0.0)
+                  .toStringAsFixed(1),
+              "Excelente",
+              const Color(0xFF5D201C),
+            ),
             Container(width: 1, height: 40.h, color: Colors.grey.shade200),
             _buildStatItem(
-                "Avaliações",
-                "${widget.loja.dadosOperacionais?.totalAvaliacoes ?? 0}",
-                "Total",
-                const Color(0xFFFF6961)),
+              "Avaliações",
+              "${widget.loja.dadosOperacionais?.totalAvaliacoes ?? 0}",
+              "Total",
+              const Color(0xFFFF6961),
+            ),
             Container(width: 1, height: 40.h, color: Colors.grey.shade200),
             _buildStatItem("Produtos", "100%", "Positivo", Colors.black87),
           ],
@@ -390,20 +416,31 @@ class _LojaPageState extends State<LojaPage>
   }
 
   Widget _buildStatItem(
-      String title, String value, String subtitle, Color valueColor) {
+    String title,
+    String value,
+    String subtitle,
+    Color valueColor,
+  ) {
     return Column(
       children: [
-        Text(title,
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 12.sp)),
+        Text(
+          title,
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 12.sp),
+        ),
         SizedBox(height: 4.h),
-        Text(value,
-            style: TextStyle(
-                color: valueColor,
-                fontSize: 18.sp,
-                fontWeight: FontWeight.bold)),
+        Text(
+          value,
+          style: TextStyle(
+            color: valueColor,
+            fontSize: 18.sp,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         SizedBox(height: 4.h),
-        Text(subtitle,
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 10.sp)),
+        Text(
+          subtitle,
+          style: TextStyle(color: Colors.grey.shade500, fontSize: 10.sp),
+        ),
       ],
     );
   }
@@ -432,18 +469,40 @@ class _LojaPageState extends State<LojaPage>
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const SliverToBoxAdapter(
-                    child: Center(
-                        child: LoadingNhac(telaCheia: false, tamanho: 40)));
+                  child: Center(
+                    child: LoadingNhac(telaCheia: false, tamanho: 40),
+                  ),
+                );
               }
-              if (snapshot.hasError ||
-                  !snapshot.hasData ||
-                  snapshot.data!.isEmpty) {
+              if (snapshot.hasError) {
+                return SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.w),
+                    child: Column(
+                      children: [
+                        const Text('Não foi possível carregar os produtos.'),
+                        TextButton(
+                          onPressed: () => setState(() {
+                            _produtosFuture = _produtoRepository.buscarPorLoja(
+                              widget.loja.id,
+                            );
+                          }),
+                          child: const Text('Tentar novamente'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
                 return SliverToBoxAdapter(
                   child: Center(
                     child: Padding(
                       padding: EdgeInsets.all(32.w),
-                      child: Text('Nenhum produto disponível no momento 😥',
-                          style: TextStyle(color: Colors.grey.shade600)),
+                      child: Text(
+                        'Nenhum produto disponível no momento 😥',
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
                     ),
                   ),
                 );
@@ -458,42 +517,40 @@ class _LojaPageState extends State<LojaPage>
                   mainAxisSpacing: 12.h,
                   childAspectRatio: 0.70,
                 ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final produto = produtos[index];
-                    return GestureDetector(
-                      onTap: () => Navigator.push(
-                        context,
-                        PageRouteBuilder(
-                          pageBuilder:
-                              (context, animation, secondaryAnimation) =>
-                                  ProdutoDetalhesPage(produto: produto),
-                          transitionsBuilder:
-                              (context, animation, secondaryAnimation, child) {
-                            const begin = Offset(0.0, 1.0);
-                            const end = Offset.zero;
-                            const curve = Curves.easeOutCubic;
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final produto = produtos[index];
+                  return GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) =>
+                            ProdutoDetalhesPage(produto: produto),
+                        transitionsBuilder:
+                            (context, animation, secondaryAnimation, child) {
+                              const begin = Offset(0.0, 1.0);
+                              const end = Offset.zero;
+                              const curve = Curves.easeOutCubic;
 
-                            var tween = Tween(begin: begin, end: end)
-                                .chain(CurveTween(curve: curve));
+                              var tween = Tween(
+                                begin: begin,
+                                end: end,
+                              ).chain(CurveTween(curve: curve));
 
-                            return SlideTransition(
-                              position: animation.drive(tween),
-                              child: child,
-                            );
-                          },
-                          transitionDuration: const Duration(milliseconds: 300),
-                        ),
+                              return SlideTransition(
+                                position: animation.drive(tween),
+                                child: child,
+                              );
+                            },
+                        transitionDuration: const Duration(milliseconds: 300),
                       ),
-                      child: ProductCard(
-                        key: E2EKeys.storeProduct(produto.id),
-                        produto: produto,
-                        lojaFechada: !widget.loja.isAberto,
-                      ),
-                    );
-                  },
-                  childCount: produtos.length,
-                ),
+                    ),
+                    child: ProductCard(
+                      key: E2EKeys.storeProduct(produto.id),
+                      produto: produto,
+                      lojaFechada: !widget.loja.isAberto,
+                    ),
+                  );
+                }, childCount: produtos.length),
               );
             },
           ),
@@ -535,7 +592,10 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return Container(
       color: Colors.white,
       padding: EdgeInsets.only(top: safeAreaTop),
