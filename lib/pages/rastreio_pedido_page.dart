@@ -1,3 +1,4 @@
+import 'package:nhac/components/estado_com_retry.dart';
 import 'dart:async';
 import 'package:nhac/models/chat/pedido_chat_referencia.dart';
 import 'package:nhac/services/shared_get.dart';
@@ -5,7 +6,6 @@ import 'package:nhac/services/home_order_route_observer.dart';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -150,6 +150,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
   bool _cancelando = false;
   final _messengerKey = GlobalKey<ScaffoldMessengerState>();
   String _erro = '';
+  bool _pedidoDesatualizado = false;
 
   final NumberFormat currencyFormat = NumberFormat.currency(
     locale: 'pt_BR',
@@ -253,6 +254,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
       setState(() {
         _isLoading = true;
         _erro = '';
+        _pedidoDesatualizado = false;
       });
     }
 
@@ -294,6 +296,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
         _pedido = pedido;
         _isLoading = false;
         _erro = '';
+        _pedidoDesatualizado = false;
       });
       LojasModel? loja = _loja;
       RotaEntregaModel? rota = _rota;
@@ -403,6 +406,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
         _motoboyDesatualizado = motoboyDesatualizado;
         _isLoading = false;
         _erro = '';
+        _pedidoDesatualizado = false;
       });
 
       _cache.remove(_cacheKey);
@@ -423,10 +427,12 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
           version != _requestVersion) {
         return;
       }
-      if (_pedido != null && _loja != null) {
-        if (_motoboyLocation != null) {
-          setState(() => _motoboyDesatualizado = true);
-        }
+      if (_pedido != null) {
+        setState(() {
+          _pedidoDesatualizado = true;
+          _isLoading = false;
+          if (_motoboyLocation != null) _motoboyDesatualizado = true;
+        });
         return;
       }
       setState(() {
@@ -874,6 +880,12 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                   SizedBox(height: 24.h),
                   Divider(color: Colors.grey.shade300, height: 1),
                   SizedBox(height: 16.h),
+                  if (_pedidoDesatualizado)
+                    BannerErroInline(
+                      mensagem:
+                          'Não foi possível atualizar o pedido. Exibindo a última informação recebida.',
+                      aoTentarNovamente: () => _carregarDados(silencioso: true),
+                    ),
                   _buildCodigoEntregaCard(),
                   _buildEntregadorCard(),
                   if (_erroLoja)

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -47,6 +49,7 @@ void main() {
   });
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
+    FlutterSecureStorage.setMockInitialValues({});
     auth = AddressAuth();
     when(() => auth.usuarioId).thenReturn('cliente');
     repo = AddressRepo();
@@ -116,6 +119,32 @@ void main() {
     expect(find.text('Número da casa'), findsOneWidget);
     expect(find.text('Para completar seu endereço, informe o número da casa.'),
         findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets(
+      'primeiro endereço sem padrão também exige número e salva uma vez',
+      (tester) async {
+    when(() => repo.buscarEnderecos('cliente')).thenAnswer((_) async => [novo]);
+    await enderecos.buscarEnderecos();
+    final resposta = Completer<void>();
+    when(() => repo.atualizarEndereco('cliente', 'b', any()))
+        .thenAnswer((_) => resposta.future);
+    await montar(tester, const CheckoutPage());
+    expect(find.text('Número da casa'), findsOneWidget);
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Número (ex: 123, S/N)'), '42');
+    await tester.tap(find.text('Salvar'));
+    await tester.pump();
+    expect(find.text('Salvando...'), findsOneWidget);
+    resposta.completeError(Exception('offline'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Não foi possível salvar o número. Tente novamente.'),
+        findsOneWidget);
+    expect(find.text('42'), findsOneWidget);
+    verify(() => repo.atualizarEndereco('cliente', 'b', any())).called(1);
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
   });

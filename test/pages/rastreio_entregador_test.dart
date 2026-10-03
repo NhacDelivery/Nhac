@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:nhac/components/estado_com_retry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -218,6 +219,36 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Loja recuperada'), findsOneWidget);
     expect(retry, findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('falha posterior mantém pedido visível com aviso e retry',
+      (tester) async {
+    setupScreen(tester);
+    final pedido = criarPedido(status: StatusPedido.preparando);
+    when(() => mockPedidoRepository.buscarPedidoPorId('stale-pedido'))
+        .thenAnswer((_) async => pedido);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(createWidgetUnderTest('stale-pedido'));
+    await tester.pumpAndSettle();
+    when(() => mockPedidoRepository.buscarPedidoPorId('stale-pedido'))
+        .thenThrow(Exception('offline'));
+    await tester.pump(const Duration(seconds: 31));
+    await tester.pumpAndSettle();
+    final aviso = find.text(
+        'Não foi possível atualizar o pedido. Exibindo a última informação recebida.');
+    await tester.ensureVisible(aviso);
+    expect(aviso, findsOneWidget);
+    expect(find.text('Pedido não encontrado.'), findsNothing);
+    when(() => mockPedidoRepository.buscarPedidoPorId('stale-pedido'))
+        .thenAnswer((_) async => pedido);
+    final retry = find.descendant(
+        of: find.ancestor(of: aviso, matching: find.byType(BannerErroInline)),
+        matching: find.byType(TextButton));
+    await tester.ensureVisible(retry);
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    expect(aviso, findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

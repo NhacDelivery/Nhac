@@ -1,6 +1,5 @@
 import 'package:nhac/components/selecionar_endereco_padrao.dart';
 import 'package:flutter/material.dart';
-import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/components/nota_fiscal_pedido.dart';
 import 'package:nhac/models/usuario/cupom_model.dart';
 import 'package:nhac/repositories/cupom_repository.dart';
@@ -8,8 +7,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:nhac/models/pedido/criar_pedido_request.dart';
-import 'package:uuid/uuid.dart';
-import 'package:nhac/repositories/pedido_repository.dart';
+import 'package:nhac/services/checkout_tentativa_service.dart';
+import 'package:nhac/components/estado_com_retry.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:nhac/controllers/cart_provider.dart';
@@ -51,12 +50,62 @@ class _CheckoutPageState extends State<CheckoutPage> {
   double? _entregaLatitude, _entregaLongitude;
   int _freteVersao = 0;
   int? _tempoEstimadoMinutos;
-  String? _checkoutIdempotencyKey;
+  final _tentativasCheckout = CheckoutTentativaService();
+  Map<String, dynamic>? _tentativaPendente;
+  String? _erroTentativa;
+  bool _consultandoTentativa = true;
+
+  Future<void> _consultarTentativa() async {
+    final uid = context.read<AuthService>().usuarioId;
+    if (uid == null) return;
+    try {
+      final tentativa = await _tentativasCheckout.carregar(uid);
+      if (!mounted || context.read<AuthService>().usuarioId != uid) return;
+      setState(() {
+        _tentativaPendente = tentativa;
+        _erroTentativa = null;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(() => _erroTentativa =
+            'Não foi possível conferir a tentativa anterior. Tente novamente antes de criar um pedido.');
+      }
+    } finally {
+      if (mounted) setState(() => _consultandoTentativa = false);
+    }
+  }
+
+  Future<void> _recuperarTentativa() async {
+    if (_isSubmitting || _tentativaPendente == null) return;
+    final auth = context.read<AuthService>();
+    final uid = auth.usuarioId;
+    if (uid == null) return;
+    final pagamento = (_tentativaPendente!['payload'] as Map)['formaPagamento'];
+    setState(() => _isSubmitting = true);
+    try {
+      final resposta = await _tentativasCheckout.recuperar(uid);
+      if (!mounted || auth.usuarioId != uid) return;
+      await LocalCacheService.salvarPedidoAtivo(uid, resposta.pedidoId);
+      await _tentativasCheckout.concluir(uid);
+      if (!mounted || auth.usuarioId != uid) return;
+      context.go(pagamento == 'DINHEIRO'
+          ? '/rastreio?pedidoId=${Uri.encodeQueryComponent(resposta.pedidoId)}'
+          : '/pagamento?pedidoId=${Uri.encodeQueryComponent(resposta.pedidoId)}');
+    } catch (e) {
+      if (mounted && auth.usuarioId == uid) {
+        context.showError(e.toString().replaceFirst('Exception: ', ''));
+      }
+      if (mounted && auth.usuarioId == uid) await _consultarTentativa();
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _consultarTentativa();
       _carregarDadosIniciais();
     });
   }
@@ -147,20 +196,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
   Future<void> _verificarNumeroEndereco() async {
     if (!mounted) return;
+    setState(() => _isLoading = false);
     final enderecoProvider = context.read<EnderecoProvider>();
     final EnderecoModel? enderecoisPadrao = enderecoProvider.enderecos.isEmpty
         ? null
         : enderecoProvider.enderecos.firstWhere(
             (e) => e.isPadrao,
-            orElse: () => EnderecoModel(
-              id: '',
-              bairro: '',
-              cep: '',
-              cidade: '',
-              estado: '',
-              numero: '',
-              rua: '',
-            ),
+            orElse: () => enderecoProvider.enderecos.first,
           );
     if (enderecoisPadrao != null &&
         enderecoisPadrao.id.isNotEmpty &&
@@ -173,96 +215,127 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Future<void> _pedirNumeroEndereco(EnderecoModel endereco) async {
     final TextEditingController numeroController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    final provider = context.read<EnderecoProvider>();
+    bool salvando = false;
+    String? erro;
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(24.r),
-        ),
-        backgroundColor: Colors.white,
-        title: Row(
-          children: [
-            Icon(Icons.home, color: const Color(0xFFFF6961), size: 28.r),
-            SizedBox(width: 12.w),
-            Expanded(
-                child: Text(
-              'Número da casa',
-              style: TextStyle(
-                fontSize: 20.sp,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF5D201C),
-              ),
-            )),
-          ],
-        ),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Para completar seu endereço, informe o número da casa.',
-                style: TextStyle(
-                  fontSize: 14.sp,
-                  color: const Color(0xFF5D201C),
+      builder: (dialogContext) => StatefulBuilder(
+          builder: (ctx, atualizar) => PopScope(
+              canPop: !salvando,
+              child: AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(24.r),
                 ),
-              ),
-              SizedBox(height: 16.h),
-              TextFormField(
-                controller: numeroController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  hintText: 'Número (ex: 123, S/N)',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12.r),
-                  ),
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 16.w,
-                    vertical: 12.h,
+                backgroundColor: Colors.white,
+                title: Row(
+                  children: [
+                    Icon(Icons.home,
+                        color: const Color(0xFFFF6961), size: 28.r),
+                    SizedBox(width: 12.w),
+                    Expanded(
+                        child: Text(
+                      'Número da casa',
+                      style: TextStyle(
+                        fontSize: 20.sp,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF5D201C),
+                      ),
+                    )),
+                  ],
+                ),
+                content: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Para completar seu endereço, informe o número da casa.',
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          color: const Color(0xFF5D201C),
+                        ),
+                      ),
+                      SizedBox(height: 16.h),
+                      if (erro != null)
+                        Text(erro!, style: const TextStyle(color: Colors.red)),
+                      TextFormField(
+                        enabled: !salvando,
+                        controller: numeroController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          hintText: 'Número (ex: 123, S/N)',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12.r),
+                          ),
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 16.w,
+                            vertical: 12.h,
+                          ),
+                        ),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? 'Campo obrigatório'
+                                : null,
+                      ),
+                    ],
                   ),
                 ),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Campo obrigatório'
-                    : null,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Cancelar',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (formKey.currentState!.validate()) {
-                final numero = numeroController.text.trim();
-                final enderecoAtualizado = endereco.copyWith(numero: numero);
-
-                await context.read<EnderecoProvider>().atualizarEndereco(
-                      enderecoAtualizado.id,
-                      enderecoAtualizado,
-                    );
-
-                if (!mounted) return;
-                Navigator.pop(context);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFE645C),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(50.r),
-              ),
-            ),
-            child: const Text('Salvar'),
-          ),
-        ],
-      ),
+                actions: [
+                  TextButton(
+                    onPressed:
+                        salvando ? null : () => Navigator.pop(dialogContext),
+                    child: Text(
+                      'Cancelar',
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
+                  ),
+                  ElevatedButton(
+                    onPressed: salvando
+                        ? null
+                        : () async {
+                            if (salvando || !formKey.currentState!.validate()) {
+                              return;
+                            }
+                            atualizar(() {
+                              salvando = true;
+                              erro = null;
+                            });
+                            try {
+                              await provider.atualizarEndereco(
+                                  endereco.id,
+                                  endereco.copyWith(
+                                      numero: numeroController.text.trim()));
+                              if (!mounted || !dialogContext.mounted) return;
+                              Navigator.pop(dialogContext);
+                              if (provider.erro != null) {
+                                context.showInfo(provider.erro!);
+                              }
+                            } catch (_) {
+                              if (ctx.mounted) {
+                                atualizar(() => erro =
+                                    'Não foi possível salvar o número. Tente novamente.');
+                              }
+                            } finally {
+                              if (ctx.mounted) {
+                                atualizar(() => salvando = false);
+                              }
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFE645C),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(50.r),
+                      ),
+                    ),
+                    child: Text(salvando ? 'Salvando...' : 'Salvar'),
+                  ),
+                ],
+              ))),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    numeroController.dispose();
   }
 
   @override
@@ -297,8 +370,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final tempoEntrega = _tempoEstimadoMinutos == null
         ? 'Tempo calculado no fechamento'
         : 'Até $_tempoEstimadoMinutos min';
-    final podeFinalizar =
-        enderecoisPadrao != null && enderecoisPadrao.numero.isNotEmpty;
+    final podeFinalizar = !_consultandoTentativa &&
+        _tentativaPendente == null &&
+        _erroTentativa == null &&
+        enderecoisPadrao != null &&
+        enderecoisPadrao.numero.isNotEmpty;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFE7E5),
@@ -329,6 +405,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_erroTentativa != null)
+              BannerErroInline(
+                  mensagem: _erroTentativa!,
+                  aoTentarNovamente: _consultarTentativa),
+            if (_tentativaPendente != null) ...[
+              const Text(
+                  'Há uma tentativa anterior sem confirmação. Verifique o resultado antes de criar outro pedido.'),
+              TextButton(
+                  onPressed: _isSubmitting ? null : _recuperarTentativa,
+                  child: Text(_isSubmitting
+                      ? 'Verificando...'
+                      : 'Verificar tentativa anterior')),
+            ],
             _buildSectionTitle('Endereço de entrega'),
             SizedBox(height: 8.h),
             Container(
@@ -945,9 +1034,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              context.push('/enderecos-salvos');
+              await context.push('/enderecos-salvos');
+              if (!mounted) return;
+              await _carregarDadosIniciais();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFE645C),
@@ -980,7 +1071,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
     double total,
     CartProvider cartProvider,
   ) async {
-    if (_isSubmitting) return;
+    if (_isSubmitting ||
+        _consultandoTentativa ||
+        _tentativaPendente != null ||
+        _erroTentativa != null) {
+      return;
+    }
     if (!_freteConfirmado ||
         _entregaLatitude == null ||
         _entregaLongitude == null) {
@@ -1072,43 +1168,49 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
 
     final navigator = Navigator.of(context, rootNavigator: true);
+    bool loadingAberto = false;
+    void fecharLoading() {
+      if (loadingAberto && navigator.mounted) {
+        navigator.pop();
+        loadingAberto = false;
+      }
+    }
 
     try {
+      loadingAberto = true;
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (dialogContext) =>
-            const LoadingNhac(telaCheia: false, tamanho: 100),
+        builder: (dialogContext) => const PopScope(
+            canPop: false, child: LoadingNhac(telaCheia: false, tamanho: 100)),
       );
 
-      _checkoutIdempotencyKey ??= const Uuid().v4();
-      final respostaPedido = await PedidoRepository().finalizarPedido(
-        pedido,
-        idempotencyKey: _checkoutIdempotencyKey!,
-      );
+      final respostaPedido = await _tentativasCheckout.enviar(uid, pedido);
+      if (authService.usuarioId != uid) {
+        fecharLoading();
+        return;
+      }
       final idGerado = respostaPedido.pedidoId;
       try {
         await LocalCacheService.salvarPedidoAtivo(uid, idGerado);
       } catch (_) {
         // O pedido foi criado; uma falha do cache não pode repetir o checkout.
       }
-      navigator.pop(); // Close loading
+      fecharLoading();
 
       if (!context.mounted) return;
       if (_formaPagamento == 'Cartão de crédito' || _formaPagamento == 'PIX') {
         await cartProvider.esvaziarCarrinho();
-        if (!context.mounted) return;
-        _checkoutIdempotencyKey = null;
+        await _tentativasCheckout.concluir(uid);
+        if (!context.mounted || authService.usuarioId != uid) return;
         context.go('/pagamento?pedidoId=$idGerado');
       } else {
         // Dinheiro
-        _exibirSucessoEVoltar(idGerado.toString(), cartProvider);
+        await _exibirSucessoEVoltar(idGerado.toString(), cartProvider);
+        await _tentativasCheckout.concluir(uid);
       }
     } on CustomCheckoutException catch (e) {
-      // Resposta de negócio é definitiva; a próxima tentativa pode gerar uma
-      // nova chave (por exemplo, após um conflito 409 de payload alterado).
-      _checkoutIdempotencyKey = null;
-      navigator.pop(); // Close loading
+      fecharLoading();
       if (!context.mounted) return;
       setState(() => _isSubmitting = false);
 
@@ -1150,11 +1252,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ),
       );
     } catch (e) {
-      navigator.pop(); // Close loading
+      fecharLoading();
       if (!context.mounted) return;
       setState(() => _isSubmitting = false);
       context.showError(e.toString().replaceAll('Exception: ', ''));
     } finally {
+      if (mounted && authService.usuarioId == uid) await _consultarTentativa();
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
@@ -1163,8 +1266,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
     String idGerado,
     CartProvider cartProvider,
   ) async {
-    _checkoutIdempotencyKey = null;
-
     final itens = cartProvider.itens.values.toList();
     final subtotal = cartProvider.valorTotal;
     final desconto = _subtotalValidado == subtotal

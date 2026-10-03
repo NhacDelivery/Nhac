@@ -24,6 +24,8 @@ class EnderecoProvider with ChangeNotifier {
     _sessionUserId = _authService.usuarioId;
     _sessionVersion++;
     _enderecos = [];
+    _erro = null;
+    _requestVersion++;
     _isLoading = false;
     notifyListeners();
   }
@@ -35,89 +37,103 @@ class EnderecoProvider with ChangeNotifier {
     super.dispose();
   }
 
+  String? _erro;
+  String? get erro => _erro;
+  int _requestVersion = 0;
+  bool _mutando = false;
   List<EnderecoModel> _enderecos = [];
   bool _isLoading = false;
 
   List<EnderecoModel> get enderecos => _enderecos;
-  bool get isLoading => _isLoading;
+  bool get isLoading => _isLoading || _mutando;
 
   Future<void> buscarEnderecos() async {
     final usuarioId = _authService.usuarioId;
     if (usuarioId == null) return;
 
     final sessionVersion = _sessionVersion;
+    final requestVersion = ++_requestVersion;
     try {
       _isLoading = true;
+      _erro = null;
       notifyListeners();
 
       final resultado = await _enderecoRepository.buscarEnderecos(usuarioId);
-      if (_disposed || sessionVersion != _sessionVersion) return;
+      if (_disposed ||
+          sessionVersion != _sessionVersion ||
+          requestVersion != _requestVersion) {
+        return;
+      }
       _enderecos = resultado;
     } catch (e) {
-      debugPrint("Erro ao buscar endereços: $e");
+      if (!_disposed &&
+          sessionVersion == _sessionVersion &&
+          requestVersion == _requestVersion) {
+        _erro = "Não foi possível atualizar os endereços. Tente novamente.";
+      }
     } finally {
-      if (!_disposed && sessionVersion == _sessionVersion) {
+      if (!_disposed &&
+          sessionVersion == _sessionVersion &&
+          requestVersion == _requestVersion) {
         _isLoading = false;
         notifyListeners();
       }
     }
   }
 
-  Future<void> adicionarEndereco(EnderecoModel endereco) async {
+  Future<void> _alterarEndereco(Future<void> Function(String) operacao,
+      {void Function()? aoConfirmar}) async {
     final usuarioId = _authService.usuarioId;
-    if (usuarioId == null) return;
-
+    if (usuarioId == null) {
+      throw StateError('Faça login para alterar o endereço.');
+    }
+    if (_mutando) throw StateError('Aguarde a alteração do endereço.');
+    final sessao = _sessionVersion;
+    _mutando = true;
+    _requestVersion++;
+    _isLoading = true;
+    _erro = null;
+    notifyListeners();
     try {
-      _isLoading = true;
-      notifyListeners();
-
-      await _enderecoRepository.adicionarEndereco(usuarioId, endereco);
+      await operacao(usuarioId);
+      if (_disposed || sessao != _sessionVersion) return;
+      aoConfirmar?.call();
       await buscarEnderecos();
-    } catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      debugPrint("Erro ao adicionar endereço: $e");
-      rethrow;
+      if (!_disposed && sessao == _sessionVersion && _erro != null) {
+        _erro =
+            'Alteração salva, mas não foi possível atualizar a lista. Tente atualizar novamente.';
+      }
+    } finally {
+      _mutando = false;
+      if (!_disposed && sessao == _sessionVersion) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
-  Future<void> removerEndereco(String enderecoId) async {
-    final usuarioId = _authService.usuarioId;
-    if (usuarioId == null) return;
+  Future<void> adicionarEndereco(EnderecoModel endereco) =>
+      _alterarEndereco((usuarioId) =>
+          _enderecoRepository.adicionarEndereco(usuarioId, endereco));
 
-    try {
-      _isLoading = true;
-      notifyListeners();
+  Future<void> removerEndereco(String enderecoId) => _alterarEndereco(
+        (usuarioId) =>
+            _enderecoRepository.removerEndereco(usuarioId, enderecoId),
+        aoConfirmar: () => _enderecos.removeWhere((e) => e.id == enderecoId),
+      );
 
-      await _enderecoRepository.removerEndereco(usuarioId, enderecoId);
-      await buscarEnderecos();
-    } catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      debugPrint("Erro ao remover endereço: $e");
-      rethrow;
-    }
-  }
-
-  Future<void> atualizarEndereco(
-      String enderecoId, EnderecoModel endereco) async {
-    final usuarioId = _authService.usuarioId;
-    if (usuarioId == null) return;
-
-    try {
-      _isLoading = true;
-      notifyListeners();
-
-      await _enderecoRepository.atualizarEndereco(
-          usuarioId, enderecoId, endereco);
-      await buscarEnderecos();
-    } catch (e) {
-      _isLoading = false;
-      notifyListeners();
-      debugPrint("Erro ao atualizar endereço: $e");
-      rethrow;
-    }
-  }
+  Future<void> atualizarEndereco(String enderecoId, EnderecoModel endereco) =>
+      _alterarEndereco(
+        (usuarioId) => _enderecoRepository.atualizarEndereco(
+            usuarioId, enderecoId, endereco),
+        aoConfirmar: () => _enderecos = _enderecos
+            .map((e) => e.id == enderecoId
+                ? endereco
+                : endereco.isPadrao
+                    ? e.copyWith(isPadrao: false)
+                    : e)
+            .toList(),
+      );
 
   Future<void> definirComoPadrao(String enderecoId) async {
     final usuarioId = _authService.usuarioId;
@@ -126,6 +142,7 @@ class EnderecoProvider with ChangeNotifier {
     }
     if (_isLoading) throw StateError('Aguarde a atualização do endereço.');
     final sessionVersion = _sessionVersion;
+    _requestVersion++;
     _isLoading = true;
     notifyListeners();
     try {

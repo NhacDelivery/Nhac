@@ -446,7 +446,7 @@ class _LojaPageState extends State<LojaPage>
               "Avaliação",
               (widget.loja.dadosOperacionais?.avaliacaoMedia ?? 0.0)
                   .toStringAsFixed(1),
-              "Excelente",
+              "Média",
               const Color(0xFF5D201C),
             ),
             Container(width: 1, height: 40.h, color: Colors.grey.shade200),
@@ -456,8 +456,6 @@ class _LojaPageState extends State<LojaPage>
               "Total",
               const Color(0xFFFF6961),
             ),
-            Container(width: 1, height: 40.h, color: Colors.grey.shade200),
-            _buildStatItem("Produtos", "100%", "Positivo", Colors.black87),
           ],
         ),
       ),
@@ -497,20 +495,6 @@ class _LojaPageState extends State<LojaPage>
   Widget _buildProdutosTab() {
     return CustomScrollView(
       slivers: [
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: EdgeInsets.all(16.w),
-            child: Row(
-              children: [
-                _buildFilterChip("Todos", true),
-                SizedBox(width: 8.w),
-                _buildFilterChip("Em destaque", false),
-                SizedBox(width: 8.w),
-                _buildFilterChip("Vendidos", false),
-              ],
-            ),
-          ),
-        ),
         SliverPadding(
           padding: EdgeInsets.symmetric(horizontal: 16.w),
           sliver: Builder(
@@ -639,24 +623,6 @@ class _LojaPageState extends State<LojaPage>
           ),
         SliverToBoxAdapter(child: SizedBox(height: 100.h)),
       ],
-    );
-  }
-
-  Widget _buildFilterChip(String label, bool isSelected) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 8.h),
-      decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFFFF6961) : Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: isSelected ? Colors.white : Colors.grey.shade600,
-          fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          fontSize: 13.sp,
-        ),
-      ),
     );
   }
 }

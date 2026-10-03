@@ -5,27 +5,33 @@ import 'package:nhac/services/api_client.dart';
 import 'package:nhac/utils/safe_parse_helpers.dart';
 
 class AvaliacaoRepository {
-  final _dio = ApiClient().dio;
+  final Dio _dio;
+  AvaliacaoRepository({Dio? dio}) : _dio = dio ?? ApiClient().dio;
 
-  Future<List<AvaliacoesModel>> buscarAvaliacoes(String lojaId, {int page = 0, int size = 10}) async {
+  Future<List<AvaliacoesModel>> buscarAvaliacoes(String lojaId,
+      {int page = 0, int size = 10}) async {
     try {
-      final response = await _dio.get('/lojas/$lojaId/avaliacoes', queryParameters: {
+      final response =
+          await _dio.get('/lojas/$lojaId/avaliacoes', queryParameters: {
         'page': page,
         'size': size,
       });
       if (response.statusCode == 200 && response.data != null) {
-        final List data = extrairLista(response.data); 
-        return data.map((map) => AvaliacoesModel.fromMap(map, map['id']?.toString() ?? '')).toList();
+        final List data = extrairLista(response.data);
+        return data
+            .map((map) =>
+                AvaliacoesModel.fromMap(map, map['id']?.toString() ?? ''))
+            .toList();
       }
-      return [];
+      throw StateError('Avaliações indisponíveis');
     } on DioException catch (e) {
-      if (e.response?.statusCode == 404) return [];
       debugPrint("Erro ao buscar avaliações: ${e.message}");
       throw Exception('Falha ao buscar avaliações');
     }
   }
 
-  Future<AvaliacoesModel> criarAvaliacao(String pedidoId, double nota, String comentario) async {
+  Future<AvaliacoesModel> criarAvaliacao(
+      String pedidoId, double nota, String comentario) async {
     try {
       final response = await _dio.post('/avaliacoes', data: {
         'pedidoId': pedidoId,
@@ -38,7 +44,8 @@ class AvaliacaoRepository {
       }
       throw Exception('Erro ao criar avaliação');
     } on DioException catch (e) {
-      final mensagem = extrairMensagemErro(e.response?.data, fallback: 'Erro ao criar avaliação');
+      final mensagem = extrairMensagemErro(e.response?.data,
+          fallback: 'Erro ao criar avaliação');
       throw Exception(mensagem);
     }
   }
@@ -53,10 +60,10 @@ class AvaliacaoRepository {
           'total': data['totalAvaliacoes'] ?? 0,
         };
       }
-      return {'media': 0.0, 'total': 0};
+      throw StateError('Resumo de avaliações indisponível');
     } on DioException catch (e) {
       debugPrint("Erro ao buscar resumo de avaliações: ${e.message}");
-      return {'media': 0.0, 'total': 0};
+      throw StateError('Resumo de avaliações indisponível');
     }
   }
 }

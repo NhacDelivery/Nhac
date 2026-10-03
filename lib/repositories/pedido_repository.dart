@@ -68,11 +68,18 @@ class PedidoRepository {
   Future<PedidoCriadoResponse> finalizarPedido(
     CriarPedidoRequest pedido, {
     required String idempotencyKey,
+  }) =>
+      recuperarTentativaCheckout(pedido.toMap(),
+          idempotencyKey: idempotencyKey);
+
+  Future<PedidoCriadoResponse> recuperarTentativaCheckout(
+    Map<String, dynamic> payload, {
+    required String idempotencyKey,
   }) async {
     try {
       final response = await _dio.post(
         '/pedidos',
-        data: pedido.toMap(),
+        data: payload,
         options: Options(headers: {'Idempotency-Key': idempotencyKey}),
       );
 

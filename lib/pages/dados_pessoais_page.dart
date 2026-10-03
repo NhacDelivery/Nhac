@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:lottie/lottie.dart';
+import 'package:nhac/components/estado_com_retry.dart';
 import 'package:nhac/components/nhac_menu_tile.dart';
 
 class DadosPessoaisPage extends StatelessWidget {
@@ -18,13 +18,15 @@ class DadosPessoaisPage extends StatelessWidget {
     if (usuario == null) {
       return Scaffold(
         backgroundColor: const Color(0xFFFFE7E5),
+        appBar: AppBar(title: const Text('Dados pessoais')),
         body: Center(
-          child: Lottie.asset(
-            'assets/animations/botao_loading_nhac.json',
-            width: 150,
-            height: 150,
-          ),
-        ),
+            child: userProvider.isLoading
+                ? const LoadingNhac(telaCheia: false)
+                : BannerErroInline(
+                    mensagem: userProvider.erro ??
+                        'Os dados pessoais ainda não foram carregados.',
+                    aoTentarNovamente: userProvider.carregarDadosUsuario,
+                  )),
       );
     }
 

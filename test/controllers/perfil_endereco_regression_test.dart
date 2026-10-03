@@ -153,4 +153,49 @@ void main() {
     expect(provider.observacao, '');
     provider.dispose();
   });
+
+  test('endereços distinguem erro de vazio e recuperam a consulta', () async {
+    final repo = EnderecoMock();
+    when(() => repo.buscarEnderecos('cliente')).thenThrow(Exception('offline'));
+    final provider = EnderecoProvider(authService: auth, repository: repo);
+    await provider.buscarEnderecos();
+    expect(provider.erro, isNotNull);
+    expect(provider.enderecos, isEmpty);
+    when(() => repo.buscarEnderecos('cliente')).thenAnswer((_) async => []);
+    await provider.buscarEnderecos();
+    expect(provider.erro, isNull);
+    provider.dispose();
+  });
+
+  test(
+      'exclusão confirmada com refresh falho remove item e avisa sem repetir DELETE',
+      () async {
+    final repo = EnderecoMock();
+    final provider = await carregar(repo);
+    when(() => repo.removerEndereco('cliente', 'antigo'))
+        .thenAnswer((_) async {});
+    when(() => repo.buscarEnderecos('cliente')).thenThrow(Exception('offline'));
+    await provider.removerEndereco('antigo');
+    expect(provider.enderecos.map((e) => e.id), ['novo']);
+    expect(provider.erro, contains('Alteração salva'));
+    expect(provider.isLoading, false);
+    verify(() => repo.removerEndereco('cliente', 'antigo')).called(1);
+    provider.dispose();
+  });
+
+  test('resposta antiga dos endereços não substitui consulta mais recente',
+      () async {
+    final repo = EnderecoMock();
+    final antiga = Completer<List<EnderecoModel>>();
+    when(() => repo.buscarEnderecos('cliente'))
+        .thenAnswer((_) => antiga.future);
+    final provider = EnderecoProvider(authService: auth, repository: repo);
+    final primeira = provider.buscarEnderecos();
+    when(() => repo.buscarEnderecos('cliente')).thenAnswer((_) async => [novo]);
+    await provider.buscarEnderecos();
+    antiga.complete([antigo]);
+    await primeira;
+    expect(provider.enderecos.single.id, 'novo');
+    provider.dispose();
+  });
 }

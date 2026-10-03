@@ -46,7 +46,8 @@ class LojaRepository {
     }
   }
 
-  Future<List<LojasModel>> buscarLojasPorNome(String termo) async {
+  Future<List<LojasModel>> buscarLojasPorNome(String termo,
+      {int page = 0, int size = 50}) async {
     final termoBusca = termo.trim();
     if (termoBusca.isEmpty) return [];
 
@@ -54,7 +55,12 @@ class LojaRepository {
       final response = await SharedGet.forClient(_dio).get(
         _dio,
         '/lojas',
-        queryParameters: {'nome': termoBusca, 'page': 0, 'size': 50},
+        queryParameters: {
+          'nome': termoBusca,
+          'page': page,
+          'size': size,
+          'sort': 'id,asc'
+        },
       );
 
       final List<dynamic> conteudo = extrairLista(response.data);

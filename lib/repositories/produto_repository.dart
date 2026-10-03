@@ -48,12 +48,18 @@ class ProdutoRepository {
     }
   }
 
-  Future<List<ProdutosModel>> buscarPorCategoria(String categoria) async {
+  Future<List<ProdutosModel>> buscarPorCategoria(String categoria,
+      {int page = 0, int size = 50}) async {
     try {
       final response = await SharedGet.forClient(_dio).get(
         _dio,
         '/produtos/cards',
-        queryParameters: {'categoriaMenu': categoria, 'size': 50},
+        queryParameters: {
+          'categoriaMenu': categoria,
+          'page': page,
+          'size': size,
+          'sort': 'id,asc'
+        },
       );
       final List<dynamic> conteudo = extrairLista(response.data);
       return conteudo.map((map) => ProdutosModel.fromMap(map)).toList();
@@ -112,12 +118,18 @@ class ProdutoRepository {
     }
   }
 
-  Future<List<ProdutosModel>> buscarProdutosPorNome(String termo) async {
+  Future<List<ProdutosModel>> buscarProdutosPorNome(String termo,
+      {int page = 0, int size = 20}) async {
     try {
       final response = await SharedGet.forClient(_dio).get(
         _dio,
         '/produtos/cards',
-        queryParameters: {'nome': termo, 'size': 20},
+        queryParameters: {
+          'nome': termo,
+          'page': page,
+          'size': size,
+          'sort': 'id,asc'
+        },
       );
       final List<dynamic> conteudo = extrairLista(response.data);
       return conteudo.map((map) => ProdutosModel.fromMap(map)).toList();

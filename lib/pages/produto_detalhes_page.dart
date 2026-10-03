@@ -1,7 +1,7 @@
+import 'package:nhac/components/estado_com_retry.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -46,8 +46,9 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   final _lojaRepository = LojaRepository();
   final _avaliacaoRepository = AvaliacaoRepository();
 
-  late Future<Map<String, dynamic>> _resumoAvaliacoesFuture;
-  late Future<List<AvaliacoesModel>> _avaliacoesFuture;
+  late Future<
+          ({Map<String, dynamic>? resumo, List<AvaliacoesModel>? comentarios})>
+      _avaliacoesFuture;
 
   @override
   void initState() {
@@ -60,12 +61,28 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
         : Future.value(null);
     _produtosDaLojaFuture = null;
 
-    _resumoAvaliacoesFuture = _avaliacaoRepository.buscarResumoAvaliacoes(
-      widget.produto.id,
-    );
-    _avaliacoesFuture = _avaliacaoRepository.buscarAvaliacoes(
-      widget.produto.lojaId,
-    );
+    _avaliacoesFuture = _carregarAvaliacoes();
+  }
+
+  Future<({Map<String, dynamic>? resumo, List<AvaliacoesModel>? comentarios})>
+      _carregarAvaliacoes() async {
+    Map<String, dynamic>? resumo;
+    List<AvaliacoesModel>? comentarios;
+    await Future.wait([
+      () async {
+        try {
+          resumo = await _avaliacaoRepository
+              .buscarResumoAvaliacoes(widget.produto.id);
+        } catch (_) {}
+      }(),
+      () async {
+        try {
+          comentarios = await _avaliacaoRepository
+              .buscarAvaliacoes(widget.produto.lojaId);
+        } catch (_) {}
+      }(),
+    ]);
+    return (resumo: resumo, comentarios: comentarios);
   }
 
   Future<_RelatedProducts> _buscarRelacionados() async {
@@ -769,132 +786,63 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   }
 
   Widget _buildReviewsSection() {
-    return Container(
+    return Padding(
       padding: EdgeInsets.symmetric(horizontal: 20.w),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              FutureBuilder<Map<String, dynamic>>(
-                future: _resumoAvaliacoesFuture,
-                builder: (context, snapshot) {
-                  final total = snapshot.data?['total'] ?? 0;
-                  return Text(
-                    'Avaliações do Produto ($total)',
+      child: FutureBuilder<
+          ({Map<String, dynamic>? resumo, List<AvaliacoesModel>? comentarios})>(
+        future: _avaliacoesFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const LoadingNhac(telaCheia: false, tamanho: 40);
+          }
+          final resumo = snapshot.data?.resumo;
+          final comentarios = snapshot.data?.comentarios;
+          return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Avaliações do produto',
                     style: TextStyle(
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF5D201C),
-                    ),
-                  );
-                },
-              ),
-              Row(
-                children: [
-                  Text(
-                    'Ver todas',
-                    style: TextStyle(fontSize: 14.sp, color: Colors.black54),
-                  ),
-                  Icon(Icons.chevron_right, size: 20.r, color: Colors.black54),
-                ],
-              ),
-            ],
-          ),
-          FutureBuilder<Map<String, dynamic>>(
-            future: _resumoAvaliacoesFuture,
-            builder: (context, snapshot) {
-              double rating = 0.0;
-              int total = 0;
-              if (snapshot.hasData && snapshot.data != null) {
-                rating = (snapshot.data!['media'] ?? 0).toDouble();
-                total = snapshot.data!['total'] ?? 0;
-              }
-              return _buildRatingSummary(rating, total);
-            },
-          ),
-          SizedBox(height: 12.h),
-          Row(
-            children: [
-              _buildReviewFilterTag('Tudo', isSelected: true),
-              SizedBox(width: 8.w),
-              _buildReviewFilterTag('Com fotos 0'),
-              SizedBox(width: 8.w),
-              _buildReviewFilterTag('Positivas 0', icon: Icons.thumb_up_alt),
-            ],
-          ),
-          SizedBox(height: 20.h),
-          FutureBuilder<List<AvaliacoesModel>>(
-            future: _avaliacoesFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: LoadingNhac(telaCheia: false, tamanho: 40),
-                );
-              }
-              if (snapshot.hasError ||
-                  !snapshot.hasData ||
-                  snapshot.data!.isEmpty) {
-                return Text(
-                  'Sem avaliações ainda.',
-                  style: TextStyle(color: Colors.grey.shade600),
-                );
-              }
-
-              return Column(
-                children: snapshot.data!.take(3).map((avaliacao) {
-                  return _buildReviewItem(
-                    name: avaliacao.nomeUsuario.trim().isNotEmpty
-                        ? avaliacao.nomeUsuario
-                        : 'Anônimo',
-                    avatarColor: Colors.brown.shade200,
-                    avatarIcon: Icons.person,
-                    review: avaliacao.comentario,
-                    date: avaliacao.criadoEm ?? '',
-                    location: '',
-                    tag: avaliacao.nota >= 4 ? 'Positiva' : 'Feedback',
-                  );
-                }).toList(),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReviewFilterTag(
-    String text, {
-    bool isSelected = false,
-    IconData? icon,
-  }) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-      decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFFFF6961) : const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(16.r),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(
-              icon,
-              size: 14.r,
-              color: isSelected ? Colors.white : Colors.black54,
-            ),
-            SizedBox(width: 4.w),
-          ],
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 13.sp,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? Colors.white : Colors.black54,
-            ),
-          ),
-        ],
+                        fontSize: 16.sp, fontWeight: FontWeight.bold)),
+                if (resumo == null)
+                  BannerErroInline(
+                      mensagem:
+                          'Não foi possível consultar a nota deste produto.',
+                      aoTentarNovamente: () => setState(
+                          () => _avaliacoesFuture = _carregarAvaliacoes()))
+                else if ((resumo['total'] as num) == 0)
+                  const Text('Este produto ainda não recebeu avaliações.')
+                else
+                  _buildRatingSummary((resumo['media'] as num).toDouble(),
+                      (resumo['total'] as num).toInt()),
+                SizedBox(height: 16.h),
+                Text('Comentários recentes da loja',
+                    style: TextStyle(
+                        fontSize: 16.sp, fontWeight: FontWeight.bold)),
+                const Text(
+                    'Podem se referir a outros produtos e pedidos desta loja.'),
+                SizedBox(height: 12.h),
+                if (comentarios == null)
+                  BannerErroInline(
+                      mensagem:
+                          'Não foi possível carregar os comentários da loja.',
+                      aoTentarNovamente: () => setState(
+                          () => _avaliacoesFuture = _carregarAvaliacoes()))
+                else if (comentarios.isEmpty)
+                  const Text('A loja ainda não recebeu comentários.')
+                else
+                  ...comentarios.take(3).map((avaliacao) => _buildReviewItem(
+                        name: avaliacao.nomeUsuario.trim().isNotEmpty
+                            ? avaliacao.nomeUsuario
+                            : 'Anônimo',
+                        avatarColor: Colors.brown.shade200,
+                        avatarIcon: Icons.person,
+                        review: avaliacao.comentario,
+                        date: avaliacao.criadoEm ?? '',
+                        location: '',
+                        tag: avaliacao.nota >= 4 ? 'Positiva' : 'Feedback',
+                      )),
+              ]);
+        },
       ),
     );
   }

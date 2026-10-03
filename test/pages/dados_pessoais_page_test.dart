@@ -44,6 +44,19 @@ class MockUserProvider extends ChangeNotifier implements UserProvider {
   bool get isPhoneUser => false;
 }
 
+class IndisponivelUserProvider extends MockUserProvider {
+  @override
+  UsuarioModel? get usuario => recuperado ? super.usuario : null;
+  bool recuperado = false;
+  @override
+  String? get erro => recuperado ? null : 'Não foi possível carregar o perfil.';
+  @override
+  Future<void> carregarDadosUsuario() async {
+    recuperado = true;
+    notifyListeners();
+  }
+}
+
 void main() {
   Widget createWidgetUnderTest(UserProvider provider, bool isGoogle) {
     return ScreenUtilInit(
@@ -99,5 +112,16 @@ void main() {
         findsOneWidget);
     expect(find.textContaining('Não pode ser alterado pelo aplicativo'),
         findsOneWidget);
+  });
+
+  testWidgets('dados pessoais com erro oferece retry e recupera perfil',
+      (tester) async {
+    final provider = IndisponivelUserProvider();
+    await tester.pumpWidget(createWidgetUnderTest(provider, true));
+    await tester.pumpAndSettle();
+    expect(find.text('Não foi possível carregar o perfil.'), findsOneWidget);
+    await tester.tap(find.text('Tentar novamente'));
+    await tester.pumpAndSettle();
+    expect(find.text('Usuario Teste'), findsOneWidget);
   });
 }

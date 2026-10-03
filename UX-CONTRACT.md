@@ -57,3 +57,20 @@ A confirmação de identidade em ProfileContent é a única responsável pelo av
 EnderecoProvider define o padrão com um único PUT; UsuarioService.atualizarEndereco desmarca os demais na mesma transação. O estado local só muda após sucesso. selecionarEnderecoPadrao compartilha aviso e resultado; seletores só fecham após confirmação e checkout repete a validação do número.
 
 CartRepository grava itens e observação em um snapshot por conta, com fila de gravações e compatibilidade com listas antigas. Carrinho vazio limpa observações. Falha de loja não invalida o pedido carregado nem confirma loja fechada. Seguidores têm loading, erro/retry e bloqueio de mutação concorrente.
+
+
+## Recuperação de perfil, catálogo e checkout
+
+- Formulários e feedback reutilizam Form/TextFormField, os botões Nhac, context.showError/showInfo e BannerErroInline. Lista vazia exige consulta bem-sucedida; erros preservam conteúdo anterior e têm retry.
+- EnderecoProvider é o dono das mutações e consultas de endereço. Resposta antiga não substitui consulta nova. Falha de refresh após alteração confirmada informa “Alteração salva”; repetir somente a consulta. O backend promove outro padrão sob lock da conta ao excluir o atual.
+- Perfil atualiza estatísticas ao ficar ativo, voltar de uma rota e retomar o aplicativo. “Cupons” conta cupons recebidos pela conta, incluindo usados, não pedidos com desconto.
+- Busca pagina nome (20), categoria (50) e lojas (50) independentemente, com ordenação por id. Carregar mais preserva resultados, deduplica IDs e repete apenas fontes pendentes. Recomendações são produtos reais de lojas abertas, sem afirmar popularidade.
+- Nota do produto e comentários recentes da loja são seções distintas. Controles sem operação e indicadores sem fonte foram removidos. Não há peso padrão inventado.
+- Pix mostra erro de consulta, oferece verificação manual desde a abertura, encerra polling no limite e conserva a consulta manual. Acompanhar pedido abre o rastreio.
+- CheckoutTentativaService persiste chave e payload original no FlutterSecureStorage, isolados por conta e URL da API, antes de enviar o POST. O payload inclui endereço/CPF e não vai para SharedPreferences nem logs. Tentativa incerta não expira automaticamente; impede nova criação até recuperação/rejeição definitiva. Recuperar reenvia exatamente o payload com a mesma chave; confirmação persistida evita outro POST. A entrada é removida após encaminhar o resultado conhecido. Não descartar uma tentativa por conflito de idempotência.
+- Rastreio mantém o pedido carregado e sinaliza falha de atualização, separadamente da posição antiga do motoboy. Dados pessoais usa erro/retry do UserProvider.
+
+| Capability | Canonical owner | Source of truth | Allowed variants | Verification |
+|---|---|---|---|---|
+| Form | Flutter Form/TextFormField e EnderecoProvider | API de endereços e contrato acima | cadastro e número no checkout | test/pages/endereco_checkout_regression_test.dart |
+| CRUD | EnderecoProvider e CheckoutTentativaService | API e idempotência por usuário | mutação confirmada e recuperação | test/controllers/perfil_endereco_regression_test.dart e test/services/checkout_tentativa_service_test.dart |

@@ -174,7 +174,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     HomeContent(isActive: _selectedIndex == 0),
                     CarrinhoPage(isActive: _selectedIndex == 1),
                     const FeedPage(),
-                    const ProfileContent(),
+                    ProfileContent(isActive: _selectedIndex == 3),
                   ],
                 ),
                 Positioned(
@@ -556,7 +556,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Total com frete',
+                Text('Subtotal dos produtos',
                     style: TextStyle(color: Colors.grey, fontSize: 12.sp)),
                 _AnimatedTotalText(
                     total: total, currencyFormat: currencyFormat),

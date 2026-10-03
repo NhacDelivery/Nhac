@@ -237,4 +237,22 @@ void main() {
     await tester.pump();
     expect(find.textContaining('Não foi possível confirmar'), findsNothing);
   });
+
+  testWidgets('voltar dos pedidos consulta estatísticas atualizadas',
+      (tester) async {
+    await montar(tester);
+    await tester.tap(find.ancestor(
+        of: find.text('Pedidos'), matching: find.byType(InkWell)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    when(() => pedidos.buscarEstatisticas('cliente')).thenAnswer((_) async =>
+        {'totalPedidos': 8, 'lojasFavoritadas': 3, 'cuponsResgatados': 4});
+    final ctx = tester.element(find.text('Histórico aberto'));
+    GoRouter.of(ctx).pop();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+    expect(find.text('8'), findsOneWidget);
+    expect(find.text('4'), findsOneWidget);
+  });
 }

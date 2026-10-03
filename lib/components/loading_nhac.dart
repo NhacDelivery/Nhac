@@ -21,8 +21,8 @@ class LoadingNhac extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         SizedBox(
-          width: tamanho.w,
-          height: tamanho.h,
+          width: tamanho.r,
+          height: tamanho.r,
           child: Lottie.asset(
             'assets/animations/loading_nhac.json',
             fit: BoxFit.contain,

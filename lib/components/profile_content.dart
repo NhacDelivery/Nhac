@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:nhac/services/home_order_route_observer.dart';
 import 'dart:ui';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -19,16 +20,64 @@ import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/pages/notificacoes_page.dart';
 
 class ProfileContent extends StatefulWidget {
+  final bool isActive;
   final PedidoRepository? pedidoRepository;
   final Future<bool> Function()? autenticarBiometria;
   const ProfileContent(
-      {super.key, this.pedidoRepository, this.autenticarBiometria});
+      {super.key,
+      this.pedidoRepository,
+      this.autenticarBiometria,
+      this.isActive = true});
 
   @override
   State<ProfileContent> createState() => _ProfileContentState();
 }
 
-class _ProfileContentState extends State<ProfileContent> {
+class _ProfileContentState extends State<ProfileContent>
+    with RouteAware, WidgetsBindingObserver {
+  ModalRoute<dynamic>? _route;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != _route) {
+      homeOrderRouteObserver.unsubscribe(this);
+      _route = route;
+      if (route != null) homeOrderRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) _carregarEstatisticas();
+  }
+
+  @override
+  void didPopNext() {
+    if (widget.isActive) _carregarEstatisticas();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && widget.isActive) {
+      _carregarEstatisticas();
+    }
+  }
+
+  @override
+  void dispose() {
+    homeOrderRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _abrirResumo(String rota) async {
+    await context.push(rota);
+    if (mounted) await _carregarEstatisticas();
+  }
+
   bool _isUploading = false;
   Map<String, dynamic> _estatisticas = {
     'totalPedidos': 0,
@@ -70,6 +119,7 @@ class _ProfileContentState extends State<ProfileContent> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _carregarEstatisticas();
     _carregarPreferencias();
   }
@@ -852,8 +902,8 @@ class _ProfileContentState extends State<ProfileContent> {
   Widget _buildStatItem(String value, String label) {
     return InkWell(
       onTap: switch (label) {
-        'Cupons' => () => context.push('/cupons'),
-        'Pedidos' => () => context.push('/meus-pedidos'),
+        'Cupons' => () => _abrirResumo('/cupons'),
+        'Pedidos' => () => _abrirResumo('/meus-pedidos'),
         _ => null,
       },
       child: Container(
