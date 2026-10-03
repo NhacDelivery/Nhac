@@ -13,3 +13,37 @@ The authenticated app uses Brazilian Portuguese and the existing Flutter theme. 
 Search history is device-local and removed on logout, including session expiry. Product and store data is retained on device for fifteen minutes after closing the app, displayed while it is revalidated; network freshness remains two minutes while home is open. The active order snapshot is also retained for fifteen minutes, but only the server authorizes checkout and payment. Promotions require a positive `percentualDesconto`.
 
 The profile's notification list displays FCM messages registered on this device, scoped to the current account; it is not a server-wide notification history.
+
+
+# Performance and recovery additions
+
+## Canonical UI Map
+
+| Capability | Canonical owner | Source of truth | Allowed variants | Verification |
+|---|---|---|---|---|
+| Toast | lib/globals/ui_utils.dart e usos existentes de context.showError | Implementação compartilhada e textos do backend | erro e informação | testes de telas existentes |
+| CRUD | PedidoRepository, CheckoutPage e pagamento | API de pedidos e idempotência | criação, recuperação e cancelamento | test/repositories/pedido_repository_test.dart |
+
+O mapa cobre os fluxos alterados nesta revisão; não representa certificação de acessibilidade de todo o produto.
+
+## Catálogo e paginação
+
+A loja pede 50 produtos por página com ordenação por id. A primeira página é exibida sem aguardar as demais. Carregar mais é explícito. Erro inicial usa retry; erro posterior preserva os cards existentes. Uma requisição em andamento impede outra carga da mesma página. IDs duplicados não criam cards duplicados.
+
+Os endpoints /produtos/cards e /produtos/cards/promocoes preservam os campos de card e omitem os grupos de adicionais. O detalhe completo continua no endpoint original. Publicar o backend antes do app que usa os novos endpoints.
+
+## Busca e cache
+
+O resultado pode aparecer do cache e ser revalidado. Respostas de buscas antigas são ignoradas. Gravar o cache local não atrasa a exibição. O estado da busca continua local nesta revisão, conforme a arquitetura Flutter existente; não criar URLs com informações de checkout ou endereço.
+
+SharedGet separa clientes, sessão, autenticação, caminho e parâmetros. Uma mutação invalida os caminhos relacionados. Uma resposta anterior à invalidação não repovoa o cache. Invalidar pedidos não impede um catálogo em andamento de ser armazenado.
+
+## Pedidos e recuperação
+
+O servidor confirma a reserva antes de chamar o provedor externo. Se a reserva existe mas o gateway não respondeu, o erro inclui pedidoId. O app abre a recuperação do pagamento do pedido existente. Não iniciar outro POST automaticamente.
+
+A idempotência conserva o mesmo pedido e o mesmo estoque reservado. Um resultado externo inconclusivo impede cancelamento e devolução do estoque até conciliação. O cupom permanece reservado junto com o pedido; volta a ficar disponível quando o cancelamento seguro termina.
+
+## Carregamento
+
+Refresh da home inicia catálogo e pedidos sem aguardar GPS. GPS tem limite de 8 segundos. Rastreio mostra o pedido antes da consulta de loja/rota. Inicialização de push acontece após o primeiro frame e falhas são reportadas ao Sentry. A reserva de pedido, as configurações de pagamento e a autenticação continuam obedecendo às suas dependências.

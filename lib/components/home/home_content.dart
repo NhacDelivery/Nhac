@@ -170,7 +170,11 @@ class _HomeContentState extends State<HomeContent>
   }
 
   Future<void> _carregarCatalogo({bool isRefresh = false}) async {
-    if (isRefresh) SharedGet.forClient(ApiClient().dio).invalidate();
+    if (isRefresh) {
+      final cache = SharedGet.forClient(ApiClient().dio);
+      cache.invalidatePrefix('/produtos');
+      cache.invalidatePrefix('/lojas');
+    }
     await Future.wait([
       _fetchProdutosNecessidades(isRefresh: isRefresh),
       _fetchProdutosPromocao(isRefresh: isRefresh),
@@ -836,7 +840,8 @@ class _HomeContentState extends State<HomeContent>
     try {
       Position position = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
+          accuracy: LocationAccuracy.medium,
+          timeLimit: const Duration(seconds: 8),
         ),
       );
 
@@ -882,12 +887,13 @@ class _HomeContentState extends State<HomeContent>
     // Não limpa o cache - mantém dados para stale-while-revalidate
     // Apenas invalida o timestamp para forçar refetch
     LocalCacheService.ultimaAtualizacaoHome = null;
+    // O GPS atualiza o endereço em segundo plano; não bloqueia os pedidos.
+    _pegarLocalizacaoUsuario();
     await Future.wait([
-      _pegarLocalizacaoUsuario(),
       context.read<UserProvider>().carregarDadosUsuario(),
       _carregarDadosIniciais(isRefresh: true),
+      _ordersKey.currentState?.refresh() ?? Future<void>.value(),
     ]);
-    await _ordersKey.currentState?.refresh();
   }
 
   void _abrirSelecaoEndereco(BuildContext context) {

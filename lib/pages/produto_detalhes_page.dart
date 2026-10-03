@@ -72,26 +72,13 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
     final products = await _produtoRepository.buscarPorCategoria(
       widget.produto.categoriaMenu,
     );
-    final storeIds = products
-        .map((p) => p.lojaId)
-        .where((id) => id.isNotEmpty)
-        .toSet();
-    final stores = await Future.wait(
-      storeIds.map((id) async {
-        try {
-          final loja = await _lojaRepository.buscarLoja(id);
-          return MapEntry(id, loja?.isAberto ?? false);
-        } catch (_) {
-          return MapEntry(id, false);
-        }
-      }),
-    );
+    final stores = [
+      for (final p in products) MapEntry(p.lojaId, p.lojaAberta),
+    ];
     return _RelatedProducts(
       products
           .where(
-            (p) =>
-                p.id != widget.produto.id &&
-                stores.any((entry) => entry.key == p.lojaId && entry.value),
+            (p) => p.id != widget.produto.id && p.lojaAberta,
           )
           .toList(),
       Map.fromEntries(stores),
@@ -343,7 +330,6 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                   ),
                 ),
               ),
-
               SliverToBoxAdapter(
                 child: Container(
                   decoration: BoxDecoration(
@@ -408,7 +394,6 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                         ),
                       ),
                       SizedBox(height: 20.h),
-
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 20.w),
                         child: Container(
@@ -469,9 +454,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           ),
                         ),
                       ),
-
                       SizedBox(height: 24.h),
-
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 20.w),
                         child: Align(
@@ -500,15 +483,10 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           ),
                         ),
                       ),
-
                       SizedBox(height: 24.h),
-
                       _buildReviewsSection(),
-
                       _buildStoreProfileSection(),
-
                       SizedBox(height: 24.h),
-
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 20.w),
                         child: Row(
@@ -562,9 +540,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           ],
                         ),
                       ),
-
                       SizedBox(height: 32.h),
-
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 20.w),
                         child: FutureBuilder<_RelatedProducts>(
@@ -581,9 +557,8 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                               return const SizedBox.shrink();
                             }
 
-                            final produtosRelacionados = snapshot.data!.products
-                                .take(5)
-                                .toList();
+                            final produtosRelacionados =
+                                snapshot.data!.products.take(5).toList();
 
                             if (produtosRelacionados.isEmpty) {
                               return const SizedBox.shrink();
@@ -597,7 +572,6 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           },
                         ),
                       ),
-
                       SizedBox(height: 100.w + bottomPadding),
                     ],
                   ),
@@ -605,7 +579,6 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               ),
             ],
           ),
-
           Positioned(
             bottom: 0,
             left: 0,
@@ -643,8 +616,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                       future: _lojaFuture,
                       builder: (context, lojaSnapshot) {
                         final loja = lojaSnapshot.data;
-                        final aindaCarregando =
-                            lojaSnapshot.connectionState !=
+                        final aindaCarregando = lojaSnapshot.connectionState !=
                             ConnectionState.done;
                         final lojaFechada =
                             aindaCarregando || loja == null || !loja.isAberto;
@@ -653,20 +625,20 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           onPressed: aindaCarregando
                               ? null
                               : lojaFechada
-                              ? () {
-                                  context.showError(
-                                    'Esta loja está fechada no momento.',
-                                  );
-                                }
-                              : () async {
-                                  try {
-                                    final cartProvider =
-                                        Provider.of<CartProvider>(
+                                  ? () {
+                                      context.showError(
+                                        'Esta loja está fechada no momento.',
+                                      );
+                                    }
+                                  : () async {
+                                      try {
+                                        final cartProvider =
+                                            Provider.of<CartProvider>(
                                           context,
                                           listen: false,
                                         );
-                                    await cartProvider
-                                        .adicionarItemComQuantidade(
+                                        await cartProvider
+                                            .adicionarItemComQuantidade(
                                           idProduto: widget.produto.id,
                                           nome: widget.produto.nome,
                                           preco: widget.produto.preco,
@@ -674,26 +646,26 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                           lojaId: widget.produto.lojaId,
                                           quantidade: _quantidade,
                                         );
-                                    if (context.mounted) {
-                                      showAppNotification(
-                                        context,
-                                        type: NotificationType.success,
-                                        imageUrl: widget.produto.imagemUrl,
-                                        message:
-                                            '$_quantidade x ${widget.produto.nome}',
-                                      );
-                                    }
-                                  } catch (e) {
-                                    if (context.mounted) {
-                                      context.showError(
-                                        e.toString().replaceAll(
-                                          'Exception: ',
-                                          '',
-                                        ),
-                                      );
-                                    }
-                                  }
-                                },
+                                        if (context.mounted) {
+                                          showAppNotification(
+                                            context,
+                                            type: NotificationType.success,
+                                            imageUrl: widget.produto.imagemUrl,
+                                            message:
+                                                '$_quantidade x ${widget.produto.nome}',
+                                          );
+                                        }
+                                      } catch (e) {
+                                        if (context.mounted) {
+                                          context.showError(
+                                            e.toString().replaceAll(
+                                                  'Exception: ',
+                                                  '',
+                                                ),
+                                          );
+                                        }
+                                      }
+                                    },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: lojaFechada
                                 ? Colors.grey.shade400
@@ -709,8 +681,8 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                             aindaCarregando
                                 ? 'Carregando...'
                                 : lojaFechada
-                                ? 'Loja fechada'
-                                : 'Adicionar  ${currencyFormat.format(widget.produto.preco * _quantidade)}',
+                                    ? 'Loja fechada'
+                                    : 'Adicionar  ${currencyFormat.format(widget.produto.preco * _quantidade)}',
                             style: TextStyle(
                               fontSize: 16.sp,
                               fontWeight: FontWeight.bold,

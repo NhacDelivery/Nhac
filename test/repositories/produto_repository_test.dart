@@ -18,7 +18,7 @@ void main() {
   void responderPagina(int pagina, Map<String, dynamic> data) {
     when(
       () => dio.get(
-        '/produtos',
+        '/produtos/cards',
         queryParameters: {
           'lojaId': 'loja-1',
           'page': pagina,
@@ -28,7 +28,7 @@ void main() {
       ),
     ).thenAnswer(
       (_) async => Response(
-        requestOptions: RequestOptions(path: '/produtos'),
+        requestOptions: RequestOptions(path: '/produtos/cards'),
         data: data,
         statusCode: 200,
       ),
@@ -40,7 +40,7 @@ void main() {
     () async {
       when(
         () => dio.get(
-          '/produtos',
+          '/produtos/cards',
           queryParameters: any(named: 'queryParameters'),
         ),
       ).thenThrow(Exception('Sem conexão'));
@@ -55,6 +55,20 @@ void main() {
       await expectLater(repository.buscarPorLoja('l1'), throwsException);
     },
   );
+
+  test('primeira página retorna sem buscar o restante do cardápio', () async {
+    responderPagina(0, {
+      'content': [
+        {'id': 'p1', 'lojaId': 'loja-1'}
+      ],
+      'last': false
+    });
+    final pagina = await repository.buscarPaginaPorLoja('loja-1');
+    expect(pagina.produtos.single.id, 'p1');
+    expect(pagina.temMais, isTrue);
+    verify(() => dio.get('/produtos/cards',
+        queryParameters: any(named: 'queryParameters'))).called(1);
+  });
 
   test('carrega o cardápio completo usando a paginação do backend', () async {
     responderPagina(0, {
@@ -74,8 +88,8 @@ void main() {
 
     expect(produtos.map((p) => p.id), ['produto-1', 'produto-2']);
     verify(
-      () =>
-          dio.get('/produtos', queryParameters: any(named: 'queryParameters')),
+      () => dio.get('/produtos/cards',
+          queryParameters: any(named: 'queryParameters')),
     ).called(2);
   });
 
@@ -84,18 +98,18 @@ void main() {
 
     expect(await repository.buscarPorLoja('loja-1'), isEmpty);
     verify(
-      () =>
-          dio.get('/produtos', queryParameters: any(named: 'queryParameters')),
+      () => dio.get('/produtos/cards',
+          queryParameters: any(named: 'queryParameters')),
     ).called(1);
   });
 
   test('promoções exigem desconto real mesmo para produto barato', () async {
     when(
-      () => dio.get('/produtos/promocoes',
+      () => dio.get('/produtos/cards/promocoes',
           queryParameters: {'page': 0, 'size': 10, 'sort': 'id,asc'}),
     ).thenAnswer(
       (_) async => Response(
-        requestOptions: RequestOptions(path: '/produtos'),
+        requestOptions: RequestOptions(path: '/produtos/cards'),
         data: {
           'content': [
             {'id': 'barato', 'preco': 15, 'percentualDesconto': 0},

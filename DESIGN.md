@@ -43,7 +43,7 @@ Retain the rounded cards, chips, and sheets already used throughout the app.
 
 ## Components
 
-Use existing shared buttons, loading indicator, product cards, and `context.showError`/`showSuccess` feedback. The map, Pix state, and chat preserve user input during network delays.
+The store keeps loaded cards in place while fetching another page; the load-more control lives in the list footer. Tracking publishes order details before waiting for route geometry. Use existing shared buttons, loading indicator, product cards, and `context.showError`/`showSuccess` feedback. The map, Pix state, and chat preserve user input during network delays.
 
 ## Do's and Don'ts
 

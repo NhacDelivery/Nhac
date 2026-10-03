@@ -284,6 +284,12 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
         }
         return;
       }
+      // Status e ações não dependem de loja, GPS ou serviço externo de rotas.
+      setState(() {
+        _pedido = pedido;
+        _isLoading = false;
+        _erro = '';
+      });
       LojasModel? loja = _loja;
       RotaEntregaModel? rota = _rota;
       String? rotaErro;

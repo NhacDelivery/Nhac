@@ -40,10 +40,18 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          _cachedToken ??= await SessionStorageService().obterToken();
-          final token = _cachedToken;
-          if (token != null && !options.headers.containsKey('Authorization')) {
-            options.headers['Authorization'] = 'Bearer $token';
+          // Esses GETs são públicos no SecurityConfig e não usam o principal.
+          // Evita leitura de storage e consulta do usuário no servidor a cada card.
+          final catalogoPublico = options.method == 'GET' &&
+              const {'/produtos/cards', '/produtos/cards/promocoes', '/lojas'}
+                  .contains(options.path);
+          if (!catalogoPublico) {
+            _cachedToken ??= await SessionStorageService().obterToken();
+            final token = _cachedToken;
+            if (token != null &&
+                !options.headers.containsKey('Authorization')) {
+              options.headers['Authorization'] = 'Bearer $token';
+            }
           }
           debugPrint('🌍 [REQ HTTP] ${options.method} ${options.uri}');
           return handler.next(options);
@@ -59,6 +67,8 @@ class ApiClient {
                 request.method != 'POST') {
               cache.invalidatePrefix('/lojas');
               cache.invalidatePrefix('/produtos');
+            } else if (request.path.startsWith('/usuarios')) {
+              cache.invalidatePrefix('/usuarios');
             } else if (request.path.startsWith('/favoritos')) {
               cache.invalidatePrefix('/favoritos');
             }

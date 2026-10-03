@@ -31,13 +31,11 @@ class SharedGet {
   }
 
   void invalidatePath(String path) {
-    _generation++;
     _cache.removeWhere((key, _) => key.path == path);
     _pending.removeWhere((key, _) => key.path == path);
   }
 
   void invalidatePrefix(String prefix) {
-    _generation++;
     _cache.removeWhere((key, _) => key.path.startsWith(prefix));
     _pending.removeWhere((key, _) => key.path.startsWith(prefix));
   }
@@ -69,7 +67,9 @@ class SharedGet {
     operation = dio
         .get<dynamic>(path, queryParameters: queryParameters)
         .then((response) {
-      if (generation == _generation) {
+      if (generation == _generation &&
+          key.session == _session &&
+          identical(_pending[key], operation)) {
         if (_cache.length >= 128) _cache.remove(_cache.keys.first);
         _cache[key] =
             (expires: DateTime.now().add(validity!), response: response);

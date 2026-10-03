@@ -1,3 +1,4 @@
+import 'package:nhac/services/shared_get.dart';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -15,22 +16,35 @@ class UserRepository {
       throw Exception('A imagem deve ter entre 1 byte e 5 MB.');
     }
     final bytes = await imagem.readAsBytes();
-    final jpeg = bytes.length >= 3 && bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff;
-    final png = bytes.length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4e && bytes[3] == 0x47;
-    final webp = bytes.length >= 12 && String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
+    final jpeg = bytes.length >= 3 &&
+        bytes[0] == 0xff &&
+        bytes[1] == 0xd8 &&
+        bytes[2] == 0xff;
+    final png = bytes.length >= 8 &&
+        bytes[0] == 0x89 &&
+        bytes[1] == 0x50 &&
+        bytes[2] == 0x4e &&
+        bytes[3] == 0x47;
+    final webp = bytes.length >= 12 &&
+        String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
         String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP';
     if (!jpeg && !png && !webp) {
       throw Exception('Envie uma imagem JPG, PNG ou WEBP.');
     }
-    final formato = jpeg ? 'jpeg' : png ? 'png' : 'webp';
+    final formato = jpeg
+        ? 'jpeg'
+        : png
+            ? 'png'
+            : 'webp';
     final extensao = jpeg ? 'jpg' : formato;
     try {
-      final resposta = await _dio.post('/uploads/imagem',
+      final resposta = await _dio.post(
+        '/uploads/imagem',
         data: FormData.fromMap({
           'pasta': 'usuarios',
           'arquivo': MultipartFile.fromBytes(bytes,
-            filename: 'perfil.$extensao',
-            contentType: DioMediaType('image', formato)),
+              filename: 'perfil.$extensao',
+              contentType: DioMediaType('image', formato)),
         }),
         options: Options(contentType: 'multipart/form-data'),
       );
@@ -42,13 +56,14 @@ class UserRepository {
 
   Future<UsuarioModel?> buscarUsuario(String id) async {
     try {
-      final response = await _dio.get('/usuarios/$id');
+      final response =
+          await SharedGet.forClient(_dio).get(_dio, '/usuarios/$id');
       if (response.statusCode == 200 && response.data != null) {
         return UsuarioModel.fromMap(response.data);
       }
       return null;
     } on DioException catch (e) {
-      if (e.response?.statusCode == 404) return null; 
+      if (e.response?.statusCode == 404) return null;
       debugPrint("Erro ao buscar utilizador na API: ${e.message}");
       throw mapException(e);
     }
@@ -63,7 +78,8 @@ class UserRepository {
     }
   }
 
-  Future<void> atualizarDadosUsuario(String id, Map<String, dynamic> dados) async {
+  Future<void> atualizarDadosUsuario(
+      String id, Map<String, dynamic> dados) async {
     try {
       await _dio.put('/usuarios/$id', data: dados);
     } catch (e) {

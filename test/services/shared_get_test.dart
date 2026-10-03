@@ -76,6 +76,31 @@ void main() {
     expect(adapter.calls, 2);
   });
 
+  test('invalidar pedidos preserva o cache de um catálogo em voo', () async {
+    final catalogo = client.get(dio, '/produtos/cards');
+    await dispatch();
+    client.invalidatePrefix('/pedidos');
+    adapter.reply(0, '{"content":[]}');
+    await catalogo;
+    await client.get(dio, '/produtos/cards');
+    expect(adapter.calls, 1);
+  });
+
+  test('invalidação de caminho impede que a resposta antiga repovoe o cache',
+      () async {
+    final antiga = client.get(dio, '/pedidos/p1');
+    await dispatch();
+    client.invalidatePath('/pedidos/p1');
+    final nova = client.get(dio, '/pedidos/p1');
+    await dispatch();
+    adapter.reply(1, '{"status":"PREPARANDO"}');
+    await nova;
+    adapter.reply(0, '{"status":"PAGO"}');
+    await antiga;
+    expect((await client.get(dio, '/pedidos/p1')).data['status'], 'PREPARANDO');
+    expect(adapter.calls, 2);
+  });
+
   test('sessões e pedidos distintos nunca compartilham dados', () async {
     final first = client.get(dio, '/pedidos/p1');
     await dispatch();

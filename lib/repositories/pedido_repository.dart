@@ -86,6 +86,15 @@ class PedidoRepository {
       throw Exception('Falha ao criar o pedido. Tente novamente.');
     } on DioException catch (e) {
       final data = e.response?.data;
+      if (data is Map &&
+          (data['errorCode'] ?? data['error']) == 'PAGAMENTO_INDISPONIVEL' &&
+          data['details'] is Map &&
+          data['details']['pedidoId'] != null) {
+        // Reserva confirmada: abrir a recuperação, sem gerar outro checkout.
+        return PedidoCriadoResponse.fromMap(
+            {'pedidoId': data['details']['pedidoId'].toString()},
+            replay: true);
+      }
       if ((e.response?.statusCode == 400 ||
               e.response?.statusCode == 409 ||
               e.response?.statusCode == 422) &&

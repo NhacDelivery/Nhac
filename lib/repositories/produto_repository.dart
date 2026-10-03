@@ -5,6 +5,12 @@ import 'package:nhac/models/produto/produtos.dart';
 import 'package:nhac/services/api_client.dart';
 import 'package:nhac/utils/safe_parse_helpers.dart';
 
+class PaginaProdutos {
+  final List<ProdutosModel> produtos;
+  final bool temMais;
+  const PaginaProdutos(this.produtos, this.temMais);
+}
+
 class ProdutoRepository {
   final Dio _dio;
 
@@ -14,7 +20,7 @@ class ProdutoRepository {
     try {
       final response = await SharedGet.forClient(_dio).get(
         _dio,
-        '/produtos/promocoes',
+        '/produtos/cards/promocoes',
         queryParameters: {'page': 0, 'size': 10, 'sort': 'id,asc'},
         validity: const Duration(minutes: 2),
       );
@@ -32,7 +38,7 @@ class ProdutoRepository {
     try {
       final response = await SharedGet.forClient(_dio).get(
         _dio,
-        '/produtos',
+        '/produtos/cards',
         queryParameters: {'size': 50},
       );
       final List<dynamic> conteudo = extrairLista(response.data);
@@ -46,7 +52,7 @@ class ProdutoRepository {
     try {
       final response = await SharedGet.forClient(_dio).get(
         _dio,
-        '/produtos',
+        '/produtos/cards',
         queryParameters: {'categoriaMenu': categoria, 'size': 50},
       );
       final List<dynamic> conteudo = extrairLista(response.data);
@@ -57,6 +63,26 @@ class ProdutoRepository {
     }
   }
 
+  Future<PaginaProdutos> buscarPaginaPorLoja(String lojaId,
+      {int page = 0, int size = 50}) async {
+    final response = await SharedGet.forClient(_dio).get(
+      _dio,
+      '/produtos/cards',
+      queryParameters: {
+        'lojaId': lojaId,
+        'page': page,
+        'size': size,
+        'sort': 'id,asc',
+      },
+    );
+    final lista = extrairLista(response.data);
+    final data = response.data;
+    return PaginaProdutos(
+      lista.map((map) => ProdutosModel.fromMap(map)).toList(),
+      lista.isNotEmpty && data is Map && data['last'] == false,
+    );
+  }
+
   Future<List<ProdutosModel>> buscarPorLoja(String lojaId) async {
     try {
       final produtos = <ProdutosModel>[];
@@ -64,7 +90,7 @@ class ProdutoRepository {
       while (true) {
         final response = await SharedGet.forClient(_dio).get(
           _dio,
-          '/produtos',
+          '/produtos/cards',
           queryParameters: {
             'lojaId': lojaId,
             'page': pagina,
@@ -90,7 +116,7 @@ class ProdutoRepository {
     try {
       final response = await SharedGet.forClient(_dio).get(
         _dio,
-        '/produtos',
+        '/produtos/cards',
         queryParameters: {'nome': termo, 'size': 20},
       );
       final List<dynamic> conteudo = extrairLista(response.data);

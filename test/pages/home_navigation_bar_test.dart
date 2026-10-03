@@ -1,3 +1,6 @@
+import 'dart:typed_data';
+import 'package:dio/dio.dart';
+import 'package:nhac/services/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -12,6 +15,22 @@ import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/connectivity_service.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+class EmptyCatalogAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(RequestOptions options,
+          Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async =>
+      ResponseBody.fromString(
+          options.path.startsWith('/produtos') || options.path == '/lojas'
+              ? '{"content":[],"last":true}'
+              : '[]',
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['application/json']
+          });
+  @override
+  void close({bool force = false}) {}
+}
 
 class MockUserProvider extends ChangeNotifier implements UserProvider {
   @override
@@ -71,6 +90,7 @@ void main() {
     TestWidgetsFlutterBinding.ensureInitialized();
     dotenv.testLoad(fileInput: 'API_BASE_URL=http://localhost:8080');
     SharedPreferences.setMockInitialValues({});
+    ApiClient().dio.httpClientAdapter = EmptyCatalogAdapter();
   });
 
   testWidgets('Barra de navegação da Home possui 4 itens e Feed é navegável',
@@ -152,5 +172,7 @@ void main() {
         findsOneWidget);
     expect(find.descendant(of: navBarRow, matching: find.text('Home')),
         findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 }

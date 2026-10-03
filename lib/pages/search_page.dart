@@ -206,14 +206,6 @@ class _SearchPageState extends State<SearchPage>
       final produtos = await _produtoRepository.buscarPorCategoria(categoria);
       if (!mounted || versao != _versaoBusca) return;
 
-      await LocalCacheService.salvarResultadosBusca(
-        'categoria:$categoria',
-        produtos: produtos,
-        lojas: const [],
-        lojaAberta: _statusDasLojas(produtos),
-      );
-
-      if (!mounted || versao != _versaoBusca) return;
       _ultimoResultado = _ResultadoBusca(
         produtos: produtos,
         lojas: const [],
@@ -224,6 +216,13 @@ class _SearchPageState extends State<SearchPage>
           : EstadoConteudo.conteudo;
       setState(() {});
       _ultimoErro = null;
+      LocalCacheService.salvarResultadosBusca(
+        'categoria:$categoria',
+        produtos: produtos,
+        lojas: const [],
+        lojaAberta: _statusDasLojas(produtos),
+      ).catchError(
+          (Object e) => debugPrint('Falha ao salvar categoria local: $e'));
     } catch (e) {
       if (!mounted || versao != _versaoBusca) return;
       if (_ultimoResultado != null) {
@@ -307,21 +306,19 @@ class _SearchPageState extends State<SearchPage>
       final resultado = await _buscarTudo(termo);
       if (!mounted || versao != _versaoBusca) return;
 
-      // Salva no cache
-      await LocalCacheService.salvarResultadosBusca(
+      _ultimoResultado = resultado;
+      _estadoBusca =
+          resultado.vazio ? EstadoConteudo.vazio : EstadoConteudo.conteudo;
+      _ultimoErro = null;
+      setState(() {});
+      LocalCacheService.salvarResultadosBusca(
         termo,
         produtos: resultado.produtos,
         lojas: resultado.lojas,
         lojaAberta: resultado.lojaAberta,
-      );
-
-      if (!mounted || versao != _versaoBusca) return;
-      _ultimoResultado = resultado;
-      _estadoBusca = _ultimoResultado!.vazio
-          ? EstadoConteudo.vazio
-          : EstadoConteudo.conteudo;
-      setState(() {});
-      _ultimoErro = null;
+      ).catchError((Object e) {
+        debugPrint('Não foi possível salvar a busca local: $e');
+      });
     } catch (e) {
       if (!mounted || versao != _versaoBusca) return;
 
@@ -519,8 +516,8 @@ class _SearchPageState extends State<SearchPage>
       mensagemErro: _ultimoErro,
       aoTentarNovamente: _termoAtual != null
           ? () => _buscaCategoria
-                ? _buscarCategoriaComCache(_termoAtual!)
-                : _buscarComCache(_termoAtual!)
+              ? _buscarCategoriaComCache(_termoAtual!)
+              : _buscarComCache(_termoAtual!)
           : null,
       builderErro: (mensagem, tentarNovamente) => SingleChildScrollView(
         child: Padding(
@@ -790,11 +787,11 @@ class _SearchPageState extends State<SearchPage>
           ),
           SizedBox(height: 16.h),
           ..._historico.asMap().entries.map(
-            (entry) => _buildAnimatedItem(
-              _buildSuggestionItem(Icons.history, entry.value),
-              entry.key + 1,
-            ),
-          ),
+                (entry) => _buildAnimatedItem(
+                  _buildSuggestionItem(Icons.history, entry.value),
+                  entry.key + 1,
+                ),
+              ),
           SizedBox(height: 24.h),
         ],
         _buildAnimatedItem(

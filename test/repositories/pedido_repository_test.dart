@@ -65,6 +65,29 @@ void main() {
     expect(endereco['longitude'], -46.7);
   });
 
+  test(
+      'reserva confirmada com gateway indisponível abre recuperação sem novo POST',
+      () async {
+    when(() => dio.post('/pedidos',
+        data: any(named: 'data'),
+        options: any(named: 'options'))).thenThrow(DioException(
+      requestOptions: RequestOptions(path: '/pedidos'),
+      response: Response(
+          requestOptions: RequestOptions(path: '/pedidos'),
+          statusCode: 409,
+          data: {
+            'error': 'PAGAMENTO_INDISPONIVEL',
+            'details': {'pedidoId': 'reservado'}
+          }),
+    ));
+    final resposta =
+        await repository.finalizarPedido(request(), idempotencyKey: 'idem-1');
+    expect(resposta.pedidoId, 'reservado');
+    expect(resposta.replay, isTrue);
+    verify(() => dio.post('/pedidos',
+        data: any(named: 'data'), options: any(named: 'options'))).called(1);
+  });
+
   test('POST /pedidos envia Idempotency-Key', () async {
     when(() => dio.post(
           '/pedidos',

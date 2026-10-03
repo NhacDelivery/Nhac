@@ -27,7 +27,36 @@ class _LojaPageState extends State<LojaPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  late Future<List<ProdutosModel>> _produtosFuture;
+  final List<ProdutosModel> _produtos = [];
+  int _pagina = 0;
+  bool _temMais = true;
+  bool _carregandoProdutos = false;
+  Object? _erroProdutos;
+
+  Future<void> _carregarProdutos() async {
+    if (_carregandoProdutos || !_temMais) return;
+    setState(() {
+      _carregandoProdutos = true;
+      _erroProdutos = null;
+    });
+    try {
+      final pagina = await _produtoRepository.buscarPaginaPorLoja(
+        widget.loja.id,
+        page: _pagina,
+      );
+      if (!mounted) return;
+      setState(() {
+        final ids = _produtos.map((p) => p.id).toSet();
+        _produtos.addAll(pagina.produtos.where((p) => ids.add(p.id)));
+        _pagina++;
+        _temMais = pagina.temMais;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _erroProdutos = e);
+    } finally {
+      if (mounted) setState(() => _carregandoProdutos = false);
+    }
+  }
 
   final ProdutoRepository _produtoRepository = ProdutoRepository();
   final LojaRepository _lojaRepository = LojaRepository();
@@ -41,25 +70,27 @@ class _LojaPageState extends State<LojaPage>
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
 
-    _produtosFuture = _produtoRepository.buscarPorLoja(widget.loja.id);
+    _carregarProdutos();
     _carregarSeguidores();
   }
 
   Future<void> _carregarSeguidores() async {
     try {
-      final count = await _lojaRepository.contarSeguidores(widget.loja.id);
-      if (mounted) setState(() => _seguidores = count);
-
-      if (!mounted) return;
-
       final auth = context.read<AuthService>();
-      if (auth.usuarioId != null) {
-        final seguindo = await _lojaRepository.estaSeguindo(
-          auth.usuarioId!,
-          widget.loja.id,
-        );
-        if (mounted) setState(() => _isSeguindo = seguindo);
-      }
+      final resultado = await Future.wait<Object>([
+        _lojaRepository.contarSeguidores(widget.loja.id),
+        if (auth.usuarioId != null)
+          _lojaRepository.estaSeguindo(auth.usuarioId!, widget.loja.id)
+        else
+          Future.value(false),
+      ]);
+      if (mounted)
+        setState(() {
+          _seguidores = resultado[0] as int;
+          _isSeguindo = resultado[1] as bool;
+        });
+    } catch (_) {
+      // Informação secundária não impede a navegação pelo cardápio.
     } finally {
       if (mounted) setState(() => _carregandoSeguidores = false);
     }
@@ -309,12 +340,10 @@ class _LojaPageState extends State<LojaPage>
               ElevatedButton(
                 onPressed: _carregandoSeguidores ? null : _toggleSeguir,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _isSeguindo
-                      ? Colors.white
-                      : const Color(0xFFFF6961),
-                  foregroundColor: _isSeguindo
-                      ? const Color(0xFFFF6961)
-                      : Colors.white,
+                  backgroundColor:
+                      _isSeguindo ? Colors.white : const Color(0xFFFF6961),
+                  foregroundColor:
+                      _isSeguindo ? const Color(0xFFFF6961) : Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
@@ -328,8 +357,8 @@ class _LojaPageState extends State<LojaPage>
                   _carregandoSeguidores
                       ? "..."
                       : _isSeguindo
-                      ? "Seguindo"
-                      : "Seguir",
+                          ? "Seguindo"
+                          : "Seguir",
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 12.sp,
@@ -464,17 +493,16 @@ class _LojaPageState extends State<LojaPage>
         ),
         SliverPadding(
           padding: EdgeInsets.symmetric(horizontal: 16.w),
-          sliver: FutureBuilder<List<ProdutosModel>>(
-            future: _produtosFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+          sliver: Builder(
+            builder: (context) {
+              if (_carregandoProdutos && _produtos.isEmpty) {
                 return const SliverToBoxAdapter(
                   child: Center(
                     child: LoadingNhac(telaCheia: false, tamanho: 40),
                   ),
                 );
               }
-              if (snapshot.hasError) {
+              if (_erroProdutos != null && _produtos.isEmpty) {
                 return SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.all(32.w),
@@ -482,11 +510,7 @@ class _LojaPageState extends State<LojaPage>
                       children: [
                         const Text('Não foi possível carregar os produtos.'),
                         TextButton(
-                          onPressed: () => setState(() {
-                            _produtosFuture = _produtoRepository.buscarPorLoja(
-                              widget.loja.id,
-                            );
-                          }),
+                          onPressed: _carregarProdutos,
                           child: const Text('Tentar novamente'),
                         ),
                       ],
@@ -494,7 +518,7 @@ class _LojaPageState extends State<LojaPage>
                   ),
                 );
               }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              if (_produtos.isEmpty) {
                 return SliverToBoxAdapter(
                   child: Center(
                     child: Padding(
@@ -508,7 +532,7 @@ class _LojaPageState extends State<LojaPage>
                 );
               }
 
-              final produtos = snapshot.data!;
+              final produtos = _produtos;
 
               return SliverGrid(
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -527,20 +551,20 @@ class _LojaPageState extends State<LojaPage>
                             ProdutoDetalhesPage(produto: produto),
                         transitionsBuilder:
                             (context, animation, secondaryAnimation, child) {
-                              const begin = Offset(0.0, 1.0);
-                              const end = Offset.zero;
-                              const curve = Curves.easeOutCubic;
+                          const begin = Offset(0.0, 1.0);
+                          const end = Offset.zero;
+                          const curve = Curves.easeOutCubic;
 
-                              var tween = Tween(
-                                begin: begin,
-                                end: end,
-                              ).chain(CurveTween(curve: curve));
+                          var tween = Tween(
+                            begin: begin,
+                            end: end,
+                          ).chain(CurveTween(curve: curve));
 
-                              return SlideTransition(
-                                position: animation.drive(tween),
-                                child: child,
-                              );
-                            },
+                          return SlideTransition(
+                            position: animation.drive(tween),
+                            child: child,
+                          );
+                        },
                         transitionDuration: const Duration(milliseconds: 300),
                       ),
                     ),
@@ -555,6 +579,44 @@ class _LojaPageState extends State<LojaPage>
             },
           ),
         ),
+        if (_produtos.isNotEmpty && (_temMais || _erroProdutos != null))
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.all(16.w),
+              child: Column(children: [
+                if (_erroProdutos != null)
+                  const Text('Não foi possível carregar mais produtos.'),
+                TextButton(
+                  key: const ValueKey('loja-carregar-mais'),
+                  style: ButtonStyle(
+                    minimumSize: const WidgetStatePropertyAll(Size(220, 48)),
+                    foregroundColor:
+                        const WidgetStatePropertyAll(Color(0xFF5D201C)),
+                    overlayColor: WidgetStateProperty.resolveWith((states) =>
+                        states.contains(WidgetState.focused) ||
+                                states.contains(WidgetState.hovered)
+                            ? const Color(0x155D201C)
+                            : null),
+                    side: WidgetStateProperty.resolveWith((states) => states
+                            .contains(WidgetState.focused)
+                        ? const BorderSide(color: Color(0xFF5D201C), width: 2)
+                        : BorderSide.none),
+                  ),
+                  onPressed: _carregandoProdutos ? null : _carregarProdutos,
+                  child: _carregandoProdutos
+                      ? Semantics(
+                          liveRegion: true,
+                          label: 'Carregando mais produtos',
+                          child:
+                              const LoadingNhac(telaCheia: false, tamanho: 24),
+                        )
+                      : Text(_erroProdutos != null
+                          ? 'Tentar novamente'
+                          : 'Carregar mais produtos'),
+                ),
+              ]),
+            ),
+          ),
         SliverToBoxAdapter(child: SizedBox(height: 100.h)),
       ],
     );
