@@ -19,7 +19,10 @@ import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/pages/notificacoes_page.dart';
 
 class ProfileContent extends StatefulWidget {
-  const ProfileContent({super.key});
+  final PedidoRepository? pedidoRepository;
+  final Future<bool> Function()? autenticarBiometria;
+  const ProfileContent(
+      {super.key, this.pedidoRepository, this.autenticarBiometria});
 
   @override
   State<ProfileContent> createState() => _ProfileContentState();
@@ -32,7 +35,9 @@ class _ProfileContentState extends State<ProfileContent> {
     'lojasFavoritadas': 0,
     'cuponsResgatados': 0,
   };
-  bool _carregandoEstatisticas = true;
+  bool _carregandoEstatisticas = false;
+  bool _erroEstatisticas = false;
+  bool _confirmandoIdentidade = false;
   Set<String> _preferencias = {};
 
   static const _opcoesPreferencia = <(String, IconData)>[
@@ -69,24 +74,41 @@ class _ProfileContentState extends State<ProfileContent> {
     _carregarPreferencias();
   }
 
+  Future<void> _atualizarPerfil() async {
+    await Future.wait([
+      context.read<UserProvider>().carregarDadosUsuario(),
+      _carregarEstatisticas(),
+    ]);
+  }
+
   Future<void> _carregarEstatisticas() async {
+    if (_carregandoEstatisticas) return;
     final auth = context.read<AuthService>();
-    if (auth.usuarioId != null) {
-      final repo = PedidoRepository();
-      final stats = await repo.buscarEstatisticas(auth.usuarioId!);
-      if (mounted) {
-        setState(() {
-          _estatisticas = stats;
-          _carregandoEstatisticas = false;
-        });
+    final usuarioId = auth.usuarioId;
+    if (usuarioId == null) return;
+    setState(() {
+      _carregandoEstatisticas = true;
+      _erroEstatisticas = false;
+    });
+    try {
+      final stats = await (widget.pedidoRepository ?? PedidoRepository())
+          .buscarEstatisticas(usuarioId);
+      if (mounted && auth.usuarioId == usuarioId) {
+        setState(() => _estatisticas = stats);
       }
-    } else {
+    } catch (_) {
+      if (mounted && auth.usuarioId == usuarioId) {
+        setState(() => _erroEstatisticas = true);
+      }
+    } finally {
       if (mounted) setState(() => _carregandoEstatisticas = false);
     }
   }
 
   Future<bool> _confirmarIdentidade() async {
-    if (await BiometricService.authenticate()) return true;
+    if (await (widget.autenticarBiometria ?? BiometricService.authenticate)()) {
+      return true;
+    }
     if (!mounted) return false;
     final auth = context.read<AuthService>();
     // Contas de Google e de telefone não têm senha: confirmam pelo próprio meio de login.
@@ -136,14 +158,23 @@ class _ProfileContentState extends State<ProfileContent> {
     // Aguarda a animação do diálogo antes de descartar o controller.
     await Future<void>.delayed(const Duration(milliseconds: 300));
     controller.dispose();
-    if (senha == null || senha.isEmpty || !mounted) return false;
+    if (senha == null || !mounted) return false;
+    if (senha.isEmpty) {
+      context.showError('Digite a senha para confirmar sua identidade.');
+      return false;
+    }
     try {
-      return await auth.confirmarSenha(email: email, senha: senha);
+      final confirmado = await auth.confirmarSenha(email: email, senha: senha);
+      if (!confirmado && mounted) {
+        context.showError("Não foi possível confirmar sua identidade.");
+      }
+      return confirmado;
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         context.showError(
           'Não foi possível confirmar a senha. Confira os dados e a conexão.',
         );
+      }
       return false;
     }
   }
@@ -189,8 +220,16 @@ class _ProfileContentState extends State<ProfileContent> {
     // Aguarda a animação do diálogo antes de descartar o controller.
     await Future<void>.delayed(const Duration(milliseconds: 300));
     controller.dispose();
-    if (codigo == null || codigo.isEmpty || !mounted) return false;
-    return auth.confirmarComSms(telefone, codigo);
+    if (codigo == null || !mounted) return false;
+    if (codigo.isEmpty) {
+      context.showError('Digite o código recebido por SMS.');
+      return false;
+    }
+    final confirmado = await auth.confirmarComSms(telefone, codigo);
+    if (!confirmado && mounted) {
+      context.showError("Não foi possível confirmar sua identidade.");
+    }
+    return confirmado;
   }
 
   void _logoutUsuario(BuildContext context) async {
@@ -357,6 +396,14 @@ class _ProfileContentState extends State<ProfileContent> {
         ? '${enderecoisPadrao.rua}, ${enderecoisPadrao.numero}${(enderecoisPadrao.complemento?.isNotEmpty ?? false) ? ' - ${enderecoisPadrao.complemento}' : ''}'
         : 'Nenhum endereço selecionado';
 
+    if (usuario == null && !userProvider.isLoading) {
+      return Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text(userProvider.erro ?? 'Perfil indisponível. Tente novamente.'),
+        TextButton(
+            onPressed: _atualizarPerfil, child: const Text('Tentar novamente')),
+      ]));
+    }
     if (usuario == null) {
       return Container(
         color: const Color(0xFFFFE7E5),
@@ -382,8 +429,7 @@ class _ProfileContentState extends State<ProfileContent> {
             CupertinoSliverRefreshControl(
               refreshIndicatorExtent: 140.h,
               refreshTriggerPullDistance: 180.h,
-              onRefresh: () async =>
-                  await context.read<UserProvider>().carregarDadosUsuario(),
+              onRefresh: _atualizarPerfil,
               builder: (
                 context,
                 refreshState,
@@ -626,7 +672,9 @@ class _ProfileContentState extends State<ProfileContent> {
                       _carregandoEstatisticas
                           ? const LoadingNhac(telaCheia: false, tamanho: 24)
                           : _buildStatItem(
-                              '${_estatisticas['totalPedidos'] ?? 0}',
+                              _erroEstatisticas
+                                  ? '—'
+                                  : '${_estatisticas['totalPedidos']}',
                               'Pedidos',
                             ),
                       Container(
@@ -637,7 +685,9 @@ class _ProfileContentState extends State<ProfileContent> {
                       _carregandoEstatisticas
                           ? const LoadingNhac(telaCheia: false, tamanho: 24)
                           : _buildStatItem(
-                              '${_estatisticas['lojasFavoritadas'] ?? 0}',
+                              _erroEstatisticas
+                                  ? '—'
+                                  : '${_estatisticas['lojasFavoritadas']}',
                               'Favoritos',
                             ),
                       Container(
@@ -648,11 +698,22 @@ class _ProfileContentState extends State<ProfileContent> {
                       _carregandoEstatisticas
                           ? const LoadingNhac(telaCheia: false, tamanho: 24)
                           : _buildStatItem(
-                              '${_estatisticas['cuponsResgatados'] ?? 0}',
+                              _erroEstatisticas
+                                  ? '—'
+                                  : '${_estatisticas['cuponsResgatados']}',
                               'Cupons',
                             ),
                     ],
                   ),
+                  if (_erroEstatisticas)
+                    TextButton(
+                        onPressed: _carregarEstatisticas,
+                        child: const Text(
+                            'Estatísticas indisponíveis. Tentar novamente')),
+                  if (userProvider.erro != null)
+                    TextButton(
+                        onPressed: _atualizarPerfil,
+                        child: Text(userProvider.erro!)),
                   SizedBox(height: 40.h),
                   Text(
                     'Sua Conta',
@@ -680,33 +741,23 @@ class _ProfileContentState extends State<ProfileContent> {
                     child: Column(
                       children: [
                         _buildAccountRow(
-                          icon: Icons.receipt_long_outlined,
-                          iconColor: const Color(0xFFFF6961),
-                          title: 'Meus pedidos',
-                          subtitle: 'Acompanhe pedidos atuais e anteriores',
-                          onTap: () => context.push('/meus-pedidos'),
-                        ),
-                        Divider(
-                          height: 1,
-                          color: Colors.grey.shade100,
-                          indent: 64.w,
-                        ),
-                        _buildAccountRow(
                           icon: Icons.person_outline,
                           iconColor: const Color(0xFFFF6961),
                           title: 'Dados Pessoais',
                           subtitle: 'Nome, e-mail, telefone...',
                           onTap: () async {
-                            final autenticado = await _confirmarIdentidade();
-                            if (!context.mounted) return;
-
-                            if (!autenticado) {
-                              context.showError(
-                                'Confirme sua identidade para continuar',
-                              );
-                              return;
+                            if (_confirmandoIdentidade) return;
+                            setState(() => _confirmandoIdentidade = true);
+                            try {
+                              final autenticado = await _confirmarIdentidade();
+                              if (context.mounted && autenticado) {
+                                context.push('/dados-pessoais');
+                              }
+                            } finally {
+                              if (mounted) {
+                                setState(() => _confirmandoIdentidade = false);
+                              }
                             }
-                            context.push('/dados-pessoais');
                           },
                         ),
                         Divider(
@@ -800,28 +851,35 @@ class _ProfileContentState extends State<ProfileContent> {
 
   Widget _buildStatItem(String value, String label) {
     return InkWell(
-      onTap: label == 'Cupons' ? () => context.push('/cupons') : null,
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24.sp,
-              color: const Color(0xFF5D201C),
-              fontWeight: FontWeight.w300,
-            ),
-          ),
-          SizedBox(height: 4.h),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12.sp,
-              color: const Color(0xFF5D201C),
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
+      onTap: switch (label) {
+        'Cupons' => () => context.push('/cupons'),
+        'Pedidos' => () => context.push('/meus-pedidos'),
+        _ => null,
+      },
+      child: Container(
+          color: Colors.transparent,
+          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+          child: Column(
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 24.sp,
+                  color: const Color(0xFF5D201C),
+                  fontWeight: FontWeight.w300,
+                ),
+              ),
+              SizedBox(height: 4.h),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.sp,
+                  color: const Color(0xFF5D201C),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          )),
     );
   }
 

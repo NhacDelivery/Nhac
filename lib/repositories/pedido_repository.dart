@@ -1,6 +1,5 @@
 import 'package:nhac/services/shared_get.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/models/pedido/avaliacao_entregador_model.dart';
 import 'package:nhac/models/pedido/criar_pedido_request.dart';
@@ -148,24 +147,25 @@ class PedidoRepository {
   }
 
   Future<Map<String, dynamic>> buscarEstatisticas(String usuarioId) async {
+    SharedGet.forClient(_dio)
+        .invalidatePath('/usuarios/$usuarioId/estatisticas');
     try {
       final response = await SharedGet.forClient(_dio)
           .get(_dio, '/usuarios/$usuarioId/estatisticas');
-      if (response.statusCode == 200 && response.data != null) {
-        return Map<String, dynamic>.from(response.data as Map);
+      if (response.statusCode != 200 || response.data is! Map) {
+        throw StateError('Estatísticas indisponíveis');
       }
-      return {
-        'totalPedidos': 0,
-        'lojasFavoritadas': 0,
-        'cuponsResgatados': 0,
-      };
+      final dados = Map<String, dynamic>.from(response.data as Map);
+      for (final campo in [
+        'totalPedidos',
+        'lojasFavoritadas',
+        'cuponsResgatados'
+      ]) {
+        if (dados[campo] is! num) throw StateError('Estatísticas incompletas');
+      }
+      return dados;
     } on DioException catch (e) {
-      debugPrint('Erro ao buscar estatísticas: ${e.message ?? ''}');
-      return {
-        'totalPedidos': 0,
-        'lojasFavoritadas': 0,
-        'cuponsResgatados': 0,
-      };
+      throw mapException(e);
     }
   }
 

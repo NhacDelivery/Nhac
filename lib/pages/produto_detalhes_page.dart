@@ -138,8 +138,9 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
         },
       );
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         context.showError('Não foi possível abrir a conversa com esta loja.');
+      }
     }
   }
 
@@ -618,54 +619,62 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                         final loja = lojaSnapshot.data;
                         final aindaCarregando = lojaSnapshot.connectionState !=
                             ConnectionState.done;
-                        final lojaFechada =
-                            aindaCarregando || loja == null || !loja.isAberto;
+                        final erroLoja = !aindaCarregando &&
+                            (lojaSnapshot.hasError || loja == null);
+                        final lojaFechada = loja != null && !loja.isAberto;
                         return ElevatedButton(
                           key: E2EKeys.productAdd,
                           onPressed: aindaCarregando
                               ? null
-                              : lojaFechada
-                                  ? () {
-                                      context.showError(
-                                        'Esta loja está fechada no momento.',
-                                      );
-                                    }
-                                  : () async {
-                                      try {
-                                        final cartProvider =
-                                            Provider.of<CartProvider>(
-                                          context,
-                                          listen: false,
-                                        );
-                                        await cartProvider
-                                            .adicionarItemComQuantidade(
-                                          idProduto: widget.produto.id,
-                                          nome: widget.produto.nome,
-                                          preco: widget.produto.preco,
-                                          imagemUrl: widget.produto.imagemUrl,
-                                          lojaId: widget.produto.lojaId,
-                                          quantidade: _quantidade,
-                                        );
-                                        if (context.mounted) {
-                                          showAppNotification(
-                                            context,
-                                            type: NotificationType.success,
-                                            imageUrl: widget.produto.imagemUrl,
-                                            message:
-                                                '$_quantidade x ${widget.produto.nome}',
-                                          );
-                                        }
-                                      } catch (e) {
-                                        if (context.mounted) {
+                              : erroLoja
+                                  ? () => setState(() {
+                                        _lojaFuture = _lojaRepository
+                                            .buscarLoja(widget.produto.lojaId);
+                                      })
+                                  : lojaFechada
+                                      ? () {
                                           context.showError(
-                                            e.toString().replaceAll(
-                                                  'Exception: ',
-                                                  '',
-                                                ),
+                                            'Esta loja está fechada no momento.',
                                           );
                                         }
-                                      }
-                                    },
+                                      : () async {
+                                          try {
+                                            final cartProvider =
+                                                Provider.of<CartProvider>(
+                                              context,
+                                              listen: false,
+                                            );
+                                            await cartProvider
+                                                .adicionarItemComQuantidade(
+                                              idProduto: widget.produto.id,
+                                              nome: widget.produto.nome,
+                                              preco: widget.produto.preco,
+                                              imagemUrl:
+                                                  widget.produto.imagemUrl,
+                                              lojaId: widget.produto.lojaId,
+                                              quantidade: _quantidade,
+                                            );
+                                            if (context.mounted) {
+                                              showAppNotification(
+                                                context,
+                                                type: NotificationType.success,
+                                                imageUrl:
+                                                    widget.produto.imagemUrl,
+                                                message:
+                                                    '$_quantidade x ${widget.produto.nome}',
+                                              );
+                                            }
+                                          } catch (e) {
+                                            if (context.mounted) {
+                                              context.showError(
+                                                e.toString().replaceAll(
+                                                      'Exception: ',
+                                                      '',
+                                                    ),
+                                              );
+                                            }
+                                          }
+                                        },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: lojaFechada
                                 ? Colors.grey.shade400
@@ -680,9 +689,11 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           child: Text(
                             aindaCarregando
                                 ? 'Carregando...'
-                                : lojaFechada
-                                    ? 'Loja fechada'
-                                    : 'Adicionar  ${currencyFormat.format(widget.produto.preco * _quantidade)}',
+                                : erroLoja
+                                    ? 'Loja indisponível. Tentar novamente'
+                                    : lojaFechada
+                                        ? 'Loja fechada'
+                                        : 'Adicionar  ${currencyFormat.format(widget.produto.preco * _quantidade)}',
                             style: TextStyle(
                               fontSize: 16.sp,
                               fontWeight: FontWeight.bold,
@@ -817,17 +828,19 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
           FutureBuilder<List<AvaliacoesModel>>(
             future: _avaliacoesFuture,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting)
+              if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(
                   child: LoadingNhac(telaCheia: false, tamanho: 40),
                 );
+              }
               if (snapshot.hasError ||
                   !snapshot.hasData ||
-                  snapshot.data!.isEmpty)
+                  snapshot.data!.isEmpty) {
                 return Text(
                   'Sem avaliações ainda.',
                   style: TextStyle(color: Colors.grey.shade600),
                 );
+              }
 
               return Column(
                 children: snapshot.data!.take(3).map((avaliacao) {

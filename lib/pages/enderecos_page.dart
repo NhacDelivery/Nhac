@@ -1,3 +1,4 @@
+import 'package:nhac/components/selecionar_endereco_padrao.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -430,7 +431,9 @@ class _EnderecosPageState extends State<EnderecosPage> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       onSelected: (value) async {
         if (value == 'isPadrao') {
-          await context.read<EnderecoProvider>().definirComoPadrao(endereco.id);
+          if (!await selecionarEnderecoPadrao(context, endereco.id)) {
+            return;
+          }
           if (mounted) context.showSuccess('Endereço padrão atualizado!');
         } else if (value == 'editar') {
           _abrirEdicaoEndereco(endereco);
@@ -597,12 +600,12 @@ class _EnderecosPageState extends State<EnderecosPage> {
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
-              await context
-                  .read<EnderecoProvider>()
-                  .definirComoPadrao(endereco.id);
+              if (!await selecionarEnderecoPadrao(context, endereco.id)) {
+                return;
+              }
               if (mounted && context.mounted) {
-                context.showSuccess('Endereço padrão atualizado!');
+                Navigator.pop(context);
+                this.context.showSuccess('Endereço padrão atualizado!');
               }
             },
             style: ElevatedButton.styleFrom(

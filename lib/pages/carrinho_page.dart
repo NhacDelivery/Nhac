@@ -1,3 +1,4 @@
+import 'package:nhac/components/selecionar_endereco_padrao.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
@@ -36,8 +37,6 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
     _observacaoController.dispose();
     super.dispose();
   }
-
-  
 
   @override
   Widget build(BuildContext context) {
@@ -164,8 +163,6 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
       ),
     );
   }
-
-  
 
   Widget _buildAddressSection(BuildContext context, EnderecoModel? address) {
     return Container(
@@ -296,7 +293,8 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
             decoration: InputDecoration(
               hintText:
                   'Ex: Tirar cebola, maionese à parte, troco para R\$ 50...',
-              hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 14.sp),
+              hintStyle:
+                  TextStyle(color: Colors.grey.shade400, fontSize: 14.sp),
               filled: true,
               fillColor: Colors.white,
               contentPadding: EdgeInsets.all(16.w),
@@ -312,7 +310,16 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                     BorderSide(color: primaryColor.withValues(alpha: 0.5)),
               ),
             ),
-            onChanged: (value) => cartProvider.setObservacao(value),
+            onChanged: (value) async {
+              try {
+                await cartProvider.setObservacao(value);
+              } catch (_) {
+                if (mounted) {
+                  context.showError(
+                      'Não foi possível salvar as observações neste aparelho.');
+                }
+              }
+            },
           ),
         ),
       ],
@@ -445,19 +452,28 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                       borderRadius: BorderRadius.circular(12.r),
                                       child: item.esgotado
                                           ? ColorFiltered(
-                                              colorFilter: const ColorFilter.mode(Colors.grey, BlendMode.saturation),
+                                              colorFilter:
+                                                  const ColorFilter.mode(
+                                                      Colors.grey,
+                                                      BlendMode.saturation),
                                               child: Image.network(
                                                 item.imagemUrl,
                                                 fit: BoxFit.cover,
-                                                errorBuilder: (context, error, stackTrace) =>
-                                                    Icon(Icons.image, color: Colors.grey, size: 24.r),
+                                                errorBuilder: (context, error,
+                                                        stackTrace) =>
+                                                    Icon(Icons.image,
+                                                        color: Colors.grey,
+                                                        size: 24.r),
                                               ),
                                             )
                                           : Image.network(
                                               item.imagemUrl,
                                               fit: BoxFit.cover,
-                                              errorBuilder: (context, error, stackTrace) =>
-                                                  Icon(Icons.image, color: Colors.grey, size: 24.r),
+                                              errorBuilder: (context, error,
+                                                      stackTrace) =>
+                                                  Icon(Icons.image,
+                                                      color: Colors.grey,
+                                                      size: 24.r),
                                             ),
                                     ),
                                   ),
@@ -484,8 +500,14 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                         fontWeight:
                                                             FontWeight.bold,
                                                         fontSize: 14.sp,
-                                                        color: item.esgotado ? Colors.grey : Colors.black,
-                                                        decoration: item.esgotado ? TextDecoration.lineThrough : null),
+                                                        color: item.esgotado
+                                                            ? Colors.grey
+                                                            : Colors.black,
+                                                        decoration:
+                                                            item.esgotado
+                                                                ? TextDecoration
+                                                                    .lineThrough
+                                                                : null),
                                                     maxLines: 2,
                                                     overflow:
                                                         TextOverflow.ellipsis,
@@ -493,10 +515,16 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                   if (item.esgotado)
                                                     Text(
                                                       'Esgotado',
-                                                      style: TextStyle(color: Colors.red, fontSize: 12.sp, fontWeight: FontWeight.bold),
+                                                      style: TextStyle(
+                                                          color: Colors.red,
+                                                          fontSize: 12.sp,
+                                                          fontWeight:
+                                                              FontWeight.bold),
                                                     ),
                                                   SizedBox(height: 8.h),
-                                                  Row(
+                                                  Wrap(
+                                                    spacing: 12.w,
+                                                    runSpacing: 8.h,
                                                     children: [
                                                       Container(
                                                         height: 32.h,
@@ -511,10 +539,13 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                                       16.r),
                                                         ),
                                                         child: Row(
+                                                          mainAxisSize:
+                                                              MainAxisSize.min,
                                                           children: [
                                                             Semantics(
                                                               button: true,
-                                                              label: 'Diminuir quantidade',
+                                                              label:
+                                                                  'Diminuir quantidade',
                                                               child: IconButton(
                                                                 padding:
                                                                     EdgeInsets
@@ -524,13 +555,21 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                                         minWidth:
                                                                             32),
                                                                 icon: Icon(
-                                                                    Icons.remove,
+                                                                    Icons
+                                                                        .remove,
                                                                     size: 16.r),
-                                                                onPressed: () async {
+                                                                onPressed:
+                                                                    () async {
                                                                   try {
-                                                                    await cartProvider.removerItem(item.produtoId);
+                                                                    await cartProvider
+                                                                        .removerItem(
+                                                                            item.produtoId);
                                                                   } catch (e) {
-                                                                    if (context.mounted) context.showError(e.toString());
+                                                                    if (context
+                                                                        .mounted) {
+                                                                      context.showError(
+                                                                          e.toString());
+                                                                    }
                                                                   }
                                                                 },
                                                               ),
@@ -555,7 +594,8 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                             ),
                                                             Semantics(
                                                               button: true,
-                                                              label: 'Aumentar quantidade',
+                                                              label:
+                                                                  'Aumentar quantidade',
                                                               child: IconButton(
                                                                 padding:
                                                                     EdgeInsets
@@ -567,26 +607,38 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                                 icon: Icon(
                                                                     Icons.add,
                                                                     size: 16.r),
-                                                                onPressed: item.esgotado ? null : () async {
-                                                                  try {
-                                                                    await cartProvider.adicionarItemComQuantidade(
-                                                                      idProduto: item.produtoId, 
-                                                                      nome: item.nome,
-                                                                      preco: item.preco,
-                                                                      imagemUrl: item.imagemUrl,
-                                                                      lojaId: item.lojaId,
-                                                                      quantidade: 1, 
-                                                                    );
-                                                                  } catch (e) {
-                                                                    if (context.mounted) context.showError(e.toString());
-                                                                  }
-                                                                },
+                                                                onPressed: item
+                                                                        .esgotado
+                                                                    ? null
+                                                                    : () async {
+                                                                        try {
+                                                                          await cartProvider
+                                                                              .adicionarItemComQuantidade(
+                                                                            idProduto:
+                                                                                item.produtoId,
+                                                                            nome:
+                                                                                item.nome,
+                                                                            preco:
+                                                                                item.preco,
+                                                                            imagemUrl:
+                                                                                item.imagemUrl,
+                                                                            lojaId:
+                                                                                item.lojaId,
+                                                                            quantidade:
+                                                                                1,
+                                                                          );
+                                                                        } catch (e) {
+                                                                          if (context
+                                                                              .mounted) {
+                                                                            context.showError(e.toString());
+                                                                          }
+                                                                        }
+                                                                      },
                                                               ),
                                                             ),
                                                           ],
                                                         ),
                                                       ),
-                                                      SizedBox(width: 16.w),
                                                       GestureDetector(
                                                         onTap: () {
                                                           HapticFeedback
@@ -610,10 +662,25 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.end,
                                               children: [
-                                                item.esgotado 
-                                                  ? ColorFiltered(
-                                                      colorFilter: const ColorFilter.mode(Colors.grey, BlendMode.saturation),
-                                                      child: Text(
+                                                item.esgotado
+                                                    ? ColorFiltered(
+                                                        colorFilter:
+                                                            const ColorFilter
+                                                                .mode(
+                                                                Colors.grey,
+                                                                BlendMode
+                                                                    .saturation),
+                                                        child: Text(
+                                                          currencyFormat.format(
+                                                              item.preco),
+                                                          style: TextStyle(
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .bold,
+                                                              fontSize: 14.sp),
+                                                        ),
+                                                      )
+                                                    : Text(
                                                         currencyFormat
                                                             .format(item.preco),
                                                         style: TextStyle(
@@ -621,15 +688,6 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                                 FontWeight.bold,
                                                             fontSize: 14.sp),
                                                       ),
-                                                    )
-                                                  : Text(
-                                                      currencyFormat
-                                                          .format(item.preco),
-                                                      style: TextStyle(
-                                                          fontWeight:
-                                                              FontWeight.bold,
-                                                          fontSize: 14.sp),
-                                                    ),
                                                 SizedBox(height: 4.h),
                                                 Semantics(
                                                   key: E2EKeys.cartStoreId,
@@ -714,45 +772,48 @@ class _AddressSelectionSheet extends StatelessWidget {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final endereco = enderecos[index];
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  onTap: () async {
-                    await context
-                        .read<EnderecoProvider>()
-                        .definirComoPadrao(endereco.id);
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                  leading: Container(
-                    padding: EdgeInsets.all(8.w),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF6961).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      endereco.bairro.toLowerCase().contains('trabalho') ||
-                              endereco.complemento
-                                  !.toLowerCase()
-                                  .contains('trabalho')
-                          ? Icons.work_outline
-                          : Icons.home_outlined,
-                      color: const Color(0xFFFF6961),
-                      size: 20.r,
-                    ),
-                  ),
-                  title: Text('${endereco.rua}, ${endereco.numero}',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 15.sp)),
-                  subtitle: Text(
-                    '${endereco.bairro}${endereco.complemento!.isNotEmpty ? ' - ${endereco.complemento}' : ''}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13.sp),
-                  ),
-                  trailing: endereco.isPadrao
-                      ? Icon(Icons.check_circle,
-                          color: const Color(0xFFFF6961), size: 22.r)
-                      : null,
-                );
+                return Material(
+                    type: MaterialType.transparency,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () async {
+                        if (!await selecionarEnderecoPadrao(
+                            context, endereco.id)) {
+                          return;
+                        }
+                        if (context.mounted) Navigator.pop(context);
+                      },
+                      leading: Container(
+                        padding: EdgeInsets.all(8.w),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6961).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          endereco.bairro.toLowerCase().contains('trabalho') ||
+                                  (endereco.complemento ?? '')
+                                      .toLowerCase()
+                                      .contains('trabalho')
+                              ? Icons.work_outline
+                              : Icons.home_outlined,
+                          color: const Color(0xFFFF6961),
+                          size: 20.r,
+                        ),
+                      ),
+                      title: Text('${endereco.rua}, ${endereco.numero}',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15.sp)),
+                      subtitle: Text(
+                        '${endereco.bairro}${(endereco.complemento?.isNotEmpty ?? false) ? ' - ${endereco.complemento}' : ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.sp),
+                      ),
+                      trailing: endereco.isPadrao
+                          ? Icon(Icons.check_circle,
+                              color: const Color(0xFFFF6961), size: 22.r)
+                          : null,
+                    ));
               },
             ),
           ),
@@ -776,11 +837,12 @@ class _AddressSelectionSheet extends StatelessWidget {
                       child: Icon(Icons.add, color: Colors.grey, size: 20.r),
                     ),
                     SizedBox(width: 16.w),
-                    Text('Adicionar novo endereço',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15.sp,
-                            color: Colors.grey)),
+                    Expanded(
+                        child: Text('Adicionar novo endereço',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15.sp,
+                                color: Colors.grey))),
                   ],
                 ),
               ),
@@ -790,6 +852,4 @@ class _AddressSelectionSheet extends StatelessWidget {
       ),
     );
   }
-
-  
 }

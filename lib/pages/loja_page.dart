@@ -63,7 +63,9 @@ class _LojaPageState extends State<LojaPage>
 
   bool _isSeguindo = false;
   int _seguidores = 0;
-  bool _carregandoSeguidores = true;
+  bool _carregandoSeguidores = false;
+  bool _erroSeguidores = false;
+  bool _alterandoSeguir = false;
 
   @override
   void initState() {
@@ -75,6 +77,11 @@ class _LojaPageState extends State<LojaPage>
   }
 
   Future<void> _carregarSeguidores() async {
+    if (_carregandoSeguidores) return;
+    setState(() {
+      _carregandoSeguidores = true;
+      _erroSeguidores = false;
+    });
     try {
       final auth = context.read<AuthService>();
       final resultado = await Future.wait<Object>([
@@ -84,25 +91,28 @@ class _LojaPageState extends State<LojaPage>
         else
           Future.value(false),
       ]);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _seguidores = resultado[0] as int;
           _isSeguindo = resultado[1] as bool;
         });
+      }
     } catch (_) {
-      // Informação secundária não impede a navegação pelo cardápio.
+      if (mounted) setState(() => _erroSeguidores = true);
     } finally {
       if (mounted) setState(() => _carregandoSeguidores = false);
     }
   }
 
   Future<void> _toggleSeguir() async {
+    if (_alterandoSeguir || _carregandoSeguidores || _erroSeguidores) return;
     final auth = context.read<AuthService>();
     if (auth.usuarioId == null) {
       context.showError('Faça login para seguir a loja.');
       return;
     }
 
+    setState(() => _alterandoSeguir = true);
     try {
       if (_isSeguindo) {
         await _lojaRepository.deixarDeSeguir(auth.usuarioId!, widget.loja.id);
@@ -123,6 +133,8 @@ class _LojaPageState extends State<LojaPage>
       }
     } catch (e) {
       if (mounted) context.showError(e.toString());
+    } finally {
+      if (mounted) setState(() => _alterandoSeguir = false);
     }
   }
 
@@ -323,7 +335,9 @@ class _LojaPageState extends State<LojaPage>
                         Text(
                           _carregandoSeguidores
                               ? "Carregando..."
-                              : "$_seguidores seguidores",
+                              : _erroSeguidores
+                                  ? "Seguidores indisponíveis"
+                                  : "$_seguidores seguidores",
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 10.sp,
@@ -338,7 +352,11 @@ class _LojaPageState extends State<LojaPage>
                 ),
               ),
               ElevatedButton(
-                onPressed: _carregandoSeguidores ? null : _toggleSeguir,
+                onPressed: _carregandoSeguidores || _alterandoSeguir
+                    ? null
+                    : _erroSeguidores
+                        ? _carregarSeguidores
+                        : _toggleSeguir,
                 style: ElevatedButton.styleFrom(
                   backgroundColor:
                       _isSeguindo ? Colors.white : const Color(0xFFFF6961),
@@ -354,11 +372,13 @@ class _LojaPageState extends State<LojaPage>
                   ),
                 ),
                 child: Text(
-                  _carregandoSeguidores
+                  _carregandoSeguidores || _alterandoSeguir
                       ? "..."
-                      : _isSeguindo
-                          ? "Seguindo"
-                          : "Seguir",
+                      : _erroSeguidores
+                          ? "Tentar novamente"
+                          : _isSeguindo
+                              ? "Seguindo"
+                              : "Seguir",
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 12.sp,

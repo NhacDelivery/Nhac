@@ -47,3 +47,13 @@ A idempotência conserva o mesmo pedido e o mesmo estoque reservado. Um resultad
 ## Carregamento
 
 Refresh da home inicia catálogo e pedidos sem aguardar GPS. GPS tem limite de 8 segundos. Rastreio mostra o pedido antes da consulta de loja/rota. Inicialização de push acontece após o primeiro frame e falhas são reportadas ao Sentry. A reserva de pedido, as configurações de pagamento e a autenticação continuam obedecendo às suas dependências.
+
+## Perfil, endereço e dados secundários
+
+UserProvider distingue consulta pendente de falha; conserva o usuário carregado em refresh e oferece retry. ProfileContent atualiza usuário e estatísticas em paralelo. Contagens indisponíveis usam travessão e retry, sem fabricar zeros. Pedidos no resumo abre /meus-pedidos.
+
+A confirmação de identidade em ProfileContent é a única responsável pelo aviso; cancelamento do diálogo ou Google não exibe falha. O botão bloqueia operações simultâneas. Telefone e e-mail de conta Google são somente leitura, com motivo visível e sem seta de edição.
+
+EnderecoProvider define o padrão com um único PUT; UsuarioService.atualizarEndereco desmarca os demais na mesma transação. O estado local só muda após sucesso. selecionarEnderecoPadrao compartilha aviso e resultado; seletores só fecham após confirmação e checkout repete a validação do número.
+
+CartRepository grava itens e observação em um snapshot por conta, com fila de gravações e compatibilidade com listas antigas. Carrinho vazio limpa observações. Falha de loja não invalida o pedido carregado nem confirma loja fechada. Seguidores têm loading, erro/retry e bloqueio de mutação concorrente.

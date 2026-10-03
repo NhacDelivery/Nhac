@@ -25,6 +25,7 @@ class UserProvider with ChangeNotifier {
     _sessionUserId = _authService.usuarioId;
     _sessionVersion++;
     _usuario = null;
+    _erro = null;
     _isLoading = false;
     notifyListeners();
   }
@@ -38,11 +39,12 @@ class UserProvider with ChangeNotifier {
 
   UsuarioModel? _usuario;
   bool _isLoading = false;
+  String? _erro;
+  String? get erro => _erro;
 
   UsuarioModel? get usuario => _usuario;
   bool get isLoading => _isLoading;
 
-  
   bool get isGoogleUser => _authService.isGoogleUser;
   bool get isPhoneUser => _authService.isPhoneUser;
   bool get hasPassword => _authService.hasPassword;
@@ -54,12 +56,17 @@ class UserProvider with ChangeNotifier {
     final sessionVersion = _sessionVersion;
     try {
       _isLoading = true;
+      _erro = null;
       notifyListeners();
 
       final resultado = await _userRepository.buscarUsuario(usuarioId);
       if (_disposed || sessionVersion != _sessionVersion) return;
+      if (resultado == null) throw StateError("Usuário indisponível");
       _usuario = resultado;
     } catch (e) {
+      if (!_disposed && sessionVersion == _sessionVersion) {
+        _erro = "Não foi possível carregar o perfil. Tente novamente.";
+      }
       debugPrint("Erro ao carregar dados do utilizador: $e");
     } finally {
       if (!_disposed && sessionVersion == _sessionVersion) {
@@ -78,6 +85,7 @@ class UserProvider with ChangeNotifier {
 
     try {
       _isLoading = true;
+      _erro = null;
       notifyListeners();
 
       final url = await _userRepository.enviarFotoPerfil(imagem);
@@ -99,6 +107,7 @@ class UserProvider with ChangeNotifier {
 
   void limparUsuario() {
     _usuario = null;
+    _erro = null;
     notifyListeners();
   }
 }

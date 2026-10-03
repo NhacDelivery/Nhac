@@ -1,3 +1,4 @@
+import 'package:nhac/components/selecionar_endereco_padrao.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/components/nota_fiscal_pedido.dart';
@@ -184,14 +185,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
           children: [
             Icon(Icons.home, color: const Color(0xFFFF6961), size: 28.r),
             SizedBox(width: 12.w),
-            Text(
+            Expanded(
+                child: Text(
               'Número da casa',
               style: TextStyle(
                 fontSize: 20.sp,
                 fontWeight: FontWeight.bold,
                 color: const Color(0xFF5D201C),
               ),
-            ),
+            )),
           ],
         ),
         content: Form(
@@ -762,13 +764,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     size: 24.r,
                   ),
                   SizedBox(width: 12.w),
-                  Text(
-                    tempoEntrega,
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      fontWeight: FontWeight.w500,
-                      color: const Color(0xFF5D201C),
-                    ),
+                  Expanded(
+                    child: Text(tempoEntrega,
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          fontWeight: FontWeight.w500,
+                          color: const Color(0xFF5D201C),
+                        )),
                   ),
                 ],
               ),
@@ -879,7 +881,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => _AddressSelectionSheet(enderecos: enderecos),
     );
-    await enderecoProvider.buscarEnderecos();
+    if (!mounted || !context.mounted) return;
+    await _verificarNumeroEndereco();
     if (!mounted || !context.mounted) return;
     if (enderecoProvider.enderecos.isEmpty) {
       _freteVersao++;
@@ -1245,52 +1248,55 @@ class _AddressSelectionSheet extends StatelessWidget {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final endereco = enderecos[index];
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  onTap: () async {
-                    await context.read<EnderecoProvider>().definirComoPadrao(
-                          endereco.id,
-                        );
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                  leading: Container(
-                    padding: EdgeInsets.all(8.w),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF6961).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      endereco.bairro.toLowerCase().contains('trabalho') ||
-                              (endereco.complemento ?? '')
-                                  .toLowerCase()
-                                  .contains('trabalho')
-                          ? Icons.work_outline
-                          : Icons.home_outlined,
-                      color: const Color(0xFFFF6961),
-                      size: 20.r,
-                    ),
-                  ),
-                  title: Text(
-                    '${endereco.rua}, ${endereco.numero}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15.sp,
-                    ),
-                  ),
-                  subtitle: Text(
-                    '${endereco.bairro}${(endereco.complemento?.isNotEmpty ?? false) ? ' - ${endereco.complemento}' : ''}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13.sp),
-                  ),
-                  trailing: endereco.isPadrao
-                      ? Icon(
-                          Icons.check_circle,
+                return Material(
+                    type: MaterialType.transparency,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () async {
+                        if (!await selecionarEnderecoPadrao(
+                            context, endereco.id)) {
+                          return;
+                        }
+                        if (context.mounted) Navigator.pop(context);
+                      },
+                      leading: Container(
+                        padding: EdgeInsets.all(8.w),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6961).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          endereco.bairro.toLowerCase().contains('trabalho') ||
+                                  (endereco.complemento ?? '')
+                                      .toLowerCase()
+                                      .contains('trabalho')
+                              ? Icons.work_outline
+                              : Icons.home_outlined,
                           color: const Color(0xFFFF6961),
-                          size: 22.r,
-                        )
-                      : null,
-                );
+                          size: 20.r,
+                        ),
+                      ),
+                      title: Text(
+                        '${endereco.rua}, ${endereco.numero}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15.sp,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${endereco.bairro}${(endereco.complemento?.isNotEmpty ?? false) ? ' - ${endereco.complemento}' : ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.sp),
+                      ),
+                      trailing: endereco.isPadrao
+                          ? Icon(
+                              Icons.check_circle,
+                              color: const Color(0xFFFF6961),
+                              size: 22.r,
+                            )
+                          : null,
+                    ));
               },
             ),
           ),
@@ -1317,14 +1323,15 @@ class _AddressSelectionSheet extends StatelessWidget {
                       child: Icon(Icons.add, color: Colors.grey, size: 20.r),
                     ),
                     SizedBox(width: 16.w),
-                    Text(
+                    Expanded(
+                        child: Text(
                       'Adicionar novo endereço',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 15.sp,
                         color: Colors.grey,
                       ),
-                    ),
+                    )),
                   ],
                 ),
               ),

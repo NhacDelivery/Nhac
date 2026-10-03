@@ -91,8 +91,11 @@ class AuthService with ChangeNotifier {
         '/auth/social',
         data: {'idToken': idToken},
       );
-      return _usuarioId == usuarioEsperado &&
-          response.data['usuarioId'] == usuarioEsperado;
+      if (_usuarioId != usuarioEsperado ||
+          response.data['usuarioId'] != usuarioEsperado) {
+        throw AuthException('Confirme com a mesma conta da sessão atual.');
+      }
+      return true;
     } catch (e) {
       throw mapException(e);
     }
@@ -121,8 +124,11 @@ class AuthService with ChangeNotifier {
           'codigo': codigo,
         },
       );
-      return _usuarioId == usuarioEsperado &&
-          response.data['usuarioId'] == usuarioEsperado;
+      if (_usuarioId != usuarioEsperado ||
+          response.data['usuarioId'] != usuarioEsperado) {
+        throw AuthException('Confirme com a mesma conta da sessão atual.');
+      }
+      return true;
     } catch (e) {
       throw mapException(e);
     }

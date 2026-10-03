@@ -15,12 +15,12 @@ import 'package:provider/provider.dart';
 class MockUserProvider extends ChangeNotifier implements UserProvider {
   @override
   UsuarioModel? get usuario => UsuarioModel(
-    id: '123',
-    nome: 'Usuario Teste',
-    email: 'atual@nhac.com',
-    imagemUrl: '',
-    telefone: '11999999999',
-  );
+        id: '123',
+        nome: 'Usuario Teste',
+        email: 'atual@nhac.com',
+        imagemUrl: '',
+        telefone: '11999999999',
+      );
 
   @override
   bool get isGoogleUser => false;
@@ -30,6 +30,8 @@ class MockUserProvider extends ChangeNotifier implements UserProvider {
 
   @override
   bool get isLoading => false;
+  @override
+  String? get erro => null;
 
   @override
   void limparUsuario() {}
@@ -67,7 +69,8 @@ class MockAuthService extends ChangeNotifier implements AuthService {
   Future<bool> confirmarSenha({
     required String email,
     required String senha,
-  }) async => true;
+  }) async =>
+      true;
   @override
   Future<bool> confirmarComGoogle() async => true;
   @override

@@ -194,4 +194,30 @@ void main() {
       expect(find.byKey(const Key('cartao-entregador-rastreio')), findsNothing);
     });
   });
+  testWidgets('falha da loja preserva pedido e oferece nova tentativa',
+      (tester) async {
+    setupScreen(tester);
+    when(() => mockPedidoRepository.buscarPedidoPorId('pedido-loja-falha'))
+        .thenAnswer((_) async => criarPedido(status: StatusPedido.preparando));
+    when(() => mockLojaRepository.buscarLoja(any()))
+        .thenThrow(Exception('offline'));
+    await tester.pumpWidget(createWidgetUnderTest('pedido-loja-falha'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pedido não encontrado.'), findsNothing);
+    final retry =
+        find.text('Não foi possível consultar a loja. Tentar novamente');
+    await tester.ensureVisible(retry);
+    expect(retry, findsOneWidget);
+    when(() => mockLojaRepository.buscarLoja(any())).thenAnswer((_) async =>
+        LojasModel(
+            id: 'loja1',
+            nome: 'Loja recuperada',
+            categoria: 'Pizzaria',
+            imagemUrl: ''));
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    expect(find.text('Loja recuperada'), findsOneWidget);
+    expect(retry, findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
 }

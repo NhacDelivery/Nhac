@@ -317,4 +317,52 @@ void main() {
     final avaliacao = await repository.buscarAvaliacaoEntregador('ped-123');
     expect(avaliacao, isNull);
   });
+  test('estatísticas falhando não retornam zeros válidos', () async {
+    when(() =>
+        dio.get('/usuarios/estat-falha/estatisticas',
+            queryParameters: any(named: 'queryParameters'),
+            options: any(named: 'options'))).thenThrow(
+        DioException(requestOptions: RequestOptions(path: '/estatisticas')));
+    await expectLater(
+        repository.buscarEstatisticas('estat-falha'), throwsException);
+  });
+
+  test('estatísticas realmente zeradas são aceitas', () async {
+    when(() => dio.get('/usuarios/estat-zero/estatisticas',
+        queryParameters: any(named: 'queryParameters'),
+        options: any(named: 'options'))).thenAnswer((_) async => Response(
+            requestOptions: RequestOptions(path: '/estatisticas'),
+            statusCode: 200,
+            data: {
+              'totalPedidos': 0,
+              'lojasFavoritadas': 0,
+              'cuponsResgatados': 0
+            }));
+    expect(
+        (await repository.buscarEstatisticas('estat-zero'))['totalPedidos'], 0);
+  });
+  test('atualização explícita de estatísticas não reaproveita contagem antiga',
+      () async {
+    var total = 1;
+    when(() => dio.get('/usuarios/estat-refresh/estatisticas',
+        queryParameters: any(named: 'queryParameters'),
+        options: any(named: 'options'))).thenAnswer((_) async => Response(
+            requestOptions: RequestOptions(path: '/estatisticas'),
+            statusCode: 200,
+            data: {
+              'totalPedidos': total,
+              'lojasFavoritadas': 0,
+              'cuponsResgatados': 0
+            }));
+    expect(
+        (await repository.buscarEstatisticas('estat-refresh'))['totalPedidos'],
+        1);
+    total = 2;
+    expect(
+        (await repository.buscarEstatisticas('estat-refresh'))['totalPedidos'],
+        2);
+    verify(() => dio.get('/usuarios/estat-refresh/estatisticas',
+        queryParameters: any(named: 'queryParameters'),
+        options: any(named: 'options'))).called(2);
+  });
 }

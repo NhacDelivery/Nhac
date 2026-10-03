@@ -99,7 +99,8 @@ class EnderecoProvider with ChangeNotifier {
     }
   }
 
-  Future<void> atualizarEndereco(String enderecoId, EnderecoModel endereco) async {
+  Future<void> atualizarEndereco(
+      String enderecoId, EnderecoModel endereco) async {
     final usuarioId = _authService.usuarioId;
     if (usuarioId == null) return;
 
@@ -107,7 +108,8 @@ class EnderecoProvider with ChangeNotifier {
       _isLoading = true;
       notifyListeners();
 
-      await _enderecoRepository.atualizarEndereco(usuarioId, enderecoId, endereco);
+      await _enderecoRepository.atualizarEndereco(
+          usuarioId, enderecoId, endereco);
       await buscarEnderecos();
     } catch (e) {
       _isLoading = false;
@@ -119,35 +121,32 @@ class EnderecoProvider with ChangeNotifier {
 
   Future<void> definirComoPadrao(String enderecoId) async {
     final usuarioId = _authService.usuarioId;
-    if (usuarioId == null) return;
-
+    if (usuarioId == null) {
+      throw StateError('Faça login para selecionar o endereço.');
+    }
+    if (_isLoading) throw StateError('Aguarde a atualização do endereço.');
+    final sessionVersion = _sessionVersion;
+    _isLoading = true;
+    notifyListeners();
     try {
-      _isLoading = true;
-      notifyListeners();
-
-      final enderecoSelecionado = _enderecos.firstWhere((e) => e.id == enderecoId);
-      final enderecoPadraoAtual = _enderecos.cast<EnderecoModel?>().firstWhere((e) => e?.isPadrao == true && e?.id != enderecoId, orElse: () => null);
-
-      if (enderecoPadraoAtual != null) {
-        await _enderecoRepository.atualizarEndereco(
-          usuarioId,
-          enderecoPadraoAtual.id,
-          enderecoPadraoAtual.copyWith(isPadrao: false),
-        );
-      }
-
+      final selecionado = _enderecos.firstWhere((e) => e.id == enderecoId);
+      // O backend desmarca os demais na mesma transação desta atualização.
       await _enderecoRepository.atualizarEndereco(
         usuarioId,
         enderecoId,
-        enderecoSelecionado.copyWith(isPadrao: true),
+        selecionado.copyWith(isPadrao: true),
       );
-
-      await buscarEnderecos();
-    } catch (e) {
-      debugPrint("Erro ao definir como padrão: $e");
+      if (_disposed || sessionVersion != _sessionVersion) {
+        throw StateError('A sessão mudou. Selecione o endereço novamente.');
+      }
+      _enderecos = _enderecos
+          .map((e) => e.copyWith(isPadrao: e.id == enderecoId))
+          .toList();
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (!_disposed && sessionVersion == _sessionVersion) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 }

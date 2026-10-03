@@ -88,9 +88,9 @@ class LojaRepository {
         final raw = response.data;
         if (raw is int) return raw;
         if (raw is Map) return safeInt(raw['total']);
-        return 0;
+        throw StateError('Contagem de seguidores indisponível');
       }
-      return 0;
+      throw StateError('Contagem de seguidores indisponível');
     } catch (e) {
       throw mapException(e);
     }
@@ -100,9 +100,12 @@ class LojaRepository {
     try {
       final response = await SharedGet.forClient(_dio)
           .get(_dio, '/usuarios/$usuarioId/seguindo/$lojaId');
-      return response.statusCode == 200 && response.data == true;
+      if (response.statusCode != 200 || response.data is! bool) {
+        throw StateError('Não foi possível consultar se você segue a loja');
+      }
+      return response.data == true;
     } catch (e) {
-      return false; // Silenciosamente retorna falso em caso de erro (ex: não logado ou não segue)
+      throw mapException(e);
     }
   }
 

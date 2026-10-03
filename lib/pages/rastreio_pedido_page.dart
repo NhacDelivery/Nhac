@@ -94,8 +94,9 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     _isLoading = true;
     final pedidoId = widget.pedidoId;
     _statusSocket.desconectar().then((_) {
-      if (mounted && _active && widget.pedidoId == pedidoId)
+      if (mounted && _active && widget.pedidoId == pedidoId) {
         _statusSocket.conectar(pedidoId);
+      }
     });
     _statusRefreshPending = _refreshing;
     _carregarDados();
@@ -134,6 +135,8 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
 
   PedidoModel? _pedido;
   LojasModel? _loja;
+  bool _carregandoLoja = false;
+  bool _erroLoja = false;
   RotaEntregaModel? _rota;
   LatLng? _motoboyLocation;
   DateTime? _motoboyAtualizadoEm;
@@ -260,7 +263,9 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
       if (!mounted ||
           !_active ||
           session != SharedGet.sessionGeneration ||
-          version != _requestVersion) return;
+          version != _requestVersion) {
+        return;
+      }
       final anterior = _pedido;
       if (anterior != null &&
           anterior.status != pedido.status &&
@@ -294,15 +299,34 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
       RotaEntregaModel? rota = _rota;
       String? rotaErro;
 
-      if (loja == null)
+      if (loja == null) {
+        setState(() {
+          _carregandoLoja = true;
+          _erroLoja = false;
+        });
         try {
           loja = await _lojaRepository.buscarLoja(pedido.lojaId);
-        } catch (_) {}
+          if (mounted &&
+              version == _requestVersion &&
+              session == SharedGet.sessionGeneration) {
+            setState(() {
+              _loja = loja;
+              _erroLoja = loja == null;
+            });
+          }
+        } catch (_) {
+          if (mounted) setState(() => _erroLoja = true);
+        } finally {
+          if (mounted) setState(() => _carregandoLoja = false);
+        }
+      }
 
       if (!mounted ||
           !_active ||
           session != SharedGet.sessionGeneration ||
-          version != _requestVersion) return;
+          version != _requestVersion) {
+        return;
+      }
       if (tentarRota) _entregaRepository.invalidarRota(widget.pedidoId);
 
       if (tentarRota ||
@@ -335,12 +359,14 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
       if (!mounted ||
           !_active ||
           session != SharedGet.sessionGeneration ||
-          version != _requestVersion) return;
+          version != _requestVersion) {
+        return;
+      }
       DateTime? motoboyAtualizadoEm = _motoboyAtualizadoEm;
       bool motoboyDesatualizado = _motoboyDesatualizado;
       if (pedido.entregador != null &&
           (_nextLocationAttempt == null ||
-              DateTime.now().isAfter(_nextLocationAttempt!)))
+              DateTime.now().isAfter(_nextLocationAttempt!))) {
         try {
           _nextLocationAttempt =
               DateTime.now().add(const Duration(seconds: 30));
@@ -359,11 +385,14 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
         } catch (_) {
           if (motoboyLocation != null) motoboyDesatualizado = true;
         }
+      }
 
       if (!mounted ||
           !_active ||
           session != SharedGet.sessionGeneration ||
-          version != _requestVersion) return;
+          version != _requestVersion) {
+        return;
+      }
       setState(() {
         _pedido = pedido;
         _loja = loja;
@@ -391,10 +420,13 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
       if (!mounted ||
           !_active ||
           session != SharedGet.sessionGeneration ||
-          version != _requestVersion) return;
+          version != _requestVersion) {
+        return;
+      }
       if (_pedido != null && _loja != null) {
-        if (_motoboyLocation != null)
+        if (_motoboyLocation != null) {
           setState(() => _motoboyDesatualizado = true);
+        }
         return;
       }
       setState(() {
@@ -644,7 +676,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
       );
     }
 
-    if (_pedido == null || _loja == null) {
+    if (_pedido == null) {
       return const Scaffold(
         body: Center(child: Text('Pedido não encontrado.')),
       );
@@ -844,11 +876,16 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                   SizedBox(height: 16.h),
                   _buildCodigoEntregaCard(),
                   _buildEntregadorCard(),
+                  if (_erroLoja)
+                    TextButton(
+                        onPressed: _carregarDados,
+                        child: const Text(
+                            'Não foi possível consultar a loja. Tentar novamente')),
                   Row(
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(25.r),
-                        child: _loja!.imagemUrl.isNotEmpty
+                        child: (_loja?.imagemUrl.isNotEmpty ?? false)
                             ? CachedNetworkImage(
                                 imageUrl: _loja!.imagemUrl,
                                 width: 50.r,
@@ -878,7 +915,10 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                               ),
                             ),
                             Text(
-                              _loja!.nome,
+                              _loja?.nome ??
+                                  (_carregandoLoja
+                                      ? 'Carregando restaurante...'
+                                      : 'Restaurante indisponível'),
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16.sp,
