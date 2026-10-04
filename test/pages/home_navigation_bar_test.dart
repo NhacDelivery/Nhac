@@ -56,6 +56,12 @@ class MockCartProvider extends ChangeNotifier implements CartProvider {
 
 class MockEnderecoProvider extends ChangeNotifier implements EnderecoProvider {
   @override
+  String? get erro => null;
+
+  @override
+  bool get isLoading => false;
+
+  @override
   List<EnderecoModel> get enderecos => [];
 
   @override
