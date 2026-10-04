@@ -82,7 +82,7 @@ void main() {
       imagens: any(named: 'imagens'), hashTags: any(named: 'hashTags'), lojaId: any(named: 'lojaId')))
         .thenAnswer((_) async => FeedPostModel.fromMap({
           'id': 'post-confirmado', 'nomeUsuario': 'Autor', 'conteudo': 'Pedido chegou',
-          'imagens': <String>[], 'hashTags': <String>[],
+          'imagens': <String>[], 'hashTags': <String>[], 'curtidas': 0, 'comentarios': 0,
         }));
     await abrir(tester);
     await tester.enterText(find.byKey(const Key('feed.publish.conteudo')), 'Pedido chegou');
