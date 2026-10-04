@@ -786,6 +786,83 @@ class _SearchPageState extends State<SearchPage>
     );
   }
 
+  Widget _buildMenuSuggestion(ProdutosModel produto) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 10.h),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _abrirProduto(produto),
+          child: Padding(
+            padding: EdgeInsets.all(12.w),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12.r),
+                  child: CachedNetworkImage(
+                    imageUrl: produto.imagemUrl,
+                    width: 56.w,
+                    height: 56.w,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => _buildSuggestionPlaceholder(),
+                    errorWidget: (_, __, ___) => _buildSuggestionPlaceholder(),
+                  ),
+                ),
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        produto.nome,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          fontWeight: FontWeight.w600,
+                          color: _corTexto,
+                        ),
+                      ),
+                      SizedBox(height: 4.h),
+                      Text(
+                        'R\$ ${produto.preco.toStringAsFixed(2).replaceAll('.', ',')}',
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.w700,
+                          color: _corPrimaria,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 8.w),
+                Container(
+                  padding: EdgeInsets.all(6.r),
+                  decoration: const BoxDecoration(
+                    color: _corAccentClaro,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    color: _corPrimaria,
+                    size: 20.r,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSuggestionPlaceholder() => Container(
+        color: _corAccentClaro,
+        child: Icon(Icons.restaurant_menu_rounded, color: _corPrimaria),
+      );
+
   Widget _buildSuggestionItem(
     IconData icon,
     String text, {
@@ -876,16 +953,16 @@ class _SearchPageState extends State<SearchPage>
           SizedBox(height: 24.h),
         ],
         if (_sugestoesReais.isNotEmpty) ...[
-          Text('Explore o cardápio',
-              style: TextStyle(
-                  fontSize: 18.sp,
-                  fontWeight: FontWeight.bold,
-                  color: _corTexto)),
-          ..._sugestoesReais.map((p) => ListTile(
-              leading: const Icon(Icons.restaurant_menu),
-              title: Text(p.nome),
-              subtitle: const Text('Ver produto'),
-              onTap: () => _abrirProduto(p))),
+          Text(
+            'Explore o cardápio',
+            style: TextStyle(
+              fontSize: 18.sp,
+              fontWeight: FontWeight.bold,
+              color: _corTexto,
+            ),
+          ),
+          SizedBox(height: 12.h),
+          ..._sugestoesReais.map(_buildMenuSuggestion),
           SizedBox(height: 24.h),
         ],
         _buildAnimatedItem(

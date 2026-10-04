@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/loja/lojas.dart';
 import '../models/produto/produtos.dart';
 import '../components/product_card.dart';
+import '../components/nhac_filter_chip.dart';
 import '../components/seta_voltar.dart';
 import '../pages/produto_detalhes_page.dart';
 import '../repositories/produto_repository.dart';
@@ -456,6 +457,16 @@ class _LojaPageState extends State<LojaPage>
               "Total",
               const Color(0xFFFF6961),
             ),
+            Container(width: 1, height: 40.h, color: Colors.grey.shade200),
+            Tooltip(
+              message: 'Percentual positivo dos produtos ainda indisponível.',
+              child: _buildStatItem(
+                'Produtos',
+                '—',
+                'Positivo',
+                const Color(0xFF5D201C),
+              ),
+            ),
           ],
         ),
       ),
@@ -495,6 +506,32 @@ class _LojaPageState extends State<LojaPage>
   Widget _buildProdutosTab() {
     return CustomScrollView(
       slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+            child: Wrap(
+              spacing: 8.w,
+              runSpacing: 4.h,
+              children: [
+                NhacFilterChip(
+                  label: 'Todos',
+                  selected: true,
+                  onSelected: () {},
+                ),
+                const NhacFilterChip(
+                  label: 'Em destaque',
+                  unavailableReason:
+                      'A loja ainda não disponibiliza os destaques.',
+                ),
+                const NhacFilterChip(
+                  label: 'Vendidos',
+                  unavailableReason:
+                      'A ordenação por vendas ainda não está disponível.',
+                ),
+              ],
+            ),
+          ),
+        ),
         SliverPadding(
           padding: EdgeInsets.symmetric(horizontal: 16.w),
           sliver: Builder(

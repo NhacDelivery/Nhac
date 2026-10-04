@@ -1,4 +1,5 @@
 import 'package:nhac/components/estado_com_retry.dart';
+import 'package:nhac/components/nhac_filter_chip.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -785,6 +786,44 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
     );
   }
 
+  Widget _buildReviewHeading(String title, IconData icon) {
+    return Row(
+      children: [
+        Container(
+          padding: EdgeInsets.all(8.r),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF0EE),
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: Icon(icon, color: const Color(0xFFFF6961), size: 20.r),
+        ),
+        SizedBox(width: 10.w),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: 16.sp,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF5D201C),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReviewCaption(String text) => Padding(
+        padding: EdgeInsets.only(top: 8.h, bottom: 12.h),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 12.sp,
+            height: 1.5,
+            color: const Color(0xFF80635F),
+          ),
+        ),
+      );
+
   Widget _buildReviewsSection() {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 20.w),
@@ -798,50 +837,78 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
           final resumo = snapshot.data?.resumo;
           final comentarios = snapshot.data?.comentarios;
           return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Avaliações do produto',
-                    style: TextStyle(
-                        fontSize: 16.sp, fontWeight: FontWeight.bold)),
-                if (resumo == null)
-                  BannerErroInline(
-                      mensagem:
-                          'Não foi possível consultar a nota deste produto.',
-                      aoTentarNovamente: () => setState(
-                          () => _avaliacoesFuture = _carregarAvaliacoes()))
-                else if ((resumo['total'] as num) == 0)
-                  const Text('Este produto ainda não recebeu avaliações.')
-                else
-                  _buildRatingSummary((resumo['media'] as num).toDouble(),
-                      (resumo['total'] as num).toInt()),
-                SizedBox(height: 16.h),
-                Text('Comentários recentes da loja',
-                    style: TextStyle(
-                        fontSize: 16.sp, fontWeight: FontWeight.bold)),
-                const Text(
-                    'Podem se referir a outros produtos e pedidos desta loja.'),
-                SizedBox(height: 12.h),
-                if (comentarios == null)
-                  BannerErroInline(
-                      mensagem:
-                          'Não foi possível carregar os comentários da loja.',
-                      aoTentarNovamente: () => setState(
-                          () => _avaliacoesFuture = _carregarAvaliacoes()))
-                else if (comentarios.isEmpty)
-                  const Text('A loja ainda não recebeu comentários.')
-                else
-                  ...comentarios.take(3).map((avaliacao) => _buildReviewItem(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildReviewHeading(
+                'Avaliações do produto',
+                Icons.star_outline_rounded,
+              ),
+              SizedBox(height: 12.h),
+              if (resumo == null)
+                BannerErroInline(
+                  mensagem: 'Não foi possível consultar a nota deste produto.',
+                  aoTentarNovamente: () => setState(
+                    () => _avaliacoesFuture = _carregarAvaliacoes(),
+                  ),
+                )
+              else if ((resumo['total'] as num) == 0)
+                _buildReviewCaption(
+                  'Este produto ainda não recebeu avaliações.',
+                )
+              else
+                _buildRatingSummary(
+                  (resumo['media'] as num).toDouble(),
+                  (resumo['total'] as num).toInt(),
+                ),
+              Wrap(
+                spacing: 8.w,
+                runSpacing: 4.h,
+                children: [
+                  NhacFilterChip(
+                    label: 'Tudo',
+                    selected: true,
+                    onSelected: () {},
+                  ),
+                  const NhacFilterChip(
+                    label: 'Com fotos',
+                    unavailableReason:
+                        'Fotos das avaliações ainda não estão disponíveis.',
+                  ),
+                  const NhacFilterChip(
+                    label: 'Positivas',
+                    unavailableReason:
+                        'O filtro por avaliações do produto ainda não está disponível.',
+                  ),
+                ],
+              ),
+              SizedBox(height: 24.h),
+              _buildReviewHeading(
+                'Comentários recentes da loja',
+                Icons.chat_bubble_outline_rounded,
+              ),
+              _buildReviewCaption('Experiências em pedidos desta loja.'),
+              if (comentarios == null)
+                BannerErroInline(
+                  mensagem: 'Não foi possível carregar os comentários da loja.',
+                  aoTentarNovamente: () => setState(
+                    () => _avaliacoesFuture = _carregarAvaliacoes(),
+                  ),
+                )
+              else if (comentarios.isEmpty)
+                _buildReviewCaption('A loja ainda não recebeu comentários.')
+              else
+                ...comentarios.take(3).map(
+                      (avaliacao) => _buildReviewItem(
                         name: avaliacao.nomeUsuario.trim().isNotEmpty
                             ? avaliacao.nomeUsuario
                             : 'Anônimo',
-                        avatarColor: Colors.brown.shade200,
-                        avatarIcon: Icons.person,
                         review: avaliacao.comentario,
                         date: avaliacao.criadoEm ?? '',
-                        location: '',
-                        tag: avaliacao.nota >= 4 ? 'Positiva' : 'Feedback',
-                      )),
-              ]);
+                        positive: avaliacao.nota >= 4,
+                      ),
+                    ),
+            ],
+          );
         },
       ),
     );
@@ -849,15 +916,22 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
 
   Widget _buildReviewItem({
     required String name,
-    required Color avatarColor,
-    required IconData avatarIcon,
     required String review,
     required String date,
-    required String location,
-    required String tag,
+    required bool positive,
   }) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 20.h),
+    final parsedDate = DateTime.tryParse(date);
+    final formattedDate = parsedDate == null
+        ? ''
+        : DateFormat('dd/MM/yyyy').format(parsedDate.toLocal());
+    return Container(
+      margin: EdgeInsets.only(bottom: 12.h),
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFFFE7E5)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -865,53 +939,62 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
             children: [
               CircleAvatar(
                 radius: 16.r,
-                backgroundColor: avatarColor,
-                child: Icon(avatarIcon, size: 20.r, color: Colors.white),
+                backgroundColor: const Color(0xFFFFF0EE),
+                child: Icon(
+                  Icons.person_outline_rounded,
+                  size: 20.r,
+                  color: const Color(0xFFFF6961),
+                ),
               ),
               SizedBox(width: 8.w),
-              Text(
-                name,
-                style: TextStyle(fontSize: 14.sp, color: Colors.black54),
-              ),
-              const Spacer(),
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFF5E5),
-                  borderRadius: BorderRadius.circular(8.r),
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF5D201C),
+                  ),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.thumb_up_alt, size: 12.r, color: Colors.orange),
-                    SizedBox(width: 4.w),
-                    Text(
-                      tag,
-                      style: TextStyle(
-                        fontSize: 12.sp,
-                        color: Colors.orange,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+              ),
+              SizedBox(width: 8.w),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFF0EE),
+                  borderRadius: BorderRadius.circular(20.r),
+                ),
+                child: Text(
+                  positive ? 'Positiva' : 'Feedback',
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF5D201C),
+                  ),
                 ),
               ),
             ],
           ),
-          SizedBox(height: 8.h),
-          Text(
-            review,
-            style: TextStyle(
-              fontSize: 15.sp,
-              color: const Color(0xFF5D201C),
-              height: 1.4,
+          if (review.trim().isNotEmpty) ...[
+            SizedBox(height: 12.h),
+            Text(
+              review,
+              style: TextStyle(
+                fontSize: 14.sp,
+                height: 1.5,
+                color: const Color(0xFF5D201C),
+              ),
             ),
-          ),
-          SizedBox(height: 8.h),
-          Text(
-            '$date  $location',
-            style: TextStyle(fontSize: 12.sp, color: Colors.black38),
-          ),
+          ],
+          if (formattedDate.isNotEmpty) ...[
+            SizedBox(height: 8.h),
+            Text(
+              formattedDate,
+              style: TextStyle(fontSize: 11.sp, color: const Color(0xFF80635F)),
+            ),
+          ],
         ],
       ),
     );
@@ -1147,115 +1230,56 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
 
   Widget _buildRatingSummary(double avaliacao, int total) {
     return Container(
-      margin: EdgeInsets.symmetric(vertical: 16.h),
-      padding: EdgeInsets.all(20.w),
+      margin: EdgeInsets.only(bottom: 12.h),
+      padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9F9F9),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFFFE7E5)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    avaliacao.toStringAsFixed(1),
-                    style: TextStyle(
-                      fontSize: 42.sp,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF5D201C),
-                      height: 1,
-                    ),
-                  ),
-                  SizedBox(width: 8.w),
-                  Icon(Icons.star, size: 24.r, color: const Color(0xFF5D201C)),
-                ],
-              ),
-              SizedBox(height: 8.h),
-              Row(
-                children: [
-                  Text(
-                    '$total Avaliações',
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-                  SizedBox(width: 4.w),
-                  Icon(
-                    Icons.info_outline,
-                    size: 14.r,
-                    color: Colors.grey.shade400,
-                  ),
-                ],
-              ),
-            ],
+          Text(
+            avaliacao.toStringAsFixed(1),
+            style: TextStyle(
+              fontSize: 36.sp,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF5D201C),
+            ),
           ),
-          SizedBox(width: 24.w),
+          SizedBox(width: 16.w),
           Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildRatingBarRow(5, 0.8),
-                SizedBox(height: 4.h),
-                _buildRatingBarRow(4, 0.4),
-                SizedBox(height: 4.h),
-                _buildRatingBarRow(3, 0.2),
-                SizedBox(height: 4.h),
-                _buildRatingBarRow(2, 0.05),
-                SizedBox(height: 4.h),
-                _buildRatingBarRow(1, 0.1),
+                Wrap(
+                  spacing: 2.w,
+                  children: List.generate(
+                    5,
+                    (index) => Icon(
+                      avaliacao >= index + 1
+                          ? Icons.star_rounded
+                          : avaliacao >= index + 0.5
+                              ? Icons.star_half_rounded
+                              : Icons.star_outline_rounded,
+                      size: 20.r,
+                      color: const Color(0xFFFF6961),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 6.h),
+                Text(
+                  '$total ${total == 1 ? "avaliação" : "avaliações"} do produto',
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    color: const Color(0xFF80635F),
+                  ),
+                ),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildRatingBarRow(int starCount, double percentage) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 45.w,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: List.generate(
-              5,
-              (index) => Icon(
-                Icons.star,
-                size: 8.r,
-                color: index < starCount
-                    ? const Color(0xFF5D201C)
-                    : Colors.transparent,
-              ),
-            ),
-          ),
-        ),
-        SizedBox(width: 8.w),
-        Expanded(
-          child: Container(
-            height: 6.h,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(10.r),
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: percentage,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF5D201C),
-                  borderRadius: BorderRadius.circular(10.r),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
