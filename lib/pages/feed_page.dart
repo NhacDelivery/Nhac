@@ -10,6 +10,7 @@ import 'package:nhac/pages/search_page.dart';
 import 'package:nhac/repositories/feed_repository.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:nhac/utils/error_ui_helper.dart';
+import 'package:nhac/globals/ui_utils.dart';
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -149,8 +150,18 @@ class _FeedPageState extends State<FeedPage>
                           color: const Color(0xFF5D201C),
                         ),
                       ),
-                      Icon(Icons.notifications_none_outlined,
-                          color: const Color(0xFF5D201C), size: 26.r),
+                      IconButton(
+                        tooltip: 'Criar publicação',
+                        icon: const Icon(Icons.edit_square, color: Color(0xFF5D201C)),
+                        onPressed: () async {
+                          final post = await context.push<FeedPostModel>('/feed-publicar');
+                          if (!mounted || post == null) return;
+                          if (!context.mounted) return;
+                          context.showSuccess('Publicação criada.');
+                          _tabController.index = 0;
+                          await _carregarPosts('Destaques');
+                        },
+                      ),
                     ],
                   ),
                   SizedBox(height: 16.h),

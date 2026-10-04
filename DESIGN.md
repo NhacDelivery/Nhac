@@ -33,6 +33,8 @@ painel corporativo ou uma reformulação da identidade para esta feature.
 Este documento espelha o código existente: `lib/globals/themes.dart` é a fonte
 canônica da paleta e da fonte. `lib/pages/feed_page.dart` e
 `lib/pages/feed_post_detail_page.dart` mantêm os estilos específicos do feed.
+A publicação usa Material e a paleta de `lightTheme`, com fotos em miniaturas
+arredondadas e formulário rolável para manter campos e ações acessíveis no celular.
 Não há geração de tokens. Mudanças futuras devem reconciliar documento e código.
 
 ## Colors

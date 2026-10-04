@@ -21,8 +21,14 @@ PUT/DELETE idempotentes e só alteram a interface após resposta do servidor.
 As abas de comentários filtram/ordenam os comentários já carregados; “Carregar mais”
 traz a página seguinte. Não existem curtidas/respostas de comentário implementadas.
 “Ver loja e fazer pedido” consulta a loja real e abre LojaPage, responsável pelo
-fluxo de seguir e comprar. Criar/editar posts está disponível na API, sem composer
-novo neste escopo. Não mostrar números fictícios de compartilhamento.
+fluxo de seguir e comprar. Criar posts abre `/feed-publicar` e retorna ao feed após confirmação do servidor.
+A tela permite texto, até seis fotos e menção opcional a uma loja buscada pela API.
+Uploads confirmados são reutilizados durante uma nova tentativa na mesma tela.
+Texto e fotos são preservados em falhas; envio bloqueia novas submissões e saída.
+Voltar com conteúdo não publicado exige confirmação de descarte.
+Publicações de cliente não declaram patrocínio; a autoria vem da sessão.
+POST não é idempotente: falha de confirmação orienta conferir o feed antes de repetir.
+Edição continua disponível pela API. Não mostrar números fictícios de compartilhamento.
 
 Contexto de negócio: principal do JWT determina autoria; FeedService determina
 permissões e promoção da loja; a API exige autenticação. ApiClient é o responsável

@@ -8,6 +8,21 @@ class FeedRepository {
   final Dio _dio;
   FeedRepository({Dio? dio}) : _dio = dio ?? ApiClient().dio;
 
+  Future<FeedPostModel> criarPost({
+    required String conteudo,
+    List<String> imagens = const [],
+    List<String> hashTags = const [],
+    String? lojaId,
+  }) async {
+    try {
+      final response = await _dio.post('/feed/posts', data: {
+        'conteudo': conteudo.trim(), 'imagens': imagens,
+        'hashTags': hashTags, 'lojaId': lojaId, 'isPatrocinado': false,
+      });
+      return FeedPostModel.fromMap(Map<String, dynamic>.from(response.data));
+    } catch (e) { throw mapException(e); }
+  }
+
   Future<List<FeedPostModel>> buscarPosts({String categoria = 'Destaques', int page = 0}) async {
     try {
       final response = await _dio.get('/feed/posts', queryParameters: {

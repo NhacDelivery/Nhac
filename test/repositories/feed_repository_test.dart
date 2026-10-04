@@ -58,6 +58,19 @@ void main() {
     verify(() => dio.post('/feed/posts/post-real/comentarios', data: {'conteudo': 'Gostei'})).called(1);
   });
 
+  test('publicação usa autoria da sessão e loja real, sem patrocínio', () async {
+    final dio = MockFeedDio();
+    when(() => dio.post('/feed/posts', data: any(named: 'data')))
+        .thenAnswer((_) async => Response(requestOptions: RequestOptions(path: '/feed/posts'), data: postData()));
+    final post = await FeedRepository(dio: dio).criarPost(conteudo: ' Meu pedido ',
+        imagens: ['https://example.com/foto.jpg'], hashTags: ['#Nhac'], lojaId: 'loja-real');
+    expect(post.id, 'post-real');
+    verify(() => dio.post('/feed/posts', data: {
+      'conteudo': 'Meu pedido', 'imagens': ['https://example.com/foto.jpg'],
+      'hashTags': ['#Nhac'], 'lojaId': 'loja-real', 'isPatrocinado': false,
+    })).called(1);
+  });
+
   test('descurtir e salvar usam DELETE e PUT', () async {
     final dio = MockFeedDio();
     when(() => dio.delete('/feed/posts/post-real/curtida'))
