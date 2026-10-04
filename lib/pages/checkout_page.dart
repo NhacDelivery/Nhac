@@ -86,6 +86,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final resposta = await _tentativasCheckout.recuperar(uid);
       if (!mounted || auth.usuarioId != uid) return;
       await LocalCacheService.salvarPedidoAtivo(uid, resposta.pedidoId);
+      await context.read<CartProvider>().esvaziarCarrinho();
       await _tentativasCheckout.concluir(uid);
       if (!mounted || auth.usuarioId != uid) return;
       context.go(pagamento == 'DINHEIRO'
@@ -111,6 +112,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Future<void> _carregarDadosIniciais() async {
+    await context.read<EnderecoProvider>().buscarEnderecos();
+    if (!mounted) return;
     await _verificarNumeroEndereco();
     if (!mounted) return;
 
@@ -373,6 +376,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final podeFinalizar = !_consultandoTentativa &&
         _tentativaPendente == null &&
         _erroTentativa == null &&
+        !enderecoProvider.isLoading &&
+        enderecoProvider.erro == null &&
+        cartProvider.itens.isNotEmpty &&
+        !cartProvider.itens.values.any((item) => item.esgotado) &&
         enderecoisPadrao != null &&
         enderecoisPadrao.numero.isNotEmpty;
 
@@ -418,6 +425,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       ? 'Verificando...'
                       : 'Verificar tentativa anterior')),
             ],
+            if (enderecoProvider.erro != null)
+              BannerErroInline(
+                mensagem: enderecoProvider.erro!,
+                aoTentarNovamente: _carregarDadosIniciais,
+              ),
+            if (cartProvider.itens.values.any((item) => item.esgotado))
+              const Text('Remova os produtos esgotados do carrinho para finalizar.'),
             _buildSectionTitle('Endereço de entrega'),
             SizedBox(height: 8.h),
             Container(
@@ -446,7 +460,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         Text(
                           enderecoisPadrao != null
                               ? '${enderecoisPadrao.rua}, ${enderecoisPadrao.numero}'
-                              : 'Nenhum endereço selecionado',
+                              : enderecoProvider.isLoading
+                                  ? 'Consultando endereços...'
+                                  : enderecoProvider.erro != null
+                                      ? 'Endereços indisponíveis'
+                                      : 'Nenhum endereço selecionado',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14.sp,
@@ -971,6 +989,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       builder: (ctx) => _AddressSelectionSheet(enderecos: enderecos),
     );
     if (!mounted || !context.mounted) return;
+    await context.read<EnderecoProvider>().buscarEnderecos();
+    if (!mounted) return;
     await _verificarNumeroEndereco();
     if (!mounted || !context.mounted) return;
     if (enderecoProvider.enderecos.isEmpty) {
@@ -992,6 +1012,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   void _mostrarDialogEnderecoVazio(BuildContext context) {
+    final enderecos = context.read<EnderecoProvider>();
+    if (enderecos.isLoading || enderecos.erro != null) {
+      context.showInfo(enderecos.erro ?? 'Aguarde a consulta dos endereços.');
+      return;
+    }
     showDialog(
       context: context,
       barrierDismissible: true,
@@ -1075,6 +1100,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
         _consultandoTentativa ||
         _tentativaPendente != null ||
         _erroTentativa != null) {
+      return;
+    }
+    final enderecos = context.read<EnderecoProvider>();
+    if (enderecos.isLoading || enderecos.erro != null) {
+      context.showError('Atualize os endereços antes de finalizar.');
+      return;
+    }
+    if (cartProvider.itens.isEmpty ||
+        cartProvider.itens.values.any((item) => item.esgotado)) {
+      context.showError('Remova os produtos esgotados do carrinho antes de finalizar.');
       return;
     }
     if (!_freteConfirmado ||

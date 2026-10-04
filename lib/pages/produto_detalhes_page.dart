@@ -570,8 +570,16 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                               return const SizedBox.shrink();
                             }
 
-                            if (snapshot.hasError ||
-                                !snapshot.hasData ||
+                            if (snapshot.hasError) {
+                              return BannerErroInline(
+                                mensagem: 'Não foi possível carregar os produtos relacionados.',
+                                aoTentarNovamente: () async {
+                                  setState(() => _produtosRelacionadosFuture = _buscarRelacionados());
+                                  try { await _produtosRelacionadosFuture; } catch (_) {}
+                                },
+                              );
+                            }
+                            if (!snapshot.hasData ||
                                 snapshot.data!.products.isEmpty) {
                               return const SizedBox.shrink();
                             }

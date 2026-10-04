@@ -1,3 +1,7 @@
+import 'dart:async';
+import 'package:nhac/components/estado_com_retry.dart';
+import 'package:nhac/repositories/avaliacao_repository.dart';
+import 'package:nhac/models/produto/avaliacoes.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -25,7 +29,18 @@ class LojaPage extends StatefulWidget {
 }
 
 class _LojaPageState extends State<LojaPage>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
+  late LojasModel _loja;
+  Timer? _atualizacaoLoja;
+  bool _consultandoLoja = false;
+  bool _lojaConfirmada = false;
+  bool _erroLoja = false;
+  final _avaliacoes = <AvaliacoesModel>[];
+  int _paginaAvaliacoes = 0;
+  bool _maisAvaliacoes = true;
+  bool _carregandoAvaliacoes = false;
+  bool _erroAvaliacoes = false;
+
   late TabController _tabController;
 
   final List<ProdutosModel> _produtos = [];
@@ -33,6 +48,105 @@ class _LojaPageState extends State<LojaPage>
   bool _temMais = true;
   bool _carregandoProdutos = false;
   Object? _erroProdutos;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _atualizarLoja();
+      _atualizacaoLoja ??= Timer.periodic(const Duration(seconds: 30), (_) => _atualizarLoja());
+    } else {
+      _atualizacaoLoja?.cancel();
+      _atualizacaoLoja = null;
+    }
+  }
+
+  Future<void> _atualizarLoja() async {
+    if (_consultandoLoja) return;
+    _consultandoLoja = true;
+    try {
+      final loja = await _lojaRepository.buscarLoja(_loja.id, atualizar: true);
+      if (!mounted) return;
+      setState(() {
+        if (loja != null) _loja = loja;
+        _lojaConfirmada = loja != null;
+        _erroLoja = loja == null;
+      });
+    } catch (_) {
+      if (mounted) setState(() { _erroLoja = true; _lojaConfirmada = false; });
+    } finally {
+      _consultandoLoja = false;
+    }
+  }
+
+  Future<void> _carregarAvaliacoes() async {
+    if (_carregandoAvaliacoes || !_maisAvaliacoes) return;
+    setState(() { _carregandoAvaliacoes = true; _erroAvaliacoes = false; });
+    try {
+      final novas = await AvaliacaoRepository().buscarAvaliacoes(_loja.id, page: _paginaAvaliacoes);
+      if (!mounted) return;
+      setState(() {
+        final ids = _avaliacoes.map((a) => a.id).toSet();
+        _avaliacoes.addAll(novas.where((a) => ids.add(a.id)));
+        _paginaAvaliacoes++;
+        _maisAvaliacoes = novas.length == 10;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _erroAvaliacoes = true);
+    } finally {
+      if (mounted) setState(() => _carregandoAvaliacoes = false);
+    }
+  }
+
+  Widget _buildAvaliacoesTab() => ListView(
+    padding: const EdgeInsets.all(20),
+    children: [
+      if (_erroAvaliacoes) BannerErroInline(
+        mensagem: 'Não foi possível carregar as avaliações.',
+        aoTentarNovamente: _carregarAvaliacoes,
+      ),
+      if (_avaliacoes.isEmpty && !_carregandoAvaliacoes && !_erroAvaliacoes)
+        const Text('Esta loja ainda não recebeu avaliações.'),
+      for (final avaliacao in _avaliacoes) ListTile(
+        title: Text(avaliacao.nomeUsuario),
+        subtitle: Text(avaliacao.comentario.isEmpty ? 'Sem comentário' : avaliacao.comentario),
+        trailing: Text('★ ${avaliacao.nota.toStringAsFixed(1)}'),
+      ),
+      if (_carregandoAvaliacoes) const LoadingNhac(telaCheia: false),
+      if (_maisAvaliacoes && !_carregandoAvaliacoes && !_erroAvaliacoes)
+        TextButton(onPressed: _carregarAvaliacoes, child: const Text('Carregar mais avaliações')),
+    ],
+  );
+
+  Widget _buildEspacoTab() {
+    final endereco = _loja.endereco;
+    return ListView(padding: const EdgeInsets.all(20), children: [
+      Text(_loja.nome, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 12),
+      Text(_loja.descricao.isEmpty ? 'A loja ainda não informou uma descrição.' : _loja.descricao),
+      if (endereco != null) ListTile(
+        leading: const Icon(Icons.location_on_outlined),
+        title: Text('${endereco.rua}, ${endereco.numero}'),
+        subtitle: Text('${endereco.cidade} - ${endereco.estado}'),
+      ),
+    ]);
+  }
+
+  Widget _buildDinamicaTab() {
+    final horarios = _loja.horarios;
+    final dias = horarios == null ? <String, String>{} : {
+      'Segunda': horarios.segunda, 'Terça': horarios.terca,
+      'Quarta': horarios.quarta, 'Quinta': horarios.quinta,
+      'Sexta': horarios.sexta, 'Sábado': horarios.sabado, 'Domingo': horarios.domingo,
+    };
+    return ListView(padding: const EdgeInsets.all(20), children: [
+      Text(!_lojaConfirmada ? 'Conferindo disponibilidade da loja' : _loja.isAberto ? 'Loja aberta' : 'Loja fechada'),
+      if (_erroLoja) BannerErroInline(mensagem: 'Não foi possível conferir a disponibilidade.', aoTentarNovamente: _atualizarLoja),
+      const SizedBox(height: 16),
+      const Text('Horários de funcionamento', style: TextStyle(fontWeight: FontWeight.bold)),
+      if (dias.isEmpty) const Text('A loja ainda não informou os horários.'),
+      for (final dia in dias.entries) ListTile(title: Text(dia.key), trailing: Text(dia.value)),
+    ]);
+  }
 
   Future<void> _carregarProdutos() async {
     if (_carregandoProdutos || !_temMais) return;
@@ -42,7 +156,7 @@ class _LojaPageState extends State<LojaPage>
     });
     try {
       final pagina = await _produtoRepository.buscarPaginaPorLoja(
-        widget.loja.id,
+        _loja.id,
         page: _pagina,
       );
       if (!mounted) return;
@@ -71,6 +185,11 @@ class _LojaPageState extends State<LojaPage>
   @override
   void initState() {
     super.initState();
+    _loja = widget.loja;
+    WidgetsBinding.instance.addObserver(this);
+    _atualizarLoja();
+    _carregarAvaliacoes();
+    _atualizacaoLoja = Timer.periodic(const Duration(seconds: 30), (_) => _atualizarLoja());
     _tabController = TabController(length: 4, vsync: this);
 
     _carregarProdutos();
@@ -86,9 +205,9 @@ class _LojaPageState extends State<LojaPage>
     try {
       final auth = context.read<AuthService>();
       final resultado = await Future.wait<Object>([
-        _lojaRepository.contarSeguidores(widget.loja.id),
+        _lojaRepository.contarSeguidores(_loja.id),
         if (auth.usuarioId != null)
-          _lojaRepository.estaSeguindo(auth.usuarioId!, widget.loja.id)
+          _lojaRepository.estaSeguindo(auth.usuarioId!, _loja.id)
         else
           Future.value(false),
       ]);
@@ -116,7 +235,7 @@ class _LojaPageState extends State<LojaPage>
     setState(() => _alterandoSeguir = true);
     try {
       if (_isSeguindo) {
-        await _lojaRepository.deixarDeSeguir(auth.usuarioId!, widget.loja.id);
+        await _lojaRepository.deixarDeSeguir(auth.usuarioId!, _loja.id);
         if (mounted) {
           setState(() {
             _isSeguindo = false;
@@ -124,7 +243,7 @@ class _LojaPageState extends State<LojaPage>
           });
         }
       } else {
-        await _lojaRepository.seguirLoja(auth.usuarioId!, widget.loja.id);
+        await _lojaRepository.seguirLoja(auth.usuarioId!, _loja.id);
         if (mounted) {
           setState(() {
             _isSeguindo = true;
@@ -142,6 +261,8 @@ class _LojaPageState extends State<LojaPage>
   @override
   void dispose() {
     _tabController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    _atualizacaoLoja?.cancel();
     super.dispose();
   }
 
@@ -175,6 +296,10 @@ class _LojaPageState extends State<LojaPage>
                       SizedBox(height: 85.h),
                       _buildProfileInfo(),
                       SizedBox(height: 16.h),
+                      if (_erroLoja) BannerErroInline(
+                        mensagem: 'Não foi possível atualizar a disponibilidade da loja.',
+                        aoTentarNovamente: _atualizarLoja,
+                      ),
                       _buildStatsCards(),
                       SizedBox(height: 16.h),
                     ],
@@ -229,9 +354,9 @@ class _LojaPageState extends State<LojaPage>
             controller: _tabController,
             children: [
               _buildProdutosTab(),
-              const Center(child: Text("Espaço (Em Breve)")),
-              const Center(child: Text("Avaliações (Em Breve)")),
-              const Center(child: Text("Dinâmica (Em Breve)")),
+              _buildEspacoTab(),
+              _buildAvaliacoesTab(),
+              _buildDinamicaTab(),
             ],
           ),
         ),
@@ -297,10 +422,10 @@ class _LojaPageState extends State<LojaPage>
                 ),
                 child: CircleAvatar(
                   backgroundColor: Colors.white,
-                  backgroundImage: widget.loja.imagemUrl.isNotEmpty
-                      ? CachedNetworkImageProvider(widget.loja.imagemUrl)
+                  backgroundImage: _loja.imagemUrl.isNotEmpty
+                      ? CachedNetworkImageProvider(_loja.imagemUrl)
                       : null,
-                  child: widget.loja.imagemUrl.isEmpty
+                  child: _loja.imagemUrl.isEmpty
                       ? Icon(Icons.store, size: 36.r, color: Colors.grey)
                       : null,
                 ),
@@ -311,7 +436,7 @@ class _LojaPageState extends State<LojaPage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      widget.loja.nome,
+                      _loja.nome,
                       style: TextStyle(
                         fontSize: 18.sp,
                         fontWeight: FontWeight.bold,
@@ -330,7 +455,7 @@ class _LojaPageState extends State<LojaPage>
                       runSpacing: 4.h,
                       children: [
                         _buildBadge(
-                          widget.loja.categoria,
+                          _loja.categoria,
                           const Color(0xFF5D201C),
                         ),
                         Text(
@@ -390,8 +515,8 @@ class _LojaPageState extends State<LojaPage>
           ),
           SizedBox(height: 8.h),
           Text(
-            widget.loja.descricao.isNotEmpty
-                ? widget.loja.descricao
+            _loja.descricao.isNotEmpty
+                ? _loja.descricao
                 : "Bem-vindo à nossa loja! Confira nossos produtos.",
             style: TextStyle(
               color: Colors.white,
@@ -445,7 +570,7 @@ class _LojaPageState extends State<LojaPage>
           children: [
             _buildStatItem(
               "Avaliação",
-              (widget.loja.dadosOperacionais?.avaliacaoMedia ?? 0.0)
+              (_loja.dadosOperacionais?.avaliacaoMedia ?? 0.0)
                   .toStringAsFixed(1),
               "Média",
               const Color(0xFF5D201C),
@@ -453,7 +578,7 @@ class _LojaPageState extends State<LojaPage>
             Container(width: 1, height: 40.h, color: Colors.grey.shade200),
             _buildStatItem(
               "Avaliações",
-              "${widget.loja.dadosOperacionais?.totalAvaliacoes ?? 0}",
+              "${_loja.dadosOperacionais?.totalAvaliacoes ?? 0}",
               "Total",
               const Color(0xFFFF6961),
             ),
@@ -612,7 +737,7 @@ class _LojaPageState extends State<LojaPage>
                     child: ProductCard(
                       key: E2EKeys.storeProduct(produto.id),
                       produto: produto,
-                      lojaFechada: !widget.loja.isAberto,
+                      lojaFechada: !_lojaConfirmada || !_loja.isAberto,
                     ),
                   );
                 }, childCount: produtos.length),

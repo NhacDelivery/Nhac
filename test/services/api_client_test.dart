@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nhac/services/api_client.dart';
 import 'package:nhac/utils/app_exceptions.dart';
+import 'package:nhac/globals/exceptions.dart' as globals;
 
 class ErrorAdapter implements HttpClientAdapter {
   final String body;
@@ -73,4 +74,20 @@ void main() {
         throwsA(isA<DioException>()
             .having((e) => e.error, 'erro', isA<BusinessRuleException>())));
   });
+  test('indisponibilidade PIX preserva código e mensagem até a tela', () async {
+    final dio = ApiClient().dio;
+    dio.httpClientAdapter = ErrorAdapter(
+      '{"message":"PIX temporariamente indisponível","errorCode":"PAGAMENTO_INDISPONIVEL"}',
+      409, 'application/json');
+    try {
+      await dio.get('/pedidos/pix/pagamento');
+      fail('Esperava indisponibilidade');
+    } catch (e) {
+      final mapped = globals.mapException(e) as globals.AppException;
+      expect(mapped, isA<globals.AppException>());
+      expect(mapped.code, 'PAGAMENTO_INDISPONIVEL');
+      expect(mapped.message, 'PIX temporariamente indisponível');
+    }
+  });
+
 }

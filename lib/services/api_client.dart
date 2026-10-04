@@ -129,9 +129,14 @@ class ApiClient {
             ));
           }
 
+          final errorCode = responseData is Map
+              ? (responseData['errorCode'] ?? responseData['error'])?.toString()
+              : null;
           // Tratamento por Status Code
           Exception customError;
-          switch (statusCode) {
+          if (errorCode == 'PAGAMENTO_INDISPONIVEL') {
+            customError = BusinessRuleException(defaultMessage, code: errorCode);
+          } else switch (statusCode) {
             case 400:
               // Verifica se possui o detalhamento de campos
               if (responseData != null &&
@@ -140,7 +145,7 @@ class ApiClient {
                 customError = ValidationException(
                     defaultMessage, responseData['details']);
               } else {
-                customError = BusinessRuleException(defaultMessage);
+                customError = BusinessRuleException(defaultMessage, code: errorCode);
               }
               break;
             case 401:
@@ -150,14 +155,14 @@ class ApiClient {
               customError = ForbiddenException(defaultMessage);
               break;
             case 409:
-              customError = BusinessRuleException(defaultMessage);
+              customError = BusinessRuleException(defaultMessage, code: errorCode);
               break;
             case 404:
               customError = NotFoundException(defaultMessage);
               break;
             case 402:
             case 422:
-              customError = BusinessRuleException(defaultMessage);
+              customError = BusinessRuleException(defaultMessage, code: errorCode);
               break;
             case 429:
               customError = TooManyRequestsException();

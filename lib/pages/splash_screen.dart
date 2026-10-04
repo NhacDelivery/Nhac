@@ -32,6 +32,11 @@ class _SplashScreenState extends State<SplashScreen>
       Future.delayed(const Duration(seconds: 1), () async {
         final email = await LocalCacheService.carregarEmailVerificacao();
         if (!mounted) return;
+        final produto = GoRouterState.of(context).uri.queryParameters['produto'];
+        if (produto != null && produto.startsWith('/produto/')) {
+          context.go(produto);
+          return;
+        }
         final pedidoPendente = PushNotificationService.pendingPedidoId;
         if (authServiceRoteador.isAuthenticated && pedidoPendente != null) {
           PushNotificationService.pendingPedidoId = null;

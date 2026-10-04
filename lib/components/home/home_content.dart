@@ -1,3 +1,4 @@
+import 'package:nhac/components/estado_enderecos.dart';
 import 'package:nhac/components/selecionar_endereco_padrao.dart';
 import 'dart:async';
 import 'package:nhac/services/home_order_route_observer.dart';
@@ -877,7 +878,7 @@ class _HomeContentState extends State<HomeContent>
               cep: place.postalCode ?? '00000-000',
               isPadrao: true,
             );
-            enderecoProvider.adicionarEndereco(novoEndereco).catchError((_) {});
+            await enderecoProvider.adicionarEnderecoAutomatico(novoEndereco);
           }
         }
       }
@@ -902,6 +903,11 @@ class _HomeContentState extends State<HomeContent>
   }
 
   void _abrirSelecaoEndereco(BuildContext context) {
+    final enderecos = context.read<EnderecoProvider>();
+    if (enderecos.isLoading || enderecos.erro != null) {
+      context.showInfo(enderecos.erro ?? 'Aguarde a consulta dos endereços.');
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -971,6 +977,7 @@ class _HomeContentState extends State<HomeContent>
             padding: EdgeInsets.all(24.w),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                const EstadoEnderecos(),
                 SizedBox(height: 16.h),
                 TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 800),

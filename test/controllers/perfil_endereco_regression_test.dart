@@ -198,4 +198,43 @@ void main() {
     expect(provider.enderecos.single.id, 'novo');
     provider.dispose();
   });
+  test('GPS aguarda consulta inicial e preserva endereço existente', () async {
+    final repo = EnderecoMock();
+    final leitura = Completer<List<EnderecoModel>>();
+    when(() => repo.buscarEnderecos('cliente')).thenAnswer((_) => leitura.future);
+    final provider = EnderecoProvider(authService: auth, repository: repo);
+    final inicial = provider.buscarEnderecos();
+    final gps = provider.adicionarEnderecoAutomatico(novo);
+    leitura.complete([antigo]);
+    await Future.wait([inicial, gps]);
+    verifyNever(() => repo.adicionarEndereco(any(), any()));
+    expect(provider.enderecos.single.isPadrao, true);
+    provider.dispose();
+  });
+
+  test('GPS não cadastra endereço quando a consulta falha', () async {
+    final repo = EnderecoMock();
+    when(() => repo.buscarEnderecos('cliente')).thenThrow(Exception('offline'));
+    final provider = EnderecoProvider(authService: auth, repository: repo);
+    await provider.adicionarEnderecoAutomatico(novo);
+    verifyNever(() => repo.adicionarEndereco(any(), any()));
+    expect(provider.erro, isNotNull);
+    provider.dispose();
+  });
+
+  test('duas respostas GPS criam no máximo um endereço sem substituir padrão', () async {
+    final repo = EnderecoMock();
+    final leitura = Completer<List<EnderecoModel>>();
+    when(() => repo.buscarEnderecos('cliente')).thenAnswer((_) => leitura.future);
+    when(() => repo.adicionarEndereco('cliente', any())).thenAnswer((_) async {});
+    final provider = EnderecoProvider(authService: auth, repository: repo);
+    final primeiro = provider.adicionarEnderecoAutomatico(novo);
+    final segundo = provider.adicionarEnderecoAutomatico(novo);
+    leitura.complete([]);
+    await Future.wait([primeiro, segundo]);
+    final salvo = verify(() => repo.adicionarEndereco('cliente', captureAny())).captured.single as EnderecoModel;
+    expect(salvo.isPadrao, false);
+    provider.dispose();
+  });
+
 }

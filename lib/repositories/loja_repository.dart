@@ -27,10 +27,12 @@ class LojaRepository {
     }
   }
 
-  Future<LojasModel?> buscarLoja(String lojaId) async {
+  Future<LojasModel?> buscarLoja(String lojaId, {bool atualizar = false}) async {
     try {
       final response =
-          await SharedGet.forClient(_dio).get(_dio, '/lojas/$lojaId');
+          atualizar
+              ? await _dio.get('/lojas/$lojaId')
+              : await SharedGet.forClient(_dio).get(_dio, '/lojas/$lojaId');
       return LojasModel.fromMap(response.data);
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {

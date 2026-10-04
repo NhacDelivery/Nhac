@@ -228,6 +228,13 @@ class _SearchPageState extends State<SearchPage>
     try {
       final resultado = await _buscarTudo(categoria, somenteCategoria: true);
       if (!mounted || versao != _versaoBusca) return;
+      if (resultado.erros.isNotEmpty && _ultimoResultado != null &&
+          !_ultimoResultado!.vazio) {
+        _ultimoErro = resultado.erros.values.join(' ');
+        _estadoBusca = EstadoConteudo.erro;
+        setState(() {});
+        return;
+      }
       _ultimoResultado = resultado;
       _estadoBusca = resultado.vazio && resultado.erros.isEmpty
           ? EstadoConteudo.vazio
@@ -328,6 +335,13 @@ class _SearchPageState extends State<SearchPage>
       final resultado = await _buscarTudo(termo);
       if (!mounted || versao != _versaoBusca) return;
 
+      if (resultado.erros.isNotEmpty && _ultimoResultado != null &&
+          !_ultimoResultado!.vazio) {
+        _ultimoErro = resultado.erros.values.join(' ');
+        _estadoBusca = EstadoConteudo.erro;
+        setState(() {});
+        return;
+      }
       _ultimoResultado = resultado;
       _estadoBusca = resultado.vazio && resultado.erros.isEmpty
           ? EstadoConteudo.vazio

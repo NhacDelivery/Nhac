@@ -16,6 +16,11 @@ class ProdutoRepository {
 
   ProdutoRepository({Dio? dio}) : _dio = dio ?? ApiClient().dio;
 
+  Future<ProdutosModel> buscarPorId(String id) async {
+    final response = await _dio.get('/produtos/${Uri.encodeComponent(id)}');
+    return ProdutosModel.fromMap(Map<String, dynamic>.from(response.data as Map));
+  }
+
   Future<List<ProdutosModel>> buscarPromocoes() async {
     try {
       final response = await SharedGet.forClient(_dio).get(

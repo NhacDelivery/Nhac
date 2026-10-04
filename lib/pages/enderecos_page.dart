@@ -494,10 +494,12 @@ class _EnderecosPageState extends State<EnderecosPage> {
   }
 
   void _abrirEdicaoEndereco(EnderecoModel enderecoAtual) {
+    final provider = context.read<EnderecoProvider>();
     final numeroController = TextEditingController(text: enderecoAtual.numero);
     final complementoController =
         TextEditingController(text: enderecoAtual.complemento);
 
+    bool salvando = false;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -506,6 +508,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
+        return StatefulBuilder(builder: (context, atualizar) {
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -570,6 +573,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
               const SizedBox(height: 32.0),
               BotaoLargoNhac(
                 texto: 'Salvar Alterações',
+                carregando: salvando,
                 onPressed: () async {
                   final enderecoAtualizado = enderecoAtual.copyWith(
                     numero: numeroController.text.isEmpty
@@ -578,17 +582,19 @@ class _EnderecosPageState extends State<EnderecosPage> {
                     complemento: complementoController.text,
                   );
 
-                  Navigator.pop(context);
-
+                  if (salvando || provider.isLoading) return;
+                  atualizar(() => salvando = true);
                   try {
-                    await context.read<EnderecoProvider>().atualizarEndereco(
+                    await provider.atualizarEndereco(
                         enderecoAtualizado.id, enderecoAtualizado);
-                    if (context.mounted) {
-                      context.showSuccess('Endereço atualizado com sucesso!');
+                    if (context.mounted) Navigator.pop(context);
+                    if (mounted) {
+                      this.context.showSuccess('Endereço atualizado com sucesso!');
                     }
                   } catch (e) {
                     if (context.mounted) {
-                      context.showError('Erro ao atualizar endereço.');
+                      atualizar(() => salvando = false);
+                      context.showError('Não foi possível salvar o endereço. Tente novamente.');
                     }
                   }
                 },
@@ -597,8 +603,12 @@ class _EnderecosPageState extends State<EnderecosPage> {
             ],
           ),
         );
+        });
       },
-    );
+    ).whenComplete(() {
+      numeroController.dispose();
+      complementoController.dispose();
+    });
   }
 
   void _confirmarisPadrao(EnderecoModel endereco) {
@@ -690,7 +700,11 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
   Timer? _debounce;
   int _versaoBusca = 0;
   bool _carregandoDetalhes = false;
-  final Dio _dio = Dio();
+  final Dio _dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 10),
+    sendTimeout: const Duration(seconds: 10),
+  ));
   final String _googleApiKey = AppConstants.googleApiKey;
 
   void _filtrarEnderecos(String query) {

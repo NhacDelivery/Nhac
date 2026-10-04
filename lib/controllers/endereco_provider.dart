@@ -26,6 +26,7 @@ class EnderecoProvider with ChangeNotifier {
     _enderecos = [];
     _erro = null;
     _requestVersion++;
+    _mutando = false;
     _isLoading = false;
     notifyListeners();
   }
@@ -46,6 +47,27 @@ class EnderecoProvider with ChangeNotifier {
 
   List<EnderecoModel> get enderecos => _enderecos;
   bool get isLoading => _isLoading || _mutando;
+
+  bool _cadastrandoAutomatico = false;
+
+  Future<void> adicionarEnderecoAutomatico(EnderecoModel endereco) async {
+    if (_cadastrandoAutomatico || _mutando) return;
+    final sessao = _sessionVersion;
+    _cadastrandoAutomatico = true;
+    try {
+      final consulta = buscarEnderecos();
+      final versaoConsulta = _requestVersion;
+      await consulta;
+      if (_disposed || sessao != _sessionVersion || versaoConsulta != _requestVersion || _isLoading || _erro != null ||
+          _authService.usuarioId == null || _enderecos.isNotEmpty || _mutando) {
+        return;
+      }
+      // GPS nunca substitui um padrão escolhido no servidor.
+      await adicionarEndereco(endereco.copyWith(isPadrao: false));
+    } finally {
+      _cadastrandoAutomatico = false;
+    }
+  }
 
   Future<void> buscarEnderecos() async {
     final usuarioId = _authService.usuarioId;

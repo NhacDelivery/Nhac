@@ -1,3 +1,4 @@
+import 'package:nhac/components/estado_enderecos.dart';
 import 'package:nhac/components/selecionar_endereco_padrao.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -87,6 +88,7 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                   padding: EdgeInsets.fromLTRB(
                       16.w, 0, 16.w, espacoParaBarraFlutuante),
                   children: [
+                    const EstadoEnderecos(),
                     SizedBox(height: 8.h),
                     TweenAnimationBuilder<double>(
                       duration: const Duration(milliseconds: 800),
@@ -201,7 +203,11 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                 Text(
                   address != null
                       ? '${address.rua}, ${address.numero} - ${address.bairro}'
-                      : 'Nenhum endereço selecionado',
+                      : context.read<EnderecoProvider>().isLoading
+                          ? 'Consultando endereços...'
+                          : context.read<EnderecoProvider>().erro != null
+                              ? 'Endereços indisponíveis'
+                              : 'Nenhum endereço selecionado',
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 14.sp,
@@ -231,6 +237,11 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
 
   Future<void> _mostrarSelecaoEndereco(BuildContext context) async {
     final enderecoProvider = context.read<EnderecoProvider>();
+    if (enderecoProvider.isLoading || enderecoProvider.erro != null) {
+      context.showInfo(enderecoProvider.erro ?? 'Aguarde a consulta dos endereços.');
+      return;
+    }
+
     final enderecos = enderecoProvider.enderecos;
     if (enderecos.isEmpty) {
       showDialog(

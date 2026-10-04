@@ -1,3 +1,4 @@
+import 'package:nhac/pages/produto_link_page.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/pages/auth/cadastro/verificar_email_cadastro.dart';
@@ -128,12 +129,16 @@ final GoRouter appRouter = GoRouter(
   refreshListenable: authServiceRoteador,
   redirect: (BuildContext context, GoRouterState state) {
     if (!authServiceRoteador.carregado) {
-      return '/splash';
+      if (state.matchedLocation == '/splash') return null;
+      return state.matchedLocation.startsWith('/produto/')
+          ? '/splash?produto=${Uri.encodeQueryComponent(state.uri.path)}'
+          : '/splash';
     }
 
     final bool estaAutenticado = authServiceRoteador.isAuthenticated;
 
-    final bool telaPublica = state.matchedLocation == '/' ||
+    final bool telaPublica = state.matchedLocation.startsWith('/produto/') ||
+        state.matchedLocation == '/' ||
         state.matchedLocation == '/splash' ||
         state.matchedLocation == '/bem-vindo' ||
         state.matchedLocation == '/bem-vindo-motoca' ||
@@ -155,6 +160,7 @@ final GoRouter appRouter = GoRouter(
     if (estaAutenticado &&
         telaPublica &&
         state.matchedLocation != '/splash' &&
+        !state.matchedLocation.startsWith('/produto/') &&
         !noMeioDoCadastro) {
       return '/home-page';
     }
@@ -162,6 +168,10 @@ final GoRouter appRouter = GoRouter(
     return null;
   },
   routes: [
+    GoRoute(
+      path: '/produto/:id',
+      builder: (context, state) => ProdutoLinkPage(produtoId: state.pathParameters['id']!),
+    ),
     GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
     GoRoute(
       path: '/home-page',

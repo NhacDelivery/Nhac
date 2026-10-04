@@ -39,7 +39,9 @@ class CustomCheckoutException extends AppException {
 Exception mapException(Object error) {
   if (error is DioException) {
     if (error.error is app_exc.AppException) {
-      return error.error as app_exc.AppException;
+      final mapped = error.error as app_exc.AppException;
+      if (mapped.code != null) return AppException(mapped.message, code: mapped.code);
+      return mapped;
     }
 
     if (error.response?.data != null && error.response!.data is Map) {

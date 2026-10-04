@@ -23,7 +23,11 @@ class _AddressPickerSheetState extends State<AddressPickerSheet> {
   bool _estaDigitando = false;
   bool _isLoadingSearch = false;
   Timer? _debounce;
-  final Dio _dio = Dio();
+  final Dio _dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 10),
+    sendTimeout: const Duration(seconds: 10),
+  ));
   final String _googleApiKey = AppConstants.googlePlacesApiKey;
 
   @override
