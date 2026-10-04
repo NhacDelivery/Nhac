@@ -26,8 +26,11 @@ void main() {
   }
 
   Future<void> publicar(WidgetTester tester) async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.byKey(const Key('feed.publish.submit')), 250,
       scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('feed.publish.submit')));
     await tester.pump();
   }
