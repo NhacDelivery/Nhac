@@ -9,6 +9,7 @@ import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/pages/search_page.dart';
 import 'package:nhac/repositories/feed_repository.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:nhac/utils/error_ui_helper.dart';
 
 class FeedPage extends StatefulWidget {
   const FeedPage({super.key});
@@ -23,6 +24,12 @@ class _FeedPageState extends State<FeedPage>
   final FeedRepository _repository = FeedRepository();
   List<FeedPostModel> _posts = [];
   bool _isLoading = true;
+  bool _loadingMore = false;
+  bool _hasMore = false;
+  int _page = 0;
+  int _requestId = 0;
+  String? _error;
+
 
   static const List<String> _categorias = [
     'Destaques',
@@ -49,13 +56,46 @@ class _FeedPageState extends State<FeedPage>
   }
 
   Future<void> _carregarPosts(String categoria) async {
-    if (mounted) setState(() => _isLoading = true);
-    final posts = await _repository.buscarPosts(categoria: categoria);
-    if (mounted) {
+    final requestId = ++_requestId;
+    if (mounted) setState(() {
+      _isLoading = true;
+      _error = null;
+      _loadingMore = false;
+    });
+    try {
+      final posts = await _repository.buscarPosts(categoria: categoria);
+      if (!mounted || requestId != _requestId) return;
       setState(() {
         _posts = posts;
-        _isLoading = false;
+        _page = 0;
+        _hasMore = posts.length == 20;
       });
+    } catch (_) {
+      if (!mounted || requestId != _requestId) return;
+      setState(() => _error = 'Não foi possível carregar o feed.');
+    } finally {
+      if (mounted && requestId == _requestId) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _carregarMais() async {
+    if (_loadingMore || !_hasMore) return;
+    final requestId = _requestId;
+    setState(() => _loadingMore = true);
+    try {
+      final posts = await _repository.buscarPosts(
+          categoria: _categorias[_tabController.index], page: _page + 1);
+      if (!mounted || requestId != _requestId) return;
+      setState(() {
+        final ids = _posts.map((post) => post.id).toSet();
+        _posts.addAll(posts.where((post) => !ids.contains(post.id)));
+        _page++;
+        _hasMore = posts.length == 20;
+      });
+    } catch (e) {
+      if (mounted && requestId == _requestId) ErrorUIHelper.handle(context, e);
+    } finally {
+      if (mounted && requestId == _requestId) setState(() => _loadingMore = false);
     }
   }
 
@@ -225,6 +265,19 @@ class _FeedPageState extends State<FeedPage>
                 childCount: 4,
               ),
             )
+          else if (_error != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.all(16.w),
+                child: Column(children: [
+                  Text(_error!, textAlign: TextAlign.center),
+                  TextButton(
+                    onPressed: () => _carregarPosts(_categorias[_tabController.index]),
+                    child: const Text('Tentar novamente'),
+                  ),
+                ]),
+              ),
+            )
           else if (_posts.isEmpty)
             SliverFillRemaining(
               child: Center(
@@ -257,6 +310,11 @@ class _FeedPageState extends State<FeedPage>
               ),
             ),
 
+          if (!_isLoading && _error == null && _hasMore)
+            SliverToBoxAdapter(child: TextButton(
+              onPressed: _loadingMore ? null : _carregarMais,
+              child: Text(_loadingMore ? 'Carregando...' : 'Carregar mais'),
+            )),
           SliverToBoxAdapter(child: SizedBox(height: 120.h)),
         ],
       ),
@@ -267,7 +325,10 @@ class _FeedPageState extends State<FeedPage>
 
   Widget _buildPostCard(FeedPostModel post) {
     return GestureDetector(
-      onTap: () => context.push('/feed-post', extra: post),
+      onTap: () async {
+        await context.push('/feed-post', extra: post);
+        if (mounted) await _carregarPosts(_categorias[_tabController.index]);
+      },
       child: Hero(
         tag: 'post_hero_${post.id}',
         child: Material(

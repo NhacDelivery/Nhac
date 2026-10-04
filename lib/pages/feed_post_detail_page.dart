@@ -4,7 +4,11 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:nhac/components/seta_voltar.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:nhac/components/botoes/botao_nhac.dart';
+import 'package:nhac/repositories/feed_repository.dart';
+import 'package:nhac/models/feed/feed_comment_model.dart';
+import 'package:nhac/utils/error_ui_helper.dart';
+import 'package:nhac/repositories/loja_repository.dart';
+import 'package:nhac/pages/loja_page.dart';
 
 class FeedPostDetailPage extends StatefulWidget {
   final FeedPostModel post;
@@ -21,8 +25,24 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   final TextEditingController _commentController = TextEditingController();
   final FocusNode _commentFocus = FocusNode();
 
-  // Mock comment replies
-  late final List<_CommentData> _comments;
+  final FeedRepository _repository = FeedRepository();
+  List<FeedCommentModel> _comments = [];
+  late FeedPostModel _post;
+  bool _loadingComments = true;
+  bool _sending = false;
+  bool _interacting = false;
+  bool _hasMoreComments = false;
+  int _commentPage = 0;
+  int _commentRequestId = 0;
+  int _postRequestId = 0;
+  bool _openingStore = false;
+  String? _commentError;
+
+  List<FeedCommentModel> get _visibleComments {
+    if (_tabController.index == 2) return _comments.where((c) => c.isAuthor).toList();
+    if (_tabController.index == 1) return _comments.reversed.toList();
+    return _comments;
+  }
 
   static const List<String> _tabs = ['Padrão', 'Recentes', 'Autor'];
 
@@ -30,7 +50,9 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: _tabs.length, vsync: this);
-    _comments = _buildMockComments();
+    _post = widget.post;
+    _tabController.addListener(() { if (mounted) setState(() {}); });
+    _carregarComentarios();
   }
 
   @override
@@ -41,65 +63,84 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     super.dispose();
   }
 
-  List<_CommentData> _buildMockComments() {
-    final post = widget.post;
-    final List<_CommentData> list = [];
-
-    // Add the topComment as first if available
-    if (post.topComment != null) {
-      list.add(_CommentData(
-        nome: post.topComment!.nomeUsuario,
-        avatarUrl: null,
-        conteudo: post.topComment!.conteudo,
-        curtidas: post.topComment!.curtidas,
-        isAuthor: false,
-      ));
+  Future<void> _carregarComentarios({bool mais = false}) async {
+    if (mais && _loadingComments) return;
+    final requestId = ++_commentRequestId;
+    final postRequestId = ++_postRequestId;
+    setState(() { _loadingComments = true; _commentError = null; });
+    try {
+      final page = mais ? _commentPage + 1 : 0;
+      final comments = await _repository.buscarComentarios(_post.id, page: page);
+      final post = await _repository.buscarPost(_post.id);
+      if (!mounted || requestId != _commentRequestId) return;
+      setState(() {
+        _comments = mais ? [..._comments, ...comments] : comments;
+        _commentPage = page;
+        _hasMoreComments = comments.length == 20;
+        if (postRequestId == _postRequestId) _post = post;
+      });
+    } catch (_) {
+      if (mounted && requestId == _commentRequestId) setState(() => _commentError = 'Não foi possível carregar os comentários.');
+    } finally {
+      if (mounted && requestId == _commentRequestId) setState(() => _loadingComments = false);
     }
+  }
 
-    // Additional mock comments
-    list.addAll([
-      _CommentData(
-        nome: 'Usuário Inicial',
-        avatarUrl: 'https://i.pravatar.cc/150?img=20',
-        conteudo: 'Que delícia! Vou pedir hoje mesmo 🤤',
-        curtidas: 42,
-        isAuthor: false,
-      ),
-      _CommentData(
-        nome: post.nomeUsuario,
-        avatarUrl: post.avatarUrl,
-        conteudo: 'Obrigado pessoal! Recomendo muito mesmo 😊',
-        curtidas: 18,
-        isAuthor: true,
-      ),
-      _CommentData(
-        nome: 'Maria Silva',
-        avatarUrl: 'https://i.pravatar.cc/150?img=23',
-        conteudo: 'Qual restaurante é esse? Preciso saber!',
-        curtidas: 33,
-        isAuthor: false,
-      ),
-      _CommentData(
-        nome: 'João Pedro',
-        avatarUrl: 'https://i.pravatar.cc/150?img=60',
-        conteudo: 'Pedi ontem e realmente é muito bom! A entrega foi super rápida.',
-        curtidas: 27,
-        isAuthor: false,
-      ),
-      _CommentData(
-        nome: 'Camila R.',
-        avatarUrl: 'https://i.pravatar.cc/150?img=44',
-        conteudo: 'Alguém sabe se entrega na zona sul? 🙏',
-        curtidas: 8,
-        isAuthor: false,
-      ),
-    ]);
-    return list;
+  Future<void> _enviarComentario() async {
+    final text = _commentController.text.trim();
+    if (_sending || text.isEmpty) return;
+    setState(() => _sending = true);
+    try {
+      await _repository.comentar(_post.id, text);
+      if (!mounted) return;
+      if (_commentController.text.trim() == text) _commentController.clear();
+      _commentFocus.unfocus();
+      await _carregarComentarios();
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _interagir({bool salvar = false}) async {
+    if (_interacting) return;
+    final postRequestId = ++_postRequestId;
+    setState(() => _interacting = true);
+    try {
+      final post = await _repository.interagir(_post.id,
+          ativo: salvar ? !_post.salvo : !_post.curtido, salvar: salvar);
+      if (mounted && postRequestId == _postRequestId) setState(() => _post = post);
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    } finally {
+      if (mounted) setState(() => _interacting = false);
+    }
+  }
+
+  Future<void> _abrirLoja(MentionedStoreModel store) async {
+    if (_openingStore || store.id == null) return;
+    setState(() => _openingStore = true);
+    try {
+      final loja = await LojaRepository().buscarLoja(store.id!);
+      if (!mounted) return;
+      if (loja == null) {
+        throw StateError('Loja não encontrada');
+      }
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => LojaPage(loja: loja),
+      ));
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    } finally {
+      if (mounted) setState(() => _openingStore = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final post = widget.post;
+    final post = _post;
+    final comments = _visibleComments;
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -294,12 +335,29 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                 ),
 
                 // ── Comments List ──────────────────────────
+                if (_loadingComments)
+                  const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator())),
+                if (_commentError != null)
+                  SliverToBoxAdapter(child: Column(children: [
+                    Text(_commentError!, textAlign: TextAlign.center),
+                    TextButton(onPressed: () => _carregarComentarios(), child: const Text('Tentar novamente')),
+                  ])),
+                if (!_loadingComments && _commentError == null && comments.isEmpty)
+                  const SliverToBoxAdapter(child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text('Nenhum comentário por aqui ainda.', textAlign: TextAlign.center),
+                  )),
                 SliverList(
                   delegate: SliverChildBuilderDelegate(
-                    (context, index) => _buildCommentCard(_comments[index]),
-                    childCount: _comments.length,
+                    (context, index) => _buildCommentCard(comments[index]),
+                    childCount: comments.length,
                   ),
                 ),
+                if (!_loadingComments && _hasMoreComments)
+                  SliverToBoxAdapter(child: TextButton(
+                    onPressed: () => _carregarComentarios(mais: true),
+                    child: const Text('Carregar mais comentários'),
+                  )),
 
                 SliverToBoxAdapter(child: SizedBox(height: 100.h + bottomPadding)),
               ],
@@ -349,13 +407,15 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                               ),
                               border: InputBorder.none,
                             ),
-                            onSubmitted: (_) {
-                              if (_commentController.text.trim().isNotEmpty) {
-                                _commentController.clear();
-                                _commentFocus.unfocus();
-                              }
-                            },
+                            maxLength: 2000,
+                            buildCounter: (_, {required currentLength, required isFocused, maxLength}) => null,
+                            onSubmitted: (_) => _enviarComentario(),
                           ),
+                        ),
+                        IconButton(
+                          tooltip: 'Enviar comentário',
+                          onPressed: _sending ? null : _enviarComentario,
+                          icon: Icon(_sending ? Icons.hourglass_empty : Icons.send),
                         ),
                       ],
                     ),
@@ -381,12 +441,11 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       _buildFloatingAction(Icons.chat_bubble_outline, _formatCount(post.comentarios)),
-                      SizedBox(width: 16.w),
-                      _buildFloatingAction(Icons.thumb_up_alt_outlined, _formatCount(post.curtidas)),
-                      SizedBox(width: 16.w),
-                      _buildFloatingAction(Icons.star_border_rounded, '42'),
-                      SizedBox(width: 16.w),
-                      _buildFloatingAction(Icons.share_outlined, '36'),
+                      SizedBox(width: 8.w),
+                      _buildFloatingAction(post.curtido ? Icons.thumb_up_alt : Icons.thumb_up_alt_outlined, _formatCount(post.curtidas), label: 'Curtir', onPressed: _interacting ? null : () => _interagir()),
+                      SizedBox(width: 8.w),
+                      _buildFloatingAction(post.salvo ? Icons.star_rounded : Icons.star_border_rounded, _formatCount(post.salvos), label: 'Salvar', onPressed: _interacting ? null : () => _interagir(salvar: true)),
+
                     ],
                   ),
                 ),
@@ -443,7 +502,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
 
   // ─── Comment Card ─────────────────────────────────────────────────────────
 
-  Widget _buildCommentCard(_CommentData comment) {
+  Widget _buildCommentCard(FeedCommentModel comment) {
     return Container(
       padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
       child: Row(
@@ -495,28 +554,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                     height: 1.4,
                   ),
                 ),
-                SizedBox(height: 8.h),
-                Row(
-                  children: [
-                    Icon(Icons.thumb_up_alt_outlined,
-                        size: 14.r, color: Colors.grey.shade400),
-                    SizedBox(width: 4.w),
-                    Text(
-                      _formatCount(comment.curtidas),
-                      style: TextStyle(
-                          fontSize: 12.sp, color: Colors.grey.shade500),
-                    ),
-                    SizedBox(width: 20.w),
-                    Icon(Icons.chat_bubble_outline,
-                        size: 14.r, color: Colors.grey.shade400),
-                    SizedBox(width: 4.w),
-                    Text(
-                      'Responder',
-                      style: TextStyle(
-                          fontSize: 12.sp, color: Colors.grey.shade500),
-                    ),
-                  ],
-                ),
+
               ],
             ),
           ),
@@ -661,29 +699,12 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
             ],
           ),
           SizedBox(height: 12.h),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () {},
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: const Color(0xFFFF6961),
-                    side: const BorderSide(color: Color(0xFFFF6961)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20.r)),
-                    padding: EdgeInsets.symmetric(vertical: 8.h),
-                  ),
-                  child: Text('Seguir', style: TextStyle(fontSize: 13.sp, fontWeight: FontWeight.w600)),
-                ),
-              ),
-              SizedBox(width: 12.w),
-              Expanded(
-                child: BotaoNhac(
-                  label: 'Fazer Pedido',
-                  fontSize: 13.0,
-                  onPressed: () {},
-                ),
-              ),
-            ],
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              onPressed: _openingStore || store.id == null ? null : () => _abrirLoja(store),
+              child: Text(_openingStore ? 'Carregando...' : 'Ver loja e fazer pedido'),
+            ),
           ),
         ],
       ),
@@ -706,8 +727,8 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     );
   }
 
-  Widget _buildFloatingAction(IconData icon, String count) {
-    return Column(
+  Widget _buildFloatingAction(IconData icon, String count, {String? label, VoidCallback? onPressed}) {
+    final content = Column(
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
@@ -719,6 +740,14 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
         ),
       ],
     );
+    return label == null ? content : Semantics(
+      label: label,
+      button: true,
+      child: InkWell(onTap: onPressed, child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 4.h),
+        child: content,
+      )),
+    );
   }
 
   String _formatCount(int count) {
@@ -727,24 +756,6 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     }
     return count.toString();
   }
-}
-
-// ─── Comment Data ────────────────────────────────────────────────────────────
-
-class _CommentData {
-  final String nome;
-  final String? avatarUrl;
-  final String conteudo;
-  final int curtidas;
-  final bool isAuthor;
-
-  const _CommentData({
-    required this.nome,
-    this.avatarUrl,
-    required this.conteudo,
-    required this.curtidas,
-    required this.isAuthor,
-  });
 }
 
 // ─── Sticky Tab Delegate ─────────────────────────────────────────────────────

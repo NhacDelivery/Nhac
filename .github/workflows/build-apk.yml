@@ -6,6 +6,7 @@ on:
       - main
       - eu-e-tu
       - context-ia-migration
+      - feature/feed-api
       - feature/checkout-stripe-tests-fix
       - fix/verificacao-testes-eu-e-tu
   pull_request:
