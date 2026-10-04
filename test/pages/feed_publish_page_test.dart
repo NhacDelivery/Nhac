@@ -26,7 +26,8 @@ void main() {
   }
 
   Future<void> publicar(WidgetTester tester) async {
-    await tester.ensureVisible(find.byKey(const Key('feed.publish.submit')));
+    await tester.scrollUntilVisible(find.byKey(const Key('feed.publish.submit')), 250,
+      scrollable: find.byType(Scrollable).first);
     await tester.tap(find.byKey(const Key('feed.publish.submit')));
     await tester.pump();
   }
@@ -53,7 +54,8 @@ void main() {
     await tester.pumpAndSettle();
     final field = tester.widget<TextFormField>(find.byKey(const Key('feed.publish.conteudo')));
     expect(field.controller!.text, 'Minha experiência');
-    await tester.ensureVisible(find.byKey(const Key('feed.publish.submit')));
+    await tester.scrollUntilVisible(find.byKey(const Key('feed.publish.submit')), 250,
+      scrollable: find.byType(Scrollable).first);
     expect(tester.widget<FilledButton>(find.byKey(const Key('feed.publish.submit'))).onPressed, isNotNull);
   });
 
