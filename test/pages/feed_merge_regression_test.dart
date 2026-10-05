@@ -156,16 +156,16 @@ void main() {
         builder: (_, __) => MaterialApp.router(routerConfig: router),
       ));
       await advance();
-      await tester.scrollUntilVisible(find.text('Conteúdo 5'), 250,
+      await tester.scrollUntilVisible(find.text('Conteúdo 5', findRichText: true), 250,
         scrollable: find.byType(Scrollable).first);
       await advance();
       final position = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
       final offset = position.pixels;
-      await tester.tap(find.text('Conteúdo 5'));
+      await tester.tap(find.text('Conteúdo 5', findRichText: true));
       await advance();
       await tester.tap(find.text('Voltar ao feed'));
       await advance();
-      expect(find.text('Conteúdo 5'), findsOneWidget);
+      expect(find.text('Conteúdo 5', findRichText: true), findsOneWidget);
       expect(position.pixels, closeTo(offset, 1));
       expect(adapter.calls, 1);
       adapter.detail!.complete(ResponseBody.fromString(jsonEncode({
