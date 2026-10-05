@@ -13,3 +13,6 @@ android/app/google-services.json
 /request-benchmark.log
 /test/.request_baseline/
 /test/.request_benchmark_test.dart
+
+.flutter-plugins
+.flutter-plugins-dependencies

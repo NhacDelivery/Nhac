@@ -1,5 +1,6 @@
 import 'package:nhac/pages/produto_link_page.dart';
 import 'package:flutter/material.dart';
+import 'package:nhac/pages/feed_publish_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/pages/auth/cadastro/verificar_email_cadastro.dart';
 import 'package:nhac/pages/bem_vindo.dart';
@@ -449,6 +450,12 @@ final GoRouter appRouter = GoRouter(
           ),
         );
       },
+    ),
+    GoRoute(
+      path: '/feed-publicar',
+      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+        key: state.pageKey, child: const FeedPublishPage(),
+      ),
     ),
     GoRoute(
       path: '/feed-post',

@@ -86,6 +86,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       final resposta = await _tentativasCheckout.recuperar(uid);
       if (!mounted || auth.usuarioId != uid) return;
       await LocalCacheService.salvarPedidoAtivo(uid, resposta.pedidoId);
+      if (!mounted || auth.usuarioId != uid) return;
       await context.read<CartProvider>().esvaziarCarrinho();
       await _tentativasCheckout.concluir(uid);
       if (!mounted || auth.usuarioId != uid) return;

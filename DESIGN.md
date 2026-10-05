@@ -1,5 +1,7 @@
 ---
 version: alpha
+name: Nhac
+description: Aplicativo de delivery com identidade coral e interfaces móveis em português.
 colors:
   primary: "#FF6961"
   background: "#FFE7E5"
@@ -48,3 +50,13 @@ The store keeps loaded cards in place while fetching another page; the load-more
 ## Do's and Don'ts
 
 Show confirmed freight as confirmed; label an estimate and block finalization until it is confirmed. Show promotions only when a real product discount exists. Do not show inert navigation or placeholder commerce actions.
+
+## Feed integrado
+
+
+Preservar SafeArea, listas com slivers e a barra inferior dos detalhes. Paginação
+é explícita, com “Carregar mais”. O campo de comentário deve continuar alcançável
+com o teclado aberto; verificação em dispositivo ainda necessária.
+
+
+Publicações, comentários e contagens vêm da API. Não preencher falhas com conteúdo fictício.

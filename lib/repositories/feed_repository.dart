@@ -1,134 +1,105 @@
+import 'package:dio/dio.dart';
+import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
+import 'package:nhac/models/feed/feed_comment_model.dart';
+import 'package:nhac/services/api_client.dart';
 
 class FeedRepository {
-  // Prévia visual: o backend ainda não possui endpoints de publicações.
-  // Ofertas sem validação não aparecem e cada publicação é marcada como exemplo.
-  Future<List<FeedPostModel>> buscarPosts({
-    String categoria = 'Destaques',
+  final Dio _dio;
+  FeedRepository({Dio? dio}) : _dio = dio ?? ApiClient().dio;
+
+  Future<FeedPostModel> criarPost({
+    required String conteudo,
+    List<String> imagens = const [],
+    List<String> hashTags = const [],
+    String? lojaId,
   }) async {
-    if (categoria == 'Promoções') return [];
-    final posts = _mockPosts
-        .where((p) => !p.isPatrocinado)
-        .map(
-          (p) => FeedPostModel(
-            id: p.id,
-            nomeUsuario: p.nomeUsuario,
-            avatarUrl: p.avatarUrl,
-            badge: 'Publicação de exemplo',
-            conteudo: p.conteudo,
-            imagens: p.imagens,
-            curtidas: 0,
-            comentarios: 0,
-            hashTags: p.hashTags,
-            mentionedStore: p.mentionedStore,
-          ),
-        )
-        .toList();
-    return categoria == 'Novidades' ? posts.reversed.toList() : posts;
+    try {
+      final response = await _dio.post(
+        '/feed/posts',
+        data: {
+          'conteudo': conteudo.trim(),
+          'imagens': imagens,
+          'hashTags': hashTags,
+          'lojaId': lojaId,
+          'isPatrocinado': false,
+        },
+      );
+      return FeedPostModel.fromMap(Map<String, dynamic>.from(response.data));
+    } catch (e) {
+      throw mapException(e);
+    }
   }
 
-  static const List<FeedPostModel> _mockPosts = [
-    FeedPostModel(
-      id: '1',
-      nomeUsuario: 'Ana Lima',
-      avatarUrl: 'https://i.pravatar.cc/150?img=47',
-      badge: 'Recomendado para você',
-      conteudo:
-          'Pedi o poke bowl de salmão aqui no app e chegou em 25 minutos! A frescura do peixe surpreendeu demais, parecia recém preparado 🫶',
-      imagens: [
-        'https://images.unsplash.com/photo-1563612116625-3012372fccce?w=600&q=80',
-        'https://images.unsplash.com/photo-1580822184713-fc5400e7fe10?w=600&q=80',
-      ],
-      curtidas: 342,
-      comentarios: 58,
-      hashTags: ['#PokeBowl', '#DeliveryRápido', '#Saudável'],
-      topComment: TopCommentModel(
-        nomeUsuario: 'Usuário Inicial',
-        conteudo: 'Poderia mandar o link da loja?',
-        curtidas: 15,
-      ),
-      mentionedStore: MentionedStoreModel(
-        nome: 'Poke do Chef',
-        imageUrl:
-            'https://images.unsplash.com/photo-1548811579-017fb2a8f883?w=150&q=80',
-        rating: 9.2,
-        avaliacoes: '8.7 mil discussões',
-      ),
-    ),
-    FeedPostModel(
-      id: '2',
-      nomeUsuario: 'Carlos M.',
-      avatarUrl: 'https://i.pravatar.cc/150?img=12',
-      badge: 'Em alta',
-      dispositivo: 'Android',
-      conteudo:
-          'Galera, alguém mais pediu pizza do "Forno de Minas" pelo Nhac? Chegou quentinha, queijo bem derretido 🍕🔥 Recomendo muito!\n\nPedido foi rápido e sem erro.',
-      imagens: [
-        'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600&q=80',
-      ],
-      curtidas: 890,
-      comentarios: 134,
-      hashTags: ['#Pizza', '#FornoDeMinas', '#Nhac'],
-      topComment: TopCommentModel(
-        nomeUsuario: 'Bia',
-        conteudo: 'Amo! Peço todo final de semana.',
-        curtidas: 125,
-      ),
-    ),
-    FeedPostModel(
-      id: '4',
-      nomeUsuario: 'Pedro H.',
-      avatarUrl: 'https://i.pravatar.cc/150?img=68',
-      badge: 'Recomendado para você',
-      dispositivo: 'iPhone 14',
-      conteudo:
-          'Ontem pedi um combinado japonês pra jantar em casa com minha namorada. Chegou com tudo perfeito, nenhum rolinho aberto e super fresco. Nota 10! ✨🍣',
-      imagens: [
-        'https://images.unsplash.com/photo-1617196034183-421b4040ed20?w=600&q=80',
-        'https://images.unsplash.com/photo-1559410545-0bdcd187e0a6?w=600&q=80',
-      ],
-      curtidas: 512,
-      comentarios: 43,
-      hashTags: ['#Japonês', '#Sushi', '#Jantar'],
-      topComment: TopCommentModel(
-        nomeUsuario: 'Lucas',
-        conteudo: 'Parece incrível, qual o nome do restaurante?',
-        curtidas: 32,
-      ),
-    ),
-    FeedPostModel(
-      id: '5',
-      nomeUsuario: 'Mariana T.',
-      avatarUrl: 'https://i.pravatar.cc/150?img=5',
-      badge: 'Em alta',
-      conteudo:
-          'Tô apaixonada nessa granola com iogurte grego que pedi de manhã cedo! Chegou super gelada. Boa opção pra quem quer algo saudável sem abrir mão do sabor 💪',
-      imagens: [
-        'https://images.unsplash.com/photo-1517673400267-0251440c45dc?w=600&q=80',
-      ],
-      curtidas: 278,
-      comentarios: 21,
-      hashTags: ['#Saudável', '#Granola', '#BomDia'],
-    ),
-    FeedPostModel(
-      id: '6',
-      nomeUsuario: 'Rafael K.',
-      avatarUrl: 'https://i.pravatar.cc/150?img=53',
-      badge: 'Recomendado para você',
-      conteudo:
-          'Hambúrguer artesanal com cheddar e bacon. Paguei R\$28 e valeu cada centavo. Carne suculenta, pão brioche macio e chegou quente! 🍔',
-      imagens: [
-        'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80',
-        'https://images.unsplash.com/photo-1553979459-d2229ba7433b?w=600&q=80',
-      ],
-      curtidas: 734,
-      comentarios: 88,
-      hashTags: ['#Burger', '#Artesanal', '#FoodLover'],
-      topComment: TopCommentModel(
-        nomeUsuario: 'Malu',
-        conteudo: 'Esse lugar é perfeito mesmo!',
-        curtidas: 89,
-      ),
-    ),
-  ];
+  Future<List<FeedPostModel>> buscarPosts({
+    String categoria = 'Destaques',
+    int page = 0,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/feed/posts',
+        queryParameters: {'categoria': categoria, 'page': page, 'size': 20},
+      );
+      return (response.data['content'] as List)
+          .map((item) => FeedPostModel.fromMap(Map<String, dynamic>.from(item)))
+          .toList();
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<FeedPostModel> buscarPost(String id) async {
+    try {
+      final response = await _dio.get('/feed/posts/${Uri.encodeComponent(id)}');
+      return FeedPostModel.fromMap(Map<String, dynamic>.from(response.data));
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<List<FeedCommentModel>> buscarComentarios(
+    String id, {
+    int page = 0,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/feed/posts/${Uri.encodeComponent(id)}/comentarios',
+        queryParameters: {'page': page, 'size': 20},
+      );
+      return (response.data['content'] as List)
+          .map(
+            (item) => FeedCommentModel.fromMap(Map<String, dynamic>.from(item)),
+          )
+          .toList();
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<FeedCommentModel> comentar(String id, String conteudo) async {
+    try {
+      final response = await _dio.post(
+        '/feed/posts/${Uri.encodeComponent(id)}/comentarios',
+        data: {'conteudo': conteudo.trim()},
+      );
+      return FeedCommentModel.fromMap(Map<String, dynamic>.from(response.data));
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<FeedPostModel> interagir(
+    String id, {
+    required bool ativo,
+    bool salvar = false,
+  }) async {
+    try {
+      final path =
+          '/feed/posts/${Uri.encodeComponent(id)}/${salvar ? 'salvo' : 'curtida'}';
+      final response = ativo ? await _dio.put(path) : await _dio.delete(path);
+      return FeedPostModel.fromMap(Map<String, dynamic>.from(response.data));
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
 }
