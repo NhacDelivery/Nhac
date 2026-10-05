@@ -6,7 +6,9 @@ void main() {
   Widget page(List<String> ids, {double width = 320}) => MaterialApp(
     home: Scaffold(
       body: SingleChildScrollView(
-        child: SizedBox(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: SizedBox(
           width: width,
           child: HomeOrdersCarousel(
             orderIds: ids,
@@ -14,6 +16,7 @@ void main() {
               height: id == 'p2' ? 520 : 200,
               child: Center(child: Text('Cartão $id')),
             )],
+          ),
           ),
         ),
       ),
