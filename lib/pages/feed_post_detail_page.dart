@@ -42,6 +42,8 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   late FeedPostModel _post;
   bool _loadingComments = true;
   bool _sending = false;
+  bool _commentPending = false;
+  bool _restoringComment = true;
   bool _interacting = false;
   bool _hasMoreComments = false;
   int _commentPage = 0;
@@ -78,13 +80,21 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
       if (!mounted) return;
       _consultarSeguindo();
       final uid = _uid;
-      if (uid != null) {
-        final pending = await _tentativas.carregar(
-          uid,
-          'comentario:${_post.id}',
-        );
-        if (mounted && pending != null)
-          _commentController.text = pending['payload']['conteudo'] as String;
+      try {
+        if (uid != null) {
+          final pending = await _tentativas.carregar(
+            uid,
+            'comentario:${_post.id}',
+          );
+          if (mounted && pending != null) {
+            _commentController.text = pending['payload']['conteudo'] as String;
+            _commentPending = true;
+          }
+        }
+      } catch (e) {
+        if (mounted) ErrorUIHelper.handle(context, e);
+      } finally {
+        if (mounted) setState(() => _restoringComment = false);
       }
       if (mounted && widget.focarComentario) _commentFocus.requestFocus();
     });
@@ -138,7 +148,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
 
   Future<void> _enviarComentario() async {
     final text = _commentController.text.trim();
-    if (_sending || text.isEmpty) return;
+    if (_sending || _restoringComment || text.isEmpty) return;
     setState(() => _sending = true);
     try {
       final uid = _uid;
@@ -148,12 +158,14 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
         'comentario:${_post.id}',
         {'conteudo': text},
       );
+      if (mounted) setState(() => _commentPending = true);
       await _repository.comentar(
         _post.id,
         text,
         idempotencyKey: tentativa['key'] as String,
       );
       await _tentativas.concluir(uid, 'comentario:${_post.id}');
+      if (mounted) setState(() => _commentPending = false);
       if (!mounted) return;
       if (_commentController.text.trim() == text) _commentController.clear();
       _commentFocus.unfocus();
@@ -659,6 +671,10 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                                 Expanded(
                                   child: TextField(
                                     controller: _commentController,
+                                    readOnly:
+                                        _sending ||
+                                        _commentPending ||
+                                        _restoringComment,
                                     focusNode: _commentFocus,
                                     style: TextStyle(fontSize: 14.sp),
                                     decoration: InputDecoration(
@@ -680,8 +696,10 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                                   ),
                                 ),
                                 IconButton(
-                                  tooltip: 'Enviar comentário',
-                                  onPressed: _sending
+                                  tooltip: _commentPending
+                                      ? 'Confirmar comentário anterior'
+                                      : 'Enviar comentário',
+                                  onPressed: _sending || _restoringComment
                                       ? null
                                       : _enviarComentario,
                                   icon: Icon(

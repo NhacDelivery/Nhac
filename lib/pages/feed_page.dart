@@ -27,6 +27,7 @@ class _FeedPageState extends State<FeedPage>
   late TabController _tabController;
   final FeedRepository _repository = FeedRepository();
   List<FeedPostModel> _posts = [];
+  final Map<String, List<FeedPostModel>> _cacheCategorias = {};
   bool _isLoading = true;
   bool _loadingMore = false;
   bool _hasMore = false;
@@ -62,6 +63,13 @@ class _FeedPageState extends State<FeedPage>
 
   Future<void> _carregarPosts(String categoria) async {
     final requestId = ++_requestId;
+    if (_categoriaCarregada != categoria) {
+      if (_categoriaCarregada != null)
+        _cacheCategorias[_categoriaCarregada!] = List.of(_posts);
+      _posts = List.of(_cacheCategorias[categoria] ?? []);
+      _categoriaCarregada = categoria;
+      _hasMore = false;
+    }
     if (mounted)
       setState(() {
         _isLoading = true;
@@ -89,7 +97,7 @@ class _FeedPageState extends State<FeedPage>
   }
 
   Future<void> _carregarMais() async {
-    if (_loadingMore || !_hasMore) return;
+    if (_isLoading || _loadingMore || !_hasMore) return;
     final requestId = _requestId;
     setState(() => _loadingMore = true);
     try {
@@ -165,6 +173,12 @@ class _FeedPageState extends State<FeedPage>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      if (widget.salvos)
+                        IconButton(
+                          tooltip: 'Voltar',
+                          onPressed: () => context.pop(),
+                          icon: const Icon(Icons.arrow_back),
+                        ),
                       Expanded(
                         child: Text(
                           widget.salvos ? 'Publicações salvas' : 'Feed',

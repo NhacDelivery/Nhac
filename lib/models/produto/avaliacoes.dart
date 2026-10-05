@@ -26,15 +26,14 @@ class AvaliacoesModel {
     String? nomeUsuario,
     double? nota,
     String? userId,
-  }) =>
-      AvaliacoesModel(
-        comentario: comentario ?? this.comentario,
-        criadoEm: criadoEm ?? this.criadoEm,
-        id: id ?? this.id,
-        nomeUsuario: nomeUsuario ?? this.nomeUsuario,
-        nota: nota ?? this.nota,
-        userId: userId ?? this.userId,
-      );
+  }) => AvaliacoesModel(
+    comentario: comentario ?? this.comentario,
+    criadoEm: criadoEm ?? this.criadoEm,
+    id: id ?? this.id,
+    nomeUsuario: nomeUsuario ?? this.nomeUsuario,
+    nota: nota ?? this.nota,
+    userId: userId ?? this.userId,
+  );
 
   factory AvaliacoesModel.fromMap(Map<String, dynamic> map, String docId) {
     return AvaliacoesModel(

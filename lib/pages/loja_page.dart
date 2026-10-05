@@ -815,13 +815,16 @@ class _LojaPageState extends State<LojaPage>
               const Color(0xFFFF6961),
             ),
             Container(width: 1, height: 40.h, color: Colors.grey.shade200),
-            _buildStatItem(
-              'Avaliações',
-              _resumoLoja == null || (_resumoLoja!['total'] as num) == 0
-                  ? '—'
-                  : '${(_resumoLoja!['percentualPositivo'] as num).toStringAsFixed(0)}%',
-              'Notas 4 e 5',
-              const Color(0xFF5D201C),
+            TextButton(
+              onPressed: _consultarResumoLoja,
+              child: _buildStatItem(
+                'Avaliações',
+                _resumoLoja == null || (_resumoLoja!['total'] as num) == 0
+                    ? '—'
+                    : '${(_resumoLoja!['percentualPositivo'] as num).toStringAsFixed(0)}%',
+                _resumoLoja == null ? 'Consultar novamente' : 'Notas 4 e 5',
+                const Color(0xFF5D201C),
+              ),
             ),
           ],
         ),
