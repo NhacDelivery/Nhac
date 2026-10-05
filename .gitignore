@@ -16,3 +16,4 @@ android/app/google-services.json
 
 .flutter-plugins
 .flutter-plugins-dependencies
+__pycache__/

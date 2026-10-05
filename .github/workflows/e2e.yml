@@ -53,8 +53,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: NhacDelivery/backend-nhac
-          ref: f1035bd0b53c22e2a1dc98c71372220238d56369
+          # Feed + checkout contracts: cards, active orders and payment recovery.
+          ref: b3b4e8e4a890bc08d64cd6c90ebd1838d9d1bc75
           path: backend-nhac
+
+      - name: Testar verificação dos contratos E2E
+        working-directory: Nhac
+        run: python3 -m unittest discover -s tool -p test_check_e2e_backend.py -v
 
       - name: Setup Java 25
         uses: actions/setup-java@v4
