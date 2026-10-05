@@ -45,6 +45,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   bool _commentPending = false;
   bool _restoringComment = true;
   bool _interacting = false;
+  bool _postRefreshPending = false;
   bool _hasMoreComments = false;
   int _commentPage = 0;
   int _commentRequestId = 0;
@@ -193,11 +194,19 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     } catch (e) {
       if (mounted) ErrorUIHelper.handle(context, e);
     } finally {
-      if (mounted) setState(() => _interacting = false);
+      if (mounted) {
+        setState(() => _interacting = false);
+        if (_postRefreshPending) await _atualizarPost();
+      }
     }
   }
 
   Future<void> _atualizarPost() async {
+    if (_interacting) {
+      _postRefreshPending = true;
+      return;
+    }
+    _postRefreshPending = false;
     final request = ++_postRequestId;
     try {
       final post = await _repository.buscarPost(_post.id);

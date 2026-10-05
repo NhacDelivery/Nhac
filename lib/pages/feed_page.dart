@@ -36,6 +36,8 @@ class _FeedPageState extends State<FeedPage>
   String? _error;
   String? _categoriaCarregada;
   final Set<String> _curtindo = {};
+  final Map<String, FeedPostModel> _confirmados = {};
+  final Map<String, int> _revisoes = {};
 
   static const List<String> _categorias = [
     'Destaques',
@@ -63,6 +65,7 @@ class _FeedPageState extends State<FeedPage>
 
   Future<void> _carregarPosts(String categoria) async {
     final requestId = ++_requestId;
+    final revisoes = Map<String, int>.of(_revisoes);
     if (_categoriaCarregada != categoria) {
       if (_categoriaCarregada != null)
         _cacheCategorias[_categoriaCarregada!] = List.of(_posts);
@@ -82,7 +85,13 @@ class _FeedPageState extends State<FeedPage>
           : await _repository.buscarPosts(categoria: categoria);
       if (!mounted || requestId != _requestId) return;
       setState(() {
-        _posts = posts;
+        _posts = posts
+            .map(
+              (post) => _revisoes[post.id] != revisoes[post.id]
+                  ? (_confirmados[post.id] ?? post)
+                  : post,
+            )
+            .toList();
         _categoriaCarregada = categoria;
         _page = 0;
         _hasMore = posts.length == 20;
@@ -99,6 +108,7 @@ class _FeedPageState extends State<FeedPage>
   Future<void> _carregarMais() async {
     if (_isLoading || _loadingMore || !_hasMore) return;
     final requestId = _requestId;
+    final revisoes = Map<String, int>.of(_revisoes);
     setState(() => _loadingMore = true);
     try {
       final posts = widget.salvos
@@ -110,7 +120,15 @@ class _FeedPageState extends State<FeedPage>
       if (!mounted || requestId != _requestId) return;
       setState(() {
         final ids = _posts.map((post) => post.id).toSet();
-        _posts.addAll(posts.where((post) => ids.add(post.id)));
+        _posts.addAll(
+          posts
+              .where((post) => ids.add(post.id))
+              .map(
+                (post) => _revisoes[post.id] != revisoes[post.id]
+                    ? (_confirmados[post.id] ?? post)
+                    : post,
+              ),
+        );
         _page++;
         _hasMore = posts.length == 20;
       });
@@ -440,6 +458,8 @@ class _FeedPageState extends State<FeedPage>
     try {
       final updated = await _repository.buscarPost(post.id);
       if (!mounted || requestId != _requestId) return;
+      _confirmados[post.id] = updated;
+      _revisoes[post.id] = (_revisoes[post.id] ?? 0) + 1;
       final index = _posts.indexWhere((p) => p.id == post.id);
       if (index >= 0)
         setState(() {
@@ -456,14 +476,15 @@ class _FeedPageState extends State<FeedPage>
 
   Future<void> _curtir(FeedPostModel post) async {
     if (!_curtindo.add(post.id)) return;
-    final requestId = _requestId;
     setState(() {});
     try {
       final updated = await _repository.interagir(
         post.id,
         ativo: !post.curtido,
       );
-      if (!mounted || requestId != _requestId) return;
+      if (!mounted) return;
+      _confirmados[post.id] = updated;
+      _revisoes[post.id] = (_revisoes[post.id] ?? 0) + 1;
       final index = _posts.indexWhere((p) => p.id == post.id);
       if (index >= 0) setState(() => _posts[index] = updated);
     } catch (e) {
