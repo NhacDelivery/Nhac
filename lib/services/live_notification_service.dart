@@ -19,6 +19,8 @@ class LiveNotificationService {
         'tempoEstimado': tempoEstimado,
         'progresso': progresso,
       });
+    } on MissingPluginException {
+      // Notificações ao vivo só estão disponíveis no Android.
     } on PlatformException catch (e) {
       debugPrint("Failed to show live notification: '${e.message}'.");
     }
@@ -39,14 +41,18 @@ class LiveNotificationService {
         'tempoEstimado': tempoEstimado,
         'progresso': progresso,
       });
+    } on MissingPluginException {
+      // Notificações ao vivo só estão disponíveis no Android.
     } on PlatformException catch (e) {
       debugPrint("Failed to update live notification: '${e.message}'.");
     }
   }
 
-  static Future<void> cancelLiveNotification() async {
+  static Future<void> cancelLiveNotification({required String pedidoId}) async {
     try {
-      await _channel.invokeMethod('cancelLiveNotification');
+      await _channel.invokeMethod('cancelLiveNotification', {'pedidoId': pedidoId});
+    } on MissingPluginException {
+      // Notificações ao vivo só estão disponíveis no Android.
     } on PlatformException catch (e) {
       debugPrint("Failed to cancel live notification: '${e.message}'.");
     }

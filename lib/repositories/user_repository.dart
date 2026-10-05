@@ -1,3 +1,4 @@
+import 'package:nhac/services/shared_get.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'package:nhac/services/image_upload_service.dart';
@@ -17,13 +18,15 @@ class UserRepository {
 
   Future<UsuarioModel?> buscarUsuario(String id) async {
     try {
-      final response = await _dio.get('/usuarios/$id');
+      final response = await SharedGet.forClient(
+        _dio,
+      ).get(_dio, '/usuarios/$id');
       if (response.statusCode == 200 && response.data != null) {
         return UsuarioModel.fromMap(response.data);
       }
       return null;
     } on DioException catch (e) {
-      if (e.response?.statusCode == 404) return null; 
+      if (e.response?.statusCode == 404) return null;
       debugPrint("Erro ao buscar utilizador na API: ${e.message}");
       throw mapException(e);
     }
@@ -38,7 +41,10 @@ class UserRepository {
     }
   }
 
-  Future<void> atualizarDadosUsuario(String id, Map<String, dynamic> dados) async {
+  Future<void> atualizarDadosUsuario(
+    String id,
+    Map<String, dynamic> dados,
+  ) async {
     try {
       await _dio.put('/usuarios/$id', data: dados);
     } catch (e) {

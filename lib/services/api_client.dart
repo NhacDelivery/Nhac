@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:nhac/services/shared_get.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/globals/app_constants.dart';
 import 'package:nhac/utils/app_exceptions.dart';
@@ -15,6 +16,10 @@ class ApiClient {
   }
 
   void atualizarTokenCache(String? novoToken) {
+    if (_cachedToken != novoToken) {
+      SharedGet.newSession();
+      SharedGet.forClient(dio).invalidate();
+    }
     _cachedToken = novoToken;
   }
 
@@ -35,15 +40,39 @@ class ApiClient {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          _cachedToken ??= await SessionStorageService().obterToken();
-          final token = _cachedToken;
-          if (token != null && !options.headers.containsKey('Authorization')) {
-            options.headers['Authorization'] = 'Bearer $token';
+          // Esses GETs são públicos no SecurityConfig e não usam o principal.
+          // Evita leitura de storage e consulta do usuário no servidor a cada card.
+          final catalogoPublico = options.method == 'GET' &&
+              const {'/produtos/cards', '/produtos/cards/promocoes', '/lojas'}
+                  .contains(options.path);
+          if (!catalogoPublico) {
+            _cachedToken ??= await SessionStorageService().obterToken();
+            final token = _cachedToken;
+            if (token != null &&
+                !options.headers.containsKey('Authorization')) {
+              options.headers['Authorization'] = 'Bearer $token';
+            }
           }
           debugPrint('🌍 [REQ HTTP] ${options.method} ${options.uri}');
           return handler.next(options);
         },
         onResponse: (response, handler) {
+          final request = response.requestOptions;
+          if (request.method != 'GET') {
+            final cache = SharedGet.forClient(dio);
+            if (request.path.startsWith('/pedidos')) {
+              cache.invalidatePrefix('/pedidos');
+              cache.invalidatePrefix('/produtos');
+            } else if (request.path.startsWith('/lojas') &&
+                request.method != 'POST') {
+              cache.invalidatePrefix('/lojas');
+              cache.invalidatePrefix('/produtos');
+            } else if (request.path.startsWith('/usuarios')) {
+              cache.invalidatePrefix('/usuarios');
+            } else if (request.path.startsWith('/favoritos')) {
+              cache.invalidatePrefix('/favoritos');
+            }
+          }
           debugPrint(
               '✅ [RES HTTP] ${response.statusCode} ${response.requestOptions.path}');
           return handler.next(response);
@@ -60,7 +89,8 @@ class ApiClient {
                   : 'Não foi possível concluir a solicitação.';
 
           if (statusCode == 401 &&
-              e.requestOptions.headers['Authorization'] == 'Bearer $_cachedToken' &&
+              e.requestOptions.headers['Authorization'] ==
+                  'Bearer $_cachedToken' &&
               !e.requestOptions.path.contains('/login') &&
               !e.requestOptions.path.contains('/auth/alterar-senha')) {
             _cachedToken = null;
@@ -69,7 +99,8 @@ class ApiClient {
             } catch (_) {
               // A sessão em memória já foi encerrada; ainda conclua a requisição
               // com erro de autenticação se a limpeza do armazenamento falhar.
-              debugPrint('Não foi possível limpar todo o armazenamento da sessão.');
+              debugPrint(
+                  'Não foi possível limpar todo o armazenamento da sessão.');
             }
             return handler.reject(DioException(
               requestOptions: e.requestOptions,
@@ -81,7 +112,7 @@ class ApiClient {
 
           if (responseData is Map) {
             debugPrint(
-              'Erro API: status=$statusCode code=${responseData['error']}',
+              'Erro API: status=$statusCode code=${responseData['errorCode'] ?? responseData['error']} mensagem=$defaultMessage',
             );
           }
 
@@ -98,9 +129,14 @@ class ApiClient {
             ));
           }
 
+          final errorCode = responseData is Map
+              ? (responseData['errorCode'] ?? responseData['error'])?.toString()
+              : null;
           // Tratamento por Status Code
           Exception customError;
-          switch (statusCode) {
+          if (errorCode == 'PAGAMENTO_INDISPONIVEL') {
+            customError = BusinessRuleException(defaultMessage, code: errorCode);
+          } else switch (statusCode) {
             case 400:
               // Verifica se possui o detalhamento de campos
               if (responseData != null &&
@@ -109,7 +145,7 @@ class ApiClient {
                 customError = ValidationException(
                     defaultMessage, responseData['details']);
               } else {
-                customError = BusinessRuleException(defaultMessage);
+                customError = BusinessRuleException(defaultMessage, code: errorCode);
               }
               break;
             case 401:
@@ -119,14 +155,14 @@ class ApiClient {
               customError = ForbiddenException(defaultMessage);
               break;
             case 409:
-              customError = BusinessRuleException(defaultMessage);
+              customError = BusinessRuleException(defaultMessage, code: errorCode);
               break;
             case 404:
               customError = NotFoundException(defaultMessage);
               break;
             case 402:
             case 422:
-              customError = BusinessRuleException(defaultMessage);
+              customError = BusinessRuleException(defaultMessage, code: errorCode);
               break;
             case 429:
               customError = TooManyRequestsException();

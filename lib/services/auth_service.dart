@@ -16,7 +16,7 @@ class AuthService with ChangeNotifier {
   int _sessionGeneration = 0;
   String? _usuarioId;
   String? _nome;
-  bool _carregado = false; 
+  bool _carregado = false;
   bool _isGoogleUser = false;
   bool _isPhoneUser = false;
 
@@ -46,10 +46,90 @@ class AuthService with ChangeNotifier {
 
   Future<void> login({required String email, required String senha}) async {
     try {
-      final response = await _dio.post('/auth/login', data: {'email': email, 'senha': senha});
+      final response = await _dio.post(
+        '/auth/login',
+        data: {'email': email, 'senha': senha},
+      );
       await _salvarSessaoDaResposta(response.data);
     } catch (e) {
-     
+      throw mapException(e);
+    }
+  }
+
+  Future<bool> confirmarSenha({
+    required String email,
+    required String senha,
+  }) async {
+    final usuarioEsperado = _usuarioId;
+    final response = await _dio.post(
+      '/auth/login',
+      data: {'email': email, 'senha': senha},
+    );
+    return usuarioEsperado != null &&
+        _usuarioId == usuarioEsperado &&
+        response.data['usuarioId'] == usuarioEsperado;
+  }
+
+  /// Confirma a identidade de uma conta Google (que não tem senha) pedindo o
+  /// login do Google de novo. Só vale se for a mesma conta da sessão atual, e
+  /// a sessão não é substituída. Devolve false se a pessoa cancelar.
+  Future<bool> confirmarComGoogle() async {
+    final usuarioEsperado = _usuarioId;
+    if (usuarioEsperado == null) return false;
+    try {
+      final googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) return false;
+      final idToken = (await googleUser.authentication).idToken;
+      if (idToken == null) {
+        throw AuthException(
+          'Não foi possível obter o token de autenticação do Google.',
+        );
+      }
+      final response = await _dio.post(
+        '/auth/social',
+        data: {'idToken': idToken},
+      );
+      if (_usuarioId != usuarioEsperado ||
+          response.data['usuarioId'] != usuarioEsperado) {
+        throw AuthException('Confirme com a mesma conta da sessão atual.');
+      }
+      return true;
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  /// Deixa o telefone só com os dígitos locais, tirando o +55 se vier junto
+  /// (o backend devolve o número em E.164, mas [formatarTelefoneE164] já soma o 55).
+  String telefoneLocal(String telefone) {
+    final numeros = telefone.replaceAll(RegExp(r'\D'), '');
+    return numeros.length > 11 && numeros.startsWith('55')
+        ? numeros.substring(2)
+        : numeros;
+  }
+
+  /// Confirma a identidade de uma conta de telefone (sem senha) com o código
+  /// SMS enviado por [enviarCodigoSms]. Só vale para a conta da sessão atual
+  /// e não substitui a sessão.
+  Future<bool> confirmarComSms(String telefone, String codigo) async {
+    final usuarioEsperado = _usuarioId;
+    if (usuarioEsperado == null) return false;
+    try {
+      final response = await _dio.post(
+        '/auth/login-sms',
+        data: {
+          'telefone': formatarTelefoneE164(telefoneLocal(telefone)),
+          'codigo': codigo,
+        },
+      );
+      if (_usuarioId != usuarioEsperado ||
+          response.data['usuarioId'] != usuarioEsperado) {
+        throw AuthException('Confirme com a mesma conta da sessão atual.');
+      }
+      return true;
+    } catch (e) {
       throw mapException(e);
     }
   }
@@ -62,9 +142,16 @@ class AuthService with ChangeNotifier {
   }) async {
     try {
       final id = const Uuid().v4();
-      final response = await _dio.post('/auth/registrar', data: {
-        'id': id, 'nome': nome, 'email': email, 'telefone': telefone, 'senha': senha,
-      });
+      final response = await _dio.post(
+        '/auth/registrar',
+        data: {
+          'id': id,
+          'nome': nome,
+          'email': email,
+          'telefone': telefone,
+          'senha': senha,
+        },
+      );
       await _salvarSessaoDaResposta(response.data);
     } catch (e) {
       throw mapException(e);
@@ -73,9 +160,10 @@ class AuthService with ChangeNotifier {
 
   Future<bool> checarEmail(String email) async {
     try {
-      final response = await _dio.post('/auth/checar-email', data: {
-        'email': email.trim(),
-      });
+      final response = await _dio.post(
+        '/auth/checar-email',
+        data: {'email': email.trim()},
+      );
       return response.data['existe'] == true;
     } catch (e) {
       throw mapException(e);
@@ -84,9 +172,10 @@ class AuthService with ChangeNotifier {
 
   Future<void> enviarCodigoCadastro(String email) async {
     try {
-      await _dio.post('/auth/enviar-codigo-cadastro', data: {
-        'email': email.trim(),
-      });
+      await _dio.post(
+        '/auth/enviar-codigo-cadastro',
+        data: {'email': email.trim()},
+      );
     } catch (e) {
       throw mapException(e);
     }
@@ -94,10 +183,10 @@ class AuthService with ChangeNotifier {
 
   Future<void> confirmarEmailCadastro(String email, String codigo) async {
     try {
-      await _dio.post('/auth/confirmar-email-cadastro', data: {
-        'email': email.trim(),
-        'codigo': codigo.trim(),
-      });
+      await _dio.post(
+        '/auth/confirmar-email-cadastro',
+        data: {'email': email.trim(), 'codigo': codigo.trim()},
+      );
     } catch (e) {
       throw mapException(e);
     }
@@ -110,9 +199,10 @@ class AuthService with ChangeNotifier {
 
   Future<void> enviarCodigoSms(String telefone) async {
     try {
-      await _dio.post('/verificacao-telefone/enviar-codigo', data: {
-        'telefone': formatarTelefoneE164(telefone),
-      });
+      await _dio.post(
+        '/verificacao-telefone/enviar-codigo',
+        data: {'telefone': formatarTelefoneE164(telefone)},
+      );
     } catch (e) {
       throw mapException(e);
     }
@@ -120,10 +210,10 @@ class AuthService with ChangeNotifier {
 
   Future<bool> loginSms(String telefone, String codigo) async {
     try {
-      final response = await _dio.post('/auth/login-sms', data: {
-        'telefone': formatarTelefoneE164(telefone),
-        'codigo': codigo,
-      });
+      final response = await _dio.post(
+        '/auth/login-sms',
+        data: {'telefone': formatarTelefoneE164(telefone), 'codigo': codigo},
+      );
       await _salvarSessaoDaResposta(response.data, viaTelefone: true);
       return response.data['isNovoUsuario'] == true;
     } catch (e) {
@@ -131,12 +221,21 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  Future<void> _salvarSessaoDaResposta(Map<String, dynamic> data, {bool viaGoogle = false, bool viaTelefone = false}) async {
+  Future<void> _salvarSessaoDaResposta(
+    Map<String, dynamic> data, {
+    bool viaGoogle = false,
+    bool viaTelefone = false,
+  }) async {
     await _logoutPendente;
     final token = data['token'] as String;
     final usuarioId = data['usuarioId'] as String;
     final nome = data['nome'] as String;
-    await _sessionStorage.salvarSessao(token: token, usuarioId: usuarioId, nome: nome);
+    await _sessionStorage.salvarSessao(
+      token: token,
+      usuarioId: usuarioId,
+      nome: nome,
+    );
+    await LocalCacheService.limparEmailVerificacao();
     ApiClient().atualizarTokenCache(token);
     await _sessionStorage.salvarLoginGoogle(viaGoogle);
     await _sessionStorage.salvarLoginTelefone(viaTelefone);
@@ -170,18 +269,25 @@ class AuthService with ChangeNotifier {
       CartRepository(usuarioId: usuarioAnterior).limparCarrinho(),
       CartRepository().limparCarrinho(),
       LocalCacheService.limparTudo(),
+      if (usuarioAnterior != null)
+        LocalCacheService.removerPedidosHome(usuarioAnterior),
+      if (usuarioAnterior != null)
+        LocalCacheService.removerPedidoAtivo(usuarioAnterior),
+      if (usuarioAnterior != null)
+        LocalCacheService.removerSnapshotPedido(usuarioAnterior),
     ]);
   }
 
   Future<void> signOut() => logout();
 
-  Future<void> esqueciSenhaEmail(String email, {CancelToken? cancelToken}) async {
+  Future<void> esqueciSenhaEmail(
+    String email, {
+    CancelToken? cancelToken,
+  }) async {
     try {
       await _dio.post(
-        '/auth/esqueci-senha/email', 
-        data: {
-          'email': email,
-        },
+        '/auth/esqueci-senha/email',
+        data: {'email': email},
         cancelToken: cancelToken,
       );
     } catch (e) {
@@ -189,80 +295,84 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  Future<void> validarCodigoRecuperacaoEmail(String email, String codigo) async {
+  Future<void> validarCodigoRecuperacaoEmail(
+    String email,
+    String codigo,
+  ) async {
     try {
-      await _dio.post('/auth/validar-codigo-redefinicao/email', data: {
-        'email': email.trim(),
-        'codigo': codigo.trim(),
-      });
+      await _dio.post(
+        '/auth/validar-codigo-redefinicao/email',
+        data: {'email': email.trim(), 'codigo': codigo.trim()},
+      );
     } catch (e) {
       throw mapException(e);
     }
   }
 
-  Future<void> redefinirSenhaEmail(String email, String codigo, String novaSenha) async {
+  Future<void> redefinirSenhaEmail(
+    String email,
+    String codigo,
+    String novaSenha,
+  ) async {
     try {
-      await _dio.post('/auth/redefinir-senha/email', data: {
-        'email': email,
-        'codigo': codigo,
-        'novaSenha': novaSenha,
-      });
+      await _dio.post(
+        '/auth/redefinir-senha/email',
+        data: {'email': email, 'codigo': codigo, 'novaSenha': novaSenha},
+      );
     } catch (e) {
       throw mapException(e);
     }
   }
-
 
   Future<void> alterarSenha(String senhaAtual, String novaSenha) async {
     if (_usuarioId == null) {
       throw AuthException('Utilizador não autenticado.');
     }
     try {
-      await _dio.put('/auth/alterar-senha', data: {
-        'senhaAtual': senhaAtual,
-        'novaSenha': novaSenha,
-      });
+      await _dio.put(
+        '/auth/alterar-senha',
+        data: {'senhaAtual': senhaAtual, 'novaSenha': novaSenha},
+      );
     } catch (e) {
       throw mapException(e);
     }
   }
 
-Future<void> updateUserName({required String userName}) async {
-  if (_usuarioId == null) {
-    throw AuthException('Utilizador não autenticado.');
-  }
-
-  final nomeLimpo = userName.trim();
-
-  try {
-    final response = await _dio.put('/usuarios/$_usuarioId', data: {
-      'nome': nomeLimpo 
-    });
-
-    final tokenFresquinho = response.data['token'] as String?;
-    final tokenFinal = (tokenFresquinho != null && tokenFresquinho.isNotEmpty)
-        ? tokenFresquinho
-        : await _sessionStorage.obterToken();
-
-    if (tokenFinal == null) {
-      throw AuthException('Sessão inválida ao salvar novo nome.');
+  Future<void> updateUserName({required String userName}) async {
+    if (_usuarioId == null) {
+      throw AuthException('Utilizador não autenticado.');
     }
 
-    _nome = nomeLimpo;
+    final nomeLimpo = userName.trim();
 
-    await _sessionStorage.salvarSessao(
-      token: tokenFinal,
-      usuarioId: _usuarioId!,
-      nome: nomeLimpo,
-    );
-    
-    ApiClient().atualizarTokenCache(tokenFinal);
-  } catch (e) {
-    throw mapException(e);
+    try {
+      final response = await _dio.put(
+        '/usuarios/$_usuarioId',
+        data: {'nome': nomeLimpo},
+      );
+
+      final tokenFresquinho = response.data['token'] as String?;
+      final tokenFinal = (tokenFresquinho != null && tokenFresquinho.isNotEmpty)
+          ? tokenFresquinho
+          : await _sessionStorage.obterToken();
+
+      if (tokenFinal == null) {
+        throw AuthException('Sessão inválida ao salvar novo nome.');
+      }
+
+      _nome = nomeLimpo;
+
+      await _sessionStorage.salvarSessao(
+        token: tokenFinal,
+        usuarioId: _usuarioId!,
+        nome: nomeLimpo,
+      );
+
+      ApiClient().atualizarTokenCache(tokenFinal);
+    } catch (e) {
+      throw mapException(e);
+    }
   }
-}
-
-
 
   Future<void> updateEmail({required String novoEmail}) async {
     if (_usuarioId == null) {
@@ -270,9 +380,10 @@ Future<void> updateUserName({required String userName}) async {
     }
 
     try {
-      final response = await _dio.put('/usuarios/$_usuarioId', data: {
-        'email': novoEmail.trim(),
-      });
+      final response = await _dio.put(
+        '/usuarios/$_usuarioId',
+        data: {'email': novoEmail.trim()},
+      );
 
       final tokenFresquinho = response.data['token'] as String?;
       if (tokenFresquinho == null || tokenFresquinho.isEmpty) {
@@ -284,7 +395,7 @@ Future<void> updateUserName({required String userName}) async {
         usuarioId: _usuarioId!,
         nome: _nome ?? 'Usuário',
       );
-      
+
       ApiClient().atualizarTokenCache(tokenFresquinho);
       notifyListeners();
     } catch (e) {
@@ -298,9 +409,10 @@ Future<void> updateUserName({required String userName}) async {
     }
 
     try {
-      final response = await _dio.put('/usuarios/$_usuarioId', data: {
-        'fcmToken': fcmToken.trim(),
-      });
+      final response = await _dio.put(
+        '/usuarios/$_usuarioId',
+        data: {'fcmToken': fcmToken.trim()},
+      );
       final tokenFresquinho = response.data['token'] as String?;
       if (tokenFresquinho != null && tokenFresquinho.isNotEmpty) {
         await _sessionStorage.salvarSessao(
@@ -316,32 +428,37 @@ Future<void> updateUserName({required String userName}) async {
     }
   }
 
-   Future<void> loginComGoogle() async {
+  Future<void> loginComGoogle() async {
     try {
       final GoogleSignIn googleSignIn = GoogleSignIn();
-      
+
       await googleSignIn.signOut();
-      
+
       final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
 
-      if (googleUser == null) return; 
+      if (googleUser == null) return;
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
       final String? idToken = googleAuth.idToken;
 
       if (idToken != null) {
-        final response = await _dio.post('/auth/social', data: {'idToken': idToken});
-        
+        final response = await _dio.post(
+          '/auth/social',
+          data: {'idToken': idToken},
+        );
+
         await _salvarSessaoDaResposta(response.data, viaGoogle: true);
       } else {
-        throw AuthException('Não foi possível obter o token de autenticação do Google.');
+        throw AuthException(
+          'Não foi possível obter o token de autenticação do Google.',
+        );
       }
     } catch (e) {
       throw mapException(e);
     }
   }
 
-  
   bool get isGoogleUser => _isGoogleUser;
   bool get isPhoneUser => _isPhoneUser;
   bool get hasPassword => !_isGoogleUser && !_isPhoneUser;

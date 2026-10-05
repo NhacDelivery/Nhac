@@ -13,6 +13,7 @@ import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/components/nhac_input_field.dart';
 
 import 'package:nhac/utils/validators.dart';
+import 'package:nhac/services/local_cache_service.dart';
 
 @NowaGenerated()
 class Senha extends StatefulWidget {
@@ -239,6 +240,7 @@ class _SenhaState extends State<Senha> {
         final email = localContext.read<CadastroController>().email;
         try {
           await localContext.read<AuthService>().enviarCodigoCadastro(email);
+          await LocalCacheService.salvarEmailVerificacao(email);
           if (!localContext.mounted) return;
           localContext.showError('Seu código expirou. Enviamos um novo para $email.');
           localContext.push('/cadastro/verificar-email', extra: email);

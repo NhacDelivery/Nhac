@@ -146,7 +146,8 @@ start_backend() {
   local deadline=$((SECONDS + 120))
   while (( SECONDS < deadline )); do
     if body=$(curl -fsS --max-time 2 "http://127.0.0.1:${BACKEND_PORT}/actuator/health" 2>/dev/null) &&
-       [[ "$body" == *'"status":"UP"'* ]]; then
+      [[ "$body" == *'"status":"UP"'* ]]; then
+      python3 "$APP_DIR/tool/check_e2e_backend.py" --port "$BACKEND_PORT"
       return 0
     fi
     kill -0 "$BACKEND_PID" 2>/dev/null || break

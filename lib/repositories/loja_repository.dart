@@ -1,3 +1,4 @@
+import 'package:nhac/services/shared_get.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/globals/exceptions.dart';
@@ -13,7 +14,8 @@ class LojaRepository {
 
   Future<List<LojasModel>> buscarLojas({int page = 0, int size = 10}) async {
     try {
-      final response = await _dio.get(
+      final response = await SharedGet.forClient(_dio).get(
+        _dio,
         '/lojas',
         queryParameters: {'page': page, 'size': size},
       );
@@ -25,9 +27,12 @@ class LojaRepository {
     }
   }
 
-  Future<LojasModel?> buscarLoja(String lojaId) async {
+  Future<LojasModel?> buscarLoja(String lojaId, {bool atualizar = false}) async {
     try {
-      final response = await _dio.get('/lojas/$lojaId');
+      final response =
+          atualizar
+              ? await _dio.get('/lojas/$lojaId')
+              : await SharedGet.forClient(_dio).get(_dio, '/lojas/$lojaId');
       return LojasModel.fromMap(response.data);
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
@@ -43,14 +48,21 @@ class LojaRepository {
     }
   }
 
-  Future<List<LojasModel>> buscarLojasPorNome(String termo) async {
+  Future<List<LojasModel>> buscarLojasPorNome(String termo,
+      {int page = 0, int size = 50}) async {
     final termoBusca = termo.trim();
     if (termoBusca.isEmpty) return [];
 
     try {
-      final response = await _dio.get(
+      final response = await SharedGet.forClient(_dio).get(
+        _dio,
         '/lojas',
-        queryParameters: {'nome': termoBusca, 'page': 0, 'size': 50},
+        queryParameters: {
+          'nome': termoBusca,
+          'page': page,
+          'size': size,
+          'sort': 'id,asc'
+        },
       );
 
       final List<dynamic> conteudo = extrairLista(response.data);
@@ -78,14 +90,15 @@ class LojaRepository {
 
   Future<int> contarSeguidores(String lojaId) async {
     try {
-      final response = await _dio.get('/favoritos/lojas/$lojaId/contagem');
+      final response = await SharedGet.forClient(_dio)
+          .get(_dio, '/favoritos/lojas/$lojaId/contagem');
       if (response.statusCode == 200) {
         final raw = response.data;
         if (raw is int) return raw;
         if (raw is Map) return safeInt(raw['total']);
-        return 0;
+        throw StateError('Contagem de seguidores indisponível');
       }
-      return 0;
+      throw StateError('Contagem de seguidores indisponível');
     } catch (e) {
       throw mapException(e);
     }
@@ -93,17 +106,22 @@ class LojaRepository {
 
   Future<bool> estaSeguindo(String usuarioId, String lojaId) async {
     try {
-      final response = await _dio.get('/usuarios/$usuarioId/seguindo/$lojaId');
-      return response.statusCode == 200 && response.data == true;
+      final response = await SharedGet.forClient(_dio)
+          .get(_dio, '/usuarios/$usuarioId/seguindo/$lojaId');
+      if (response.statusCode != 200 || response.data is! bool) {
+        throw StateError('Não foi possível consultar se você segue a loja');
+      }
+      return response.data == true;
     } catch (e) {
-      return false; // Silenciosamente retorna falso em caso de erro (ex: não logado ou não segue)
+      throw mapException(e);
     }
   }
 
   Future<List<LojasModel>> listarLojasFavoritas(
       {int page = 0, int size = 10}) async {
     try {
-      final response = await _dio.get(
+      final response = await SharedGet.forClient(_dio).get(
+        _dio,
         '/favoritos',
         queryParameters: {'page': page, 'size': size, 'sort': 'criadoEm,desc'},
       );

@@ -1,0 +1,65 @@
+name: Prepare Flutter config
+description: Creates and validates .env and google-services.json, with optional keystore decoding.
+
+inputs:
+  env_file_content:
+    description: Content for .env file
+    required: true
+  google_services_json:
+    description: Content for android/app/google-services.json
+    required: true
+  require_keystore:
+    description: Whether to require and decode KEYSTORE_BASE64
+    required: false
+    default: 'false'
+  keystore_base64:
+    description: Base64 encoded keystore content
+    required: false
+    default: ''
+  required_env_keys:
+    description: Space-separated .env keys to warn if missing
+    required: false
+    default: 'SENTRY_DSN STRIPE_PUBLISHABLE_KEY GOOGLE_PLACES_API_KEY'
+
+runs:
+  using: composite
+  steps:
+    - name: Create and validate local config files
+      shell: bash
+      env:
+        ENV_FILE_CONTENT: ${{ inputs.env_file_content }}
+        GOOGLE_SERVICES_JSON_CONTENT: ${{ inputs.google_services_json }}
+        REQUIRE_KEYSTORE: ${{ inputs.require_keystore }}
+        KEYSTORE_BASE64: ${{ inputs.keystore_base64 }}
+        REQUIRED_ENV_KEYS: ${{ inputs.required_env_keys }}
+      run: |
+        set -euo pipefail
+
+        printf '%s\n' "$ENV_FILE_CONTENT" > .env
+        printf '%s\n' "$GOOGLE_SERVICES_JSON_CONTENT" > android/app/google-services.json
+
+        if [ ! -s .env ]; then
+          echo "::error::.env está vazio - confira o secret ENV_FILE do repositório"
+          exit 1
+        fi
+
+        python3 -c "import json; json.load(open('android/app/google-services.json'))" || {
+          echo "::error::google-services.json inválido - confira o secret GOOGLE_SERVICES_JSON"
+          exit 1
+        }
+
+        if [ "$REQUIRE_KEYSTORE" = "true" ]; then
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::KEYSTORE_BASE64 está vazio, mas o job requer keystore"
+            exit 1
+          fi
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "${GITHUB_WORKSPACE}/codemagic.keystore"
+          if [ ! -s "${GITHUB_WORKSPACE}/codemagic.keystore" ]; then
+            echo "::error::Falha ao decodificar keystore"
+            exit 1
+          fi
+        fi
+
+        for key in $REQUIRED_ENV_KEYS; do
+          grep -q "^$key=" .env || echo "::warning::$key não encontrada em .env (pode causar crash no boot do app)"
+        done

@@ -1,6 +1,8 @@
+import 'package:nhac/components/estado_com_retry.dart';
+import 'package:nhac/components/nhac_filter_chip.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:nhac/components/loading_nhac.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +19,13 @@ import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/repositories/avaliacao_repository.dart';
 import 'package:nhac/models/produto/avaliacoes.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
+import 'package:go_router/go_router.dart';
+
+class _RelatedProducts {
+  final List<ProdutosModel> products;
+  final Map<String, bool> storesOpen;
+  const _RelatedProducts(this.products, this.storesOpen);
+}
 
 class ProdutoDetalhesPage extends StatefulWidget {
   final ProdutosModel produto;
@@ -29,8 +38,8 @@ class ProdutoDetalhesPage extends StatefulWidget {
 
 class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   int _quantidade = 1;
-  
-  late Future<List<ProdutosModel>> _produtosRelacionadosFuture;
+
+  late Future<_RelatedProducts> _produtosRelacionadosFuture;
   Future<LojasModel?>? _lojaFuture;
   Future<List<ProdutosModel>>? _produtosDaLojaFuture;
 
@@ -38,22 +47,119 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   final _lojaRepository = LojaRepository();
   final _avaliacaoRepository = AvaliacaoRepository();
 
-  late Future<Map<String, dynamic>> _resumoAvaliacoesFuture;
-  late Future<List<AvaliacoesModel>> _avaliacoesFuture;
+  late Future<
+          ({Map<String, dynamic>? resumo, List<AvaliacoesModel>? comentarios})>
+      _avaliacoesFuture;
 
   @override
   void initState() {
     super.initState();
-    
-    _produtosRelacionadosFuture = _produtoRepository.buscarPorCategoria(widget.produto.categoriaMenu);
+
+    _produtosRelacionadosFuture = _buscarRelacionados();
 
     _lojaFuture = widget.produto.lojaId.isNotEmpty
         ? _lojaRepository.buscarLoja(widget.produto.lojaId)
         : Future.value(null);
     _produtosDaLojaFuture = null;
 
-    _resumoAvaliacoesFuture = _avaliacaoRepository.buscarResumoAvaliacoes(widget.produto.id);
-    _avaliacoesFuture = _avaliacaoRepository.buscarAvaliacoes(widget.produto.lojaId);
+    _avaliacoesFuture = _carregarAvaliacoes();
+  }
+
+  Future<({Map<String, dynamic>? resumo, List<AvaliacoesModel>? comentarios})>
+      _carregarAvaliacoes() async {
+    Map<String, dynamic>? resumo;
+    List<AvaliacoesModel>? comentarios;
+    await Future.wait([
+      () async {
+        try {
+          resumo = await _avaliacaoRepository
+              .buscarResumoAvaliacoes(widget.produto.id);
+        } catch (_) {}
+      }(),
+      () async {
+        try {
+          comentarios = await _avaliacaoRepository
+              .buscarAvaliacoes(widget.produto.lojaId);
+        } catch (_) {}
+      }(),
+    ]);
+    return (resumo: resumo, comentarios: comentarios);
+  }
+
+  Future<_RelatedProducts> _buscarRelacionados() async {
+    final products = await _produtoRepository.buscarPorCategoria(
+      widget.produto.categoriaMenu,
+    );
+    final stores = [
+      for (final p in products) MapEntry(p.lojaId, p.lojaAberta),
+    ];
+    return _RelatedProducts(
+      products
+          .where(
+            (p) => p.id != widget.produto.id && p.lojaAberta,
+          )
+          .toList(),
+      Map.fromEntries(stores),
+    );
+  }
+
+  void _mostrarMaisOpcoes() {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('Copiar link do produto'),
+              onTap: () async {
+                Navigator.pop(ctx);
+                await Clipboard.setData(
+                  ClipboardData(
+                    text: 'https://nhac.app/produto/${widget.produto.id}',
+                  ),
+                );
+                if (mounted) context.showSuccess('Link copiado.');
+              },
+            ),
+            if (widget.produto.lojaId.isNotEmpty)
+              ListTile(
+                leading: const Icon(Icons.chat_bubble_outline),
+                title: const Text('Perguntar à loja sobre este produto'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _abrirChat();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _abrirChat() async {
+    if (widget.produto.lojaId.isEmpty) return;
+    try {
+      final loja = await _lojaFuture;
+      if (!mounted) return;
+      if (loja == null) {
+        context.showError('Não foi possível abrir a conversa com esta loja.');
+        return;
+      }
+      context.push(
+        '/chat-loja',
+        extra: {
+          'lojaId': loja.id,
+          'lojaNome': loja.nome,
+          'produto': widget.produto,
+        },
+      );
+    } catch (_) {
+      if (mounted) {
+        context.showError('Não foi possível abrir a conversa com esta loja.');
+      }
+    }
   }
 
   void _incrementarQuantidade() {
@@ -74,7 +180,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
 
   void _abrirLojaProfile() async {
     if (_isNavigatingToLoja || _lojaFuture == null) return;
-    
+
     dynamic loja;
     try {
       loja = await _lojaFuture;
@@ -84,7 +190,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
       }
       return;
     }
-    
+
     if (loja == null) return;
 
     setState(() {
@@ -97,12 +203,19 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (context, animation, secondaryAnimation) => LojaPage(loja: loja),
+        pageBuilder: (context, animation, secondaryAnimation) =>
+            LojaPage(loja: loja),
         transitionsBuilder: (context, animation, secondaryAnimation, child) {
           const begin = Offset(1.0, 0.0);
           const end = Offset.zero;
-          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeOutCubic));
-          return SlideTransition(position: animation.drive(tween), child: child);
+          var tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: Curves.easeOutCubic));
+          return SlideTransition(
+            position: animation.drive(tween),
+            child: child,
+          );
         },
       ),
     );
@@ -116,7 +229,10 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final currencyFormat = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+    final currencyFormat = NumberFormat.currency(
+      locale: 'pt_BR',
+      symbol: 'R\$',
+    );
     final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
@@ -141,8 +257,11 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
-                      icon: Icon(Icons.arrow_back_ios_new,
-                          color: const Color(0xFF5D201C), size: 20.r),
+                      icon: Icon(
+                        Icons.arrow_back_ios_new,
+                        color: const Color(0xFF5D201C),
+                        size: 20.r,
+                      ),
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),
@@ -156,11 +275,15 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
-                        icon: Icon(Icons.share_outlined,
-                            color: const Color(0xFF5D201C), size: 20.r),
+                        icon: Icon(
+                          Icons.share_outlined,
+                          color: const Color(0xFF5D201C),
+                          size: 20.r,
+                        ),
                         onPressed: () {
                           // Mudou de uid para id
-                          final link = 'https://nhac.app/produto/${widget.produto.id}';
+                          final link =
+                              'https://nhac.app/produto/${widget.produto.id}';
                           Share.share(
                             'Confira este produto no Nhac!\n\n'
                             '${widget.produto.nome}\n'
@@ -180,9 +303,12 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                         shape: BoxShape.circle,
                       ),
                       child: IconButton(
-                        icon: Icon(Icons.more_horiz,
-                            color: const Color(0xFF5D201C), size: 20.r),
-                        onPressed: () {},
+                        icon: Icon(
+                          Icons.more_horiz,
+                          color: const Color(0xFF5D201C),
+                          size: 20.r,
+                        ),
+                        onPressed: _mostrarMaisOpcoes,
                       ),
                     ),
                   ),
@@ -197,24 +323,32 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                             placeholder: (context, url) => Container(
                               color: const Color(0xFFF5F5F5),
                               child: const Center(
-                                child: LoadingNhac(telaCheia: false, tamanho: 40),
+                                child: LoadingNhac(
+                                  telaCheia: false,
+                                  tamanho: 40,
+                                ),
                               ),
                             ),
                             errorWidget: (context, url, error) => Container(
                               color: const Color(0xFFF5F5F5),
-                              child: Icon(Icons.fastfood,
-                                  size: 80.r, color: Colors.grey),
+                              child: Icon(
+                                Icons.fastfood,
+                                size: 80.r,
+                                color: Colors.grey,
+                              ),
                             ),
                           )
                         : Container(
                             color: const Color(0xFFF5F5F5),
-                            child: Icon(Icons.fastfood,
-                                size: 80.r, color: Colors.grey),
+                            child: Icon(
+                              Icons.fastfood,
+                              size: 80.r,
+                              color: Colors.grey,
+                            ),
                           ),
                   ),
                 ),
               ),
-
               SliverToBoxAdapter(
                 child: Container(
                   decoration: BoxDecoration(
@@ -228,8 +362,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Padding(
-                        padding:
-                            EdgeInsets.fromLTRB(20.w, 24.h, 20.w, 10.h),
+                        padding: EdgeInsets.fromLTRB(20.w, 24.h, 20.w, 10.h),
                         child: Text(
                           widget.produto.nome,
                           textAlign: TextAlign.center,
@@ -257,14 +390,22 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                 color: const Color(0xFFFF6961),
                                 letterSpacing: -1.5,
                                 shadows: const [
-                                  Shadow(offset: Offset(-0.8, -0.8),
-                                      color: Color(0xFFFF6961)),
-                                  Shadow(offset: Offset(0.8, -0.8),
-                                      color: Color(0xFFFF6961)),
-                                  Shadow(offset: Offset(0.8, 0.8),
-                                      color: Color(0xFFFF6961)),
-                                  Shadow(offset: Offset(-0.8, 0.8),
-                                      color: Color(0xFFFF6961)),
+                                  Shadow(
+                                    offset: Offset(-0.8, -0.8),
+                                    color: Color(0xFFFF6961),
+                                  ),
+                                  Shadow(
+                                    offset: Offset(0.8, -0.8),
+                                    color: Color(0xFFFF6961),
+                                  ),
+                                  Shadow(
+                                    offset: Offset(0.8, 0.8),
+                                    color: Color(0xFFFF6961),
+                                  ),
+                                  Shadow(
+                                    offset: Offset(-0.8, 0.8),
+                                    color: Color(0xFFFF6961),
+                                  ),
                                 ],
                               ),
                             ),
@@ -272,7 +413,6 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                         ),
                       ),
                       SizedBox(height: 20.h),
-
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 20.w),
                         child: Container(
@@ -284,25 +424,35 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           child: Column(
                             children: [
                               _buildServiceRow(
-                                  Icons.bolt, 'Envio imediato após a compra'),
-                              Padding(
-                                padding: EdgeInsets.symmetric(vertical: 8.h),
-                                child: const Divider(
-                                    height: 1, color: Color(0xFFEEEEEE)),
+                                Icons.bolt,
+                                'Envio imediato após a compra',
                               ),
-                              _buildServiceRow(Icons.check_circle_outline,
-                                  'Garantia de reembolso em caso de problemas'),
                               Padding(
                                 padding: EdgeInsets.symmetric(vertical: 8.h),
                                 child: const Divider(
-                                    height: 1, color: Color(0xFFEEEEEE)),
+                                  height: 1,
+                                  color: Color(0xFFEEEEEE),
+                                ),
+                              ),
+                              _buildServiceRow(
+                                Icons.check_circle_outline,
+                                'Garantia de reembolso em caso de problemas',
+                              ),
+                              Padding(
+                                padding: EdgeInsets.symmetric(vertical: 8.h),
+                                child: const Divider(
+                                  height: 1,
+                                  color: Color(0xFFEEEEEE),
+                                ),
                               ),
                               FutureBuilder<LojasModel?>(
                                 future: _lojaFuture,
                                 builder: (context, snapshot) {
                                   String nomeLoja = 'Loja Parceira';
-                                  if (snapshot.connectionState == ConnectionState.done) {
-                                    if (snapshot.hasData && snapshot.data != null) {
+                                  if (snapshot.connectionState ==
+                                      ConnectionState.done) {
+                                    if (snapshot.hasData &&
+                                        snapshot.data != null) {
                                       nomeLoja = snapshot.data!.nome;
                                     } else {
                                       // Busca terminou sem retornar a loja
@@ -314,17 +464,16 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                     }
                                   }
                                   return _buildServiceRow(
-                                      Icons.storefront_outlined,
-                                      'Vendido por: $nomeLoja');
+                                    Icons.storefront_outlined,
+                                    'Vendido por: $nomeLoja',
+                                  );
                                 },
                               ),
                             ],
                           ),
                         ),
                       ),
-
                       SizedBox(height: 24.h),
-
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 20.w),
                         child: Align(
@@ -353,15 +502,10 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           ),
                         ),
                       ),
-
                       SizedBox(height: 24.h),
-                      
                       _buildReviewsSection(),
-
                       _buildStoreProfileSection(),
-
                       SizedBox(height: 24.h),
-
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 20.w),
                         child: Row(
@@ -377,16 +521,18 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                             ),
                             Container(
                               decoration: BoxDecoration(
-                                border: Border.all(
-                                    color: Colors.grey.shade300),
+                                border: Border.all(color: Colors.grey.shade300),
                                 borderRadius: BorderRadius.circular(30.r),
                               ),
                               child: Row(
                                 children: [
                                   IconButton(
                                     onPressed: _decrementarQuantidade,
-                                    icon: Icon(Icons.remove,
-                                        size: 20.r, color: Colors.black54),
+                                    icon: Icon(
+                                      Icons.remove,
+                                      size: 20.r,
+                                      color: Colors.black54,
+                                    ),
                                   ),
                                   SizedBox(
                                     width: 40.w,
@@ -401,8 +547,11 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                   ),
                                   IconButton(
                                     onPressed: _incrementarQuantidade,
-                                    icon: Icon(Icons.add,
-                                        size: 20.r, color: Colors.black54),
+                                    icon: Icon(
+                                      Icons.add,
+                                      size: 20.r,
+                                      color: Colors.black54,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -410,27 +559,33 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           ],
                         ),
                       ),
-
                       SizedBox(height: 32.h),
-
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 20.w),
-                        child: FutureBuilder<List<ProdutosModel>>(
+                        child: FutureBuilder<_RelatedProducts>(
                           future: _produtosRelacionadosFuture,
                           builder: (context, snapshot) {
                             if (snapshot.connectionState ==
-                                    ConnectionState.waiting) {
+                                ConnectionState.waiting) {
                               return const SizedBox.shrink();
                             }
 
-                            if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+                            if (snapshot.hasError) {
+                              return BannerErroInline(
+                                mensagem: 'Não foi possível carregar os produtos relacionados.',
+                                aoTentarNovamente: () async {
+                                  setState(() => _produtosRelacionadosFuture = _buscarRelacionados());
+                                  try { await _produtosRelacionadosFuture; } catch (_) {}
+                                },
+                              );
+                            }
+                            if (!snapshot.hasData ||
+                                snapshot.data!.products.isEmpty) {
                               return const SizedBox.shrink();
                             }
 
-                            final produtosRelacionados = snapshot.data!
-                                .where((p) => p.id != widget.produto.id)
-                                .take(5)
-                                .toList();
+                            final produtosRelacionados =
+                                snapshot.data!.products.take(5).toList();
 
                             if (produtosRelacionados.isEmpty) {
                               return const SizedBox.shrink();
@@ -439,12 +594,11 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                             return HomeProductSection(
                               title: 'Produtos Relacionados',
                               products: produtosRelacionados,
-                              onSeeAll: () {},
-                            );                          
+                              lojaAberta: snapshot.data!.storesOpen,
+                            );
                           },
                         ),
                       ),
-
                       SizedBox(height: 100.w + bottomPadding),
                     ],
                   ),
@@ -452,7 +606,6 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               ),
             ],
           ),
-
           Positioned(
             bottom: 0,
             left: 0,
@@ -476,73 +629,102 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               ),
               child: Row(
                 children: [
-
-                  _buildIconAction(Icons.chat_bubble_outline, 'Chat', ''),
+                  InkWell(
+                    onTap: _abrirChat,
+                    child: _buildIconAction(
+                      Icons.chat_bubble_outline,
+                      'Chat',
+                      '',
+                    ),
+                  ),
                   SizedBox(width: 24.w),
                   Expanded(
                     child: FutureBuilder<LojasModel?>(
                       future: _lojaFuture,
                       builder: (context, lojaSnapshot) {
                         final loja = lojaSnapshot.data;
-                        final aindaCarregando =
-                            lojaSnapshot.connectionState != ConnectionState.done;
-                        final lojaFechada =
-                            aindaCarregando || loja == null || !loja.isAberto;
+                        final aindaCarregando = lojaSnapshot.connectionState !=
+                            ConnectionState.done;
+                        final erroLoja = !aindaCarregando &&
+                            (lojaSnapshot.hasError || loja == null);
+                        final lojaFechada = loja != null && !loja.isAberto;
                         return ElevatedButton(
                           key: E2EKeys.productAdd,
-                      onPressed: aindaCarregando
-                          ? null
-                          : lojaFechada
-                          ? () {
-                              context.showError('Esta loja está fechada no momento.');
-                            }
-                          : () async {
-                        try {
-                          final cartProvider = Provider.of<CartProvider>(context, listen: false);
-                          await cartProvider.adicionarItemComQuantidade(
-                            idProduto: widget.produto.id, 
-                            nome: widget.produto.nome,
-                            preco: widget.produto.preco,
-                            imagemUrl: widget.produto.imagemUrl,
-                            lojaId: widget.produto.lojaId,
-                            quantidade: _quantidade,
-                          );
-                          if (context.mounted) {
-                            showAppNotification(
-                              context,
-                              type: NotificationType.success,
-                              imageUrl: widget.produto.imagemUrl,
-                              message: '$_quantidade x ${widget.produto.nome}',
-                            );
-                          }
-                        } catch (e) {
-                          if (context.mounted) {
-                            context.showError(e.toString().replaceAll('Exception: ', ''));
-                          }
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: lojaFechada
-                            ? Colors.grey.shade400
-                            : const Color(0xFFFF6961),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: EdgeInsets.symmetric(vertical: 16.h),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(50.r),
-                        ),
-                      ),
-                      child: Text(
-                        aindaCarregando
-                            ? 'Carregando...'
-                            : lojaFechada
-                            ? 'Loja fechada'
-                            : 'Adicionar  ${currencyFormat.format(widget.produto.preco * _quantidade)}',
-                        style: TextStyle(
-                          fontSize: 16.sp,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                          onPressed: aindaCarregando
+                              ? null
+                              : erroLoja
+                                  ? () => setState(() {
+                                        _lojaFuture = _lojaRepository
+                                            .buscarLoja(widget.produto.lojaId);
+                                      })
+                                  : lojaFechada
+                                      ? () {
+                                          context.showError(
+                                            'Esta loja está fechada no momento.',
+                                          );
+                                        }
+                                      : () async {
+                                          try {
+                                            final cartProvider =
+                                                Provider.of<CartProvider>(
+                                              context,
+                                              listen: false,
+                                            );
+                                            await cartProvider
+                                                .adicionarItemComQuantidade(
+                                              idProduto: widget.produto.id,
+                                              nome: widget.produto.nome,
+                                              preco: widget.produto.preco,
+                                              imagemUrl:
+                                                  widget.produto.imagemUrl,
+                                              lojaId: widget.produto.lojaId,
+                                              quantidade: _quantidade,
+                                            );
+                                            if (context.mounted) {
+                                              showAppNotification(
+                                                context,
+                                                type: NotificationType.success,
+                                                imageUrl:
+                                                    widget.produto.imagemUrl,
+                                                message:
+                                                    '$_quantidade x ${widget.produto.nome}',
+                                              );
+                                            }
+                                          } catch (e) {
+                                            if (context.mounted) {
+                                              context.showError(
+                                                e.toString().replaceAll(
+                                                      'Exception: ',
+                                                      '',
+                                                    ),
+                                              );
+                                            }
+                                          }
+                                        },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: lojaFechada
+                                ? Colors.grey.shade400
+                                : const Color(0xFFFF6961),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: EdgeInsets.symmetric(vertical: 16.h),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(50.r),
+                            ),
+                          ),
+                          child: Text(
+                            aindaCarregando
+                                ? 'Carregando...'
+                                : erroLoja
+                                    ? 'Loja indisponível. Tentar novamente'
+                                    : lojaFechada
+                                        ? 'Loja fechada'
+                                        : 'Adicionar  ${currencyFormat.format(widget.produto.preco * _quantidade)}',
+                            style: TextStyle(
+                              fontSize: 16.sp,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         );
                       },
                     ),
@@ -552,14 +734,15 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
             ),
           ),
           Positioned(
-            right: 25.w, 
+            right: 25.w,
             top: 0,
             bottom: 0,
             width: 150.w,
             child: GestureDetector(
               behavior: HitTestBehavior.translucent,
               onHorizontalDragEnd: (details) {
-                if (details.primaryVelocity != null && details.primaryVelocity! < -300) {
+                if (details.primaryVelocity != null &&
+                    details.primaryVelocity! < -300) {
                   _abrirLojaProfile();
                 }
               },
@@ -584,10 +767,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
         Expanded(
           child: Text(
             text,
-            style: TextStyle(
-              fontSize: 14.sp,
-              color: const Color(0xFF555555),
-            ),
+            style: TextStyle(fontSize: 14.sp, color: const Color(0xFF555555)),
           ),
         ),
         Icon(Icons.chevron_right, size: 20.r, color: const Color(0xFFCCCCCC)),
@@ -595,7 +775,12 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
     );
   }
 
-  Widget _buildIconAction(IconData icon, String label, String count, {Color? iconColor}) {
+  Widget _buildIconAction(
+    IconData icon,
+    String label,
+    String count, {
+    Color? iconColor,
+  }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -603,141 +788,158 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
         SizedBox(height: 4.h),
         Text(
           count.isNotEmpty ? count : label,
-          style: TextStyle(
-            fontSize: 11.sp,
-            color: const Color(0xFF888888),
+          style: TextStyle(fontSize: 11.sp, color: const Color(0xFF888888)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReviewHeading(String title, IconData icon) {
+    return Row(
+      children: [
+        Container(
+          padding: EdgeInsets.all(8.r),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFF0EE),
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: Icon(icon, color: const Color(0xFFFF6961), size: 20.r),
+        ),
+        SizedBox(width: 10.w),
+        Expanded(
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: 16.sp,
+              fontWeight: FontWeight.w700,
+              color: const Color(0xFF5D201C),
+            ),
           ),
         ),
       ],
     );
   }
 
+  Widget _buildReviewCaption(String text) => Padding(
+        padding: EdgeInsets.only(top: 8.h, bottom: 12.h),
+        child: Text(
+          text,
+          style: TextStyle(
+            fontSize: 12.sp,
+            height: 1.5,
+            color: const Color(0xFF80635F),
+          ),
+        ),
+      );
+
   Widget _buildReviewsSection() {
-    return Container(
+    return Padding(
       padding: EdgeInsets.symmetric(horizontal: 20.w),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: FutureBuilder<
+          ({Map<String, dynamic>? resumo, List<AvaliacoesModel>? comentarios})>(
+        future: _avaliacoesFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const LoadingNhac(telaCheia: false, tamanho: 40);
+          }
+          final resumo = snapshot.data?.resumo;
+          final comentarios = snapshot.data?.comentarios;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              FutureBuilder<Map<String, dynamic>>(
-                future: _resumoAvaliacoesFuture,
-                builder: (context, snapshot) {
-                  final total = snapshot.data?['total'] ?? 0;
-                  return Text(
-                    'Avaliações do Produto ($total)',
-                    style: TextStyle(
-                      fontSize: 16.sp,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF5D201C),
-                    ),
-                  );
-                }
+              _buildReviewHeading(
+                'Avaliações do produto',
+                Icons.star_outline_rounded,
               ),
-              Row(
-                children: [
-                  Text(
-                    'Ver todas',
-                    style: TextStyle(
-                      fontSize: 14.sp,
-                      color: Colors.black54,
-                    ),
+              SizedBox(height: 12.h),
+              if (resumo == null)
+                BannerErroInline(
+                  mensagem: 'Não foi possível consultar a nota deste produto.',
+                  aoTentarNovamente: () => setState(
+                    () => _avaliacoesFuture = _carregarAvaliacoes(),
                   ),
-                  Icon(Icons.chevron_right, size: 20.r, color: Colors.black54),
+                )
+              else if ((resumo['total'] as num) == 0)
+                _buildReviewCaption(
+                  'Este produto ainda não recebeu avaliações.',
+                )
+              else
+                _buildRatingSummary(
+                  (resumo['media'] as num).toDouble(),
+                  (resumo['total'] as num).toInt(),
+                ),
+              Wrap(
+                spacing: 8.w,
+                runSpacing: 4.h,
+                children: [
+                  NhacFilterChip(
+                    label: 'Tudo',
+                    selected: true,
+                    onSelected: () {},
+                  ),
+                  const NhacFilterChip(
+                    label: 'Com fotos',
+                    unavailableReason:
+                        'Fotos das avaliações ainda não estão disponíveis.',
+                  ),
+                  const NhacFilterChip(
+                    label: 'Positivas',
+                    unavailableReason:
+                        'O filtro por avaliações do produto ainda não está disponível.',
+                  ),
                 ],
               ),
+              SizedBox(height: 24.h),
+              _buildReviewHeading(
+                'Comentários recentes da loja',
+                Icons.chat_bubble_outline_rounded,
+              ),
+              _buildReviewCaption('Experiências em pedidos desta loja.'),
+              if (comentarios == null)
+                BannerErroInline(
+                  mensagem: 'Não foi possível carregar os comentários da loja.',
+                  aoTentarNovamente: () => setState(
+                    () => _avaliacoesFuture = _carregarAvaliacoes(),
+                  ),
+                )
+              else if (comentarios.isEmpty)
+                _buildReviewCaption('A loja ainda não recebeu comentários.')
+              else
+                ...comentarios.take(3).map(
+                      (avaliacao) => _buildReviewItem(
+                        name: avaliacao.nomeUsuario.trim().isNotEmpty
+                            ? avaliacao.nomeUsuario
+                            : 'Anônimo',
+                        review: avaliacao.comentario,
+                        date: avaliacao.criadoEm ?? '',
+                        positive: avaliacao.nota >= 4,
+                      ),
+                    ),
             ],
-          ),
-          FutureBuilder<Map<String, dynamic>>(
-            future: _resumoAvaliacoesFuture,
-            builder: (context, snapshot) {
-              double rating = 0.0;
-              int total = 0;
-              if (snapshot.hasData && snapshot.data != null) {
-                rating = (snapshot.data!['media'] ?? 0).toDouble();
-                total = snapshot.data!['total'] ?? 0;
-              }
-              return _buildRatingSummary(rating, total);
-            }
-          ),
-          SizedBox(height: 12.h),
-          Row(
-            children: [
-              _buildReviewFilterTag('Tudo', isSelected: true),
-              SizedBox(width: 8.w),
-              _buildReviewFilterTag('Com fotos 0'),
-              SizedBox(width: 8.w),
-              _buildReviewFilterTag('Positivas 0', icon: Icons.thumb_up_alt),
-            ],
-          ),
-          SizedBox(height: 20.h),
-          FutureBuilder<List<AvaliacoesModel>>(
-            future: _avaliacoesFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: LoadingNhac(telaCheia: false, tamanho: 40));
-              if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) return Text('Sem avaliações ainda.', style: TextStyle(color: Colors.grey.shade600));
-
-              return Column(
-                children: snapshot.data!.take(3).map((avaliacao) {
-                  return _buildReviewItem(
-                    name: avaliacao.nomeUsuario.trim().isNotEmpty
-                        ? avaliacao.nomeUsuario
-                        : 'Anônimo',
-                    avatarColor: Colors.brown.shade200,
-                    avatarIcon: Icons.person,
-                    review: avaliacao.comentario,
-                    date: avaliacao.criadoEm ?? '',
-                    location: '',
-                    tag: avaliacao.nota >= 4 ? 'Positiva' : 'Feedback',
-                  );
-                }).toList(),
-              );
-            }
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReviewFilterTag(String text, {bool isSelected = false, IconData? icon}) {
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-      decoration: BoxDecoration(
-        color: isSelected ? const Color(0xFFFF6961) : const Color(0xFFF5F5F5),
-        borderRadius: BorderRadius.circular(16.r),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 14.r, color: isSelected ? Colors.white : Colors.black54),
-            SizedBox(width: 4.w),
-          ],
-          Text(
-            text,
-            style: TextStyle(
-              fontSize: 13.sp,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: isSelected ? Colors.white : Colors.black54,
-            ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
 
   Widget _buildReviewItem({
     required String name,
-    required Color avatarColor,
-    required IconData avatarIcon,
     required String review,
     required String date,
-    required String location,
-    required String tag,
+    required bool positive,
   }) {
-    return Padding(
-      padding: EdgeInsets.only(bottom: 20.h),
+    final parsedDate = DateTime.tryParse(date);
+    final formattedDate = parsedDate == null
+        ? ''
+        : DateFormat('dd/MM/yyyy').format(parsedDate.toLocal());
+    return Container(
+      margin: EdgeInsets.only(bottom: 12.h),
+      padding: EdgeInsets.all(16.w),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFFFE7E5)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -745,59 +947,62 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
             children: [
               CircleAvatar(
                 radius: 16.r,
-                backgroundColor: avatarColor,
-                child: Icon(avatarIcon, size: 20.r, color: Colors.white),
+                backgroundColor: const Color(0xFFFFF0EE),
+                child: Icon(
+                  Icons.person_outline_rounded,
+                  size: 20.r,
+                  color: const Color(0xFFFF6961),
+                ),
               ),
               SizedBox(width: 8.w),
-              Text(
-                name,
-                style: TextStyle(
-                  fontSize: 14.sp,
-                  color: Colors.black54,
+              Expanded(
+                child: Text(
+                  name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF5D201C),
+                  ),
                 ),
               ),
-              const Spacer(),
+              SizedBox(width: 8.w),
               Container(
-                padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF5E5),
-                  borderRadius: BorderRadius.circular(8.r),
+                  color: const Color(0xFFFFF0EE),
+                  borderRadius: BorderRadius.circular(20.r),
                 ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.thumb_up_alt, size: 12.r, color: Colors.orange),
-                    SizedBox(width: 4.w),
-                    Text(
-                      tag,
-                      style: TextStyle(
-                        fontSize: 12.sp,
-                        color: Colors.orange,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  positive ? 'Positiva' : 'Feedback',
+                  style: TextStyle(
+                    fontSize: 11.sp,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF5D201C),
+                  ),
                 ),
               ),
             ],
           ),
-          SizedBox(height: 8.h),
-          Text(
-            review,
-            style: TextStyle(
-              fontSize: 15.sp,
-              color: const Color(0xFF5D201C),
-              height: 1.4,
+          if (review.trim().isNotEmpty) ...[
+            SizedBox(height: 12.h),
+            Text(
+              review,
+              style: TextStyle(
+                fontSize: 14.sp,
+                height: 1.5,
+                color: const Color(0xFF5D201C),
+              ),
             ),
-          ),
-          SizedBox(height: 8.h),
-          Text(
-            '$date  $location',
-            style: TextStyle(
-              fontSize: 12.sp,
-              color: Colors.black38,
+          ],
+          if (formattedDate.isNotEmpty) ...[
+            SizedBox(height: 8.h),
+            Text(
+              formattedDate,
+              style: TextStyle(fontSize: 11.sp, color: const Color(0xFF80635F)),
             ),
-          ),
+          ],
         ],
       ),
     );
@@ -927,13 +1132,17 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                         separatorBuilder: (_, __) => SizedBox(width: 12.w),
                         itemBuilder: (context, index) {
                           final prod = produtosLoja[index];
-                          final currencyFormat = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+                          final currencyFormat = NumberFormat.currency(
+                            locale: 'pt_BR',
+                            symbol: 'R\$',
+                          );
                           return GestureDetector(
                             onTap: () {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (context) => ProdutoDetalhesPage(produto: prod),
+                                  builder: (context) =>
+                                      ProdutoDetalhesPage(produto: prod),
                                 ),
                               );
                             },
@@ -955,26 +1164,36 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                                 )
                                               : Container(
                                                   color: Colors.grey.shade200,
-                                                  child: Icon(Icons.fastfood, color: Colors.grey),
+                                                  child: Icon(
+                                                    Icons.fastfood,
+                                                    color: Colors.grey,
+                                                  ),
                                                 ),
                                           Positioned(
                                             bottom: 0,
                                             left: 0,
                                             right: 0,
                                             child: Container(
-                                              padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 4.h),
+                                              padding: EdgeInsets.symmetric(
+                                                horizontal: 6.w,
+                                                vertical: 4.h,
+                                              ),
                                               decoration: BoxDecoration(
                                                 gradient: LinearGradient(
                                                   begin: Alignment.bottomCenter,
                                                   end: Alignment.topCenter,
                                                   colors: [
-                                                    Colors.black.withValues(alpha: 0.7),
+                                                    Colors.black.withValues(
+                                                      alpha: 0.7,
+                                                    ),
                                                     Colors.transparent,
                                                   ],
                                                 ),
                                               ),
                                               child: Text(
-                                                currencyFormat.format(prod.preco),
+                                                currencyFormat.format(
+                                                  prod.preco,
+                                                ),
                                                 style: TextStyle(
                                                   color: Colors.white,
                                                   fontWeight: FontWeight.bold,
@@ -1019,109 +1238,56 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
 
   Widget _buildRatingSummary(double avaliacao, int total) {
     return Container(
-      margin: EdgeInsets.symmetric(vertical: 16.h),
-      padding: EdgeInsets.all(20.w),
+      margin: EdgeInsets.only(bottom: 12.h),
+      padding: EdgeInsets.all(16.w),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9F9F9),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFFFE7E5)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Text(
-                    avaliacao.toStringAsFixed(1),
-                    style: TextStyle(
-                      fontSize: 42.sp,
-                      fontWeight: FontWeight.w900,
-                      color: const Color(0xFF5D201C),
-                      height: 1,
-                    ),
-                  ),
-                  SizedBox(width: 8.w),
-                  Icon(Icons.star, size: 24.r, color: const Color(0xFF5D201C)),
-                ],
-              ),
-              SizedBox(height: 8.h),
-              Row(
-                children: [
-                  Text(
-                    '$total Avaliações',
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-                  SizedBox(width: 4.w),
-                  Icon(Icons.info_outline, size: 14.r, color: Colors.grey.shade400),
-                ],
-              ),
-            ],
+          Text(
+            avaliacao.toStringAsFixed(1),
+            style: TextStyle(
+              fontSize: 36.sp,
+              fontWeight: FontWeight.w800,
+              color: const Color(0xFF5D201C),
+            ),
           ),
-          SizedBox(width: 24.w),
+          SizedBox(width: 16.w),
           Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildRatingBarRow(5, 0.8),
-                SizedBox(height: 4.h),
-                _buildRatingBarRow(4, 0.4),
-                SizedBox(height: 4.h),
-                _buildRatingBarRow(3, 0.2),
-                SizedBox(height: 4.h),
-                _buildRatingBarRow(2, 0.05),
-                SizedBox(height: 4.h),
-                _buildRatingBarRow(1, 0.1),
+                Wrap(
+                  spacing: 2.w,
+                  children: List.generate(
+                    5,
+                    (index) => Icon(
+                      avaliacao >= index + 1
+                          ? Icons.star_rounded
+                          : avaliacao >= index + 0.5
+                              ? Icons.star_half_rounded
+                              : Icons.star_outline_rounded,
+                      size: 20.r,
+                      color: const Color(0xFFFF6961),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 6.h),
+                Text(
+                  '$total ${total == 1 ? "avaliação" : "avaliações"} do produto',
+                  style: TextStyle(
+                    fontSize: 12.sp,
+                    color: const Color(0xFF80635F),
+                  ),
+                ),
               ],
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildRatingBarRow(int starCount, double percentage) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 45.w,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: List.generate(
-              5,
-              (index) => Icon(
-                Icons.star,
-                size: 8.r,
-                color: index < starCount ? const Color(0xFF5D201C) : Colors.transparent,
-              ),
-            ),
-          ),
-        ),
-        SizedBox(width: 8.w),
-        Expanded(
-          child: Container(
-            height: 6.h,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade200,
-              borderRadius: BorderRadius.circular(10.r),
-            ),
-            child: FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: percentage,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: const Color(0xFF5D201C),
-                  borderRadius: BorderRadius.circular(10.r),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

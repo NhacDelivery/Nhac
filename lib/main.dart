@@ -3,6 +3,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/repositories/produto_repository.dart';
@@ -40,16 +41,20 @@ Future<void> _firebaseMessagingBackgroundHandler(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  await PushNotificationService.registrarMensagem(message);
   debugPrint("Notificação em background recebida!");
 
   if (message.data.containsKey('pedidoId') &&
       message.data.containsKey('status')) {
-    final status =
-        StatusPedido.fromApi(message.data['status']?.toString());
+    final status = StatusPedido.fromApi(message.data['status']?.toString());
 
-    final nomeProduto =
-        message.data['nomeProduto']?.toString() ?? 'Seu pedido';
+    final nomeProduto = message.data['nomeProduto']?.toString() ?? 'Seu pedido';
 
+    if (status.terminal) {
+      await LiveNotificationService.cancelLiveNotification(
+          pedidoId: message.data['pedidoId'].toString());
+      return;
+    }
     final stageIndex = status.stage;
 
     LiveNotificationService.updateLiveNotification(
@@ -68,6 +73,7 @@ late final SharedPreferences sharedPrefs;
 @NowaGenerated()
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('pt_BR', null);
 
   // Carrega as variáveis do arquivo .env.
   // IMPORTANTE: isso precisa acontecer antes de acessar AppConstants.
@@ -93,7 +99,7 @@ Future<void> main() async {
 
       // Set tracesSampleRate to 1.0 to capture
       // 100% of transactions for tracing.
-      options.tracesSampleRate = 1.0;
+      options.tracesSampleRate = kDebugMode ? 1.0 : 0.1;
 
       // The sampling rate for profiling is relative
       // to tracesSampleRate.
@@ -125,10 +131,15 @@ Future<void> main() async {
             _firebaseMessagingBackgroundHandler,
           );
 
-          final pushService =
-              PushNotificationService(authServiceRoteador);
+          final pushService = PushNotificationService(authServiceRoteador);
 
-          await pushService.initialize();
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            try {
+              await pushService.initialize();
+            } catch (e, stack) {
+              await Sentry.captureException(e, stackTrace: stack);
+            }
+          });
         }
 
         sharedPrefs = await SharedPreferences.getInstance();

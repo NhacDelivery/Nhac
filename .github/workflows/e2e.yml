@@ -20,9 +20,13 @@ env:
 
 jobs:
   e2e:
-    name: E2E-001 a E2E-004
+    name: E2E API${{ matrix.api_level }} ${{ matrix.profile }}
+    if: ${{ github.run_attempt <= 2 }}
     runs-on: ubuntu-24.04
     timeout-minutes: 110
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(github.event_name == 'workflow_dispatch' && '{"include":[{"api_level":34,"profile":"pixel_2"},{"api_level":33,"profile":"pixel_6"}]}' || '{"include":[{"api_level":34,"profile":"pixel_2"}]}') }}
     services:
       mariadb:
         image: mariadb:11.4
@@ -49,8 +53,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: NhacDelivery/backend-nhac
-          ref: f1035bd0b53c22e2a1dc98c71372220238d56369
+          # Feed + checkout contracts: cards, active orders and payment recovery.
+          ref: b3b4e8e4a890bc08d64cd6c90ebd1838d9d1bc75
           path: backend-nhac
+
+      - name: Testar verificação dos contratos E2E
+        working-directory: Nhac
+        run: python3 -m unittest discover -s tool -p test_check_e2e_backend.py -v
 
       - name: Setup Java 25
         uses: actions/setup-java@v4
@@ -98,6 +107,37 @@ jobs:
       - name: Habilitar aceleracao do emulador
         run: sudo chmod 666 /dev/kvm
 
+      - name: Preparar SDK do emulador com retentativa
+        shell: bash
+        run: |
+          SDKMANAGER_BIN="$(command -v sdkmanager || true)"
+          if [ -z "$SDKMANAGER_BIN" ]; then
+            for candidate in \
+              "${ANDROID_SDK_ROOT:-}/cmdline-tools/latest/bin/sdkmanager" \
+              "${ANDROID_HOME:-}/cmdline-tools/latest/bin/sdkmanager"; do
+              if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+                SDKMANAGER_BIN="$candidate"
+                break
+              fi
+            done
+          fi
+
+          if [ -z "$SDKMANAGER_BIN" ]; then
+            echo "sdkmanager indisponível neste runner. O pacote do emulador será preparado pelo android-emulator-runner."
+            exit 0
+          fi
+
+          for attempt in 1 2 3; do
+            if "$SDKMANAGER_BIN" --install emulator --channel=0; then
+              exit 0
+            fi
+            echo "Falha ao instalar emulator (tentativa ${attempt}/3), limpando cache do SDK..."
+            "$SDKMANAGER_BIN" --clear-cache || true
+            sleep 5
+          done
+          echo "Não foi possível preparar o pacote emulator após 3 tentativas."
+          exit 1
+
       - name: Executar E2E Android isolado
         timeout-minutes: 95
         uses: ReactiveCircus/android-emulator-runner@v2
@@ -110,9 +150,9 @@ jobs:
           BACKEND_DIR: ${{ github.workspace }}/backend-nhac
           BACKEND_JAVA_HOME: ${{ steps.backend-java.outputs.home }}
         with:
-          api-level: 34
+          api-level: ${{ matrix.api_level }}
           arch: x86_64
-          profile: pixel_2
+          profile: ${{ matrix.profile }}
           cores: 3
           ram-size: 4096M
           heap-size: 1024M
@@ -121,11 +161,38 @@ jobs:
           working-directory: Nhac
           script: ./tool/run_e2e.sh
 
+      - name: Gerar resumo E2E
+        if: always()
+        working-directory: Nhac
+        shell: bash
+        run: |
+          echo "## Resultado E2E" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Run attempt: ${{ github.run_attempt }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- API level: ${{ matrix.api_level }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Perfil: ${{ matrix.profile }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Repeat: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && '3' || '1' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if ls e2e-logs/*.log >/dev/null 2>&1; then
+            echo "### Últimas linhas dos logs" >> "$GITHUB_STEP_SUMMARY"
+            for log_file in e2e-logs/*.log; do
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "\`\`\`text" >> "$GITHUB_STEP_SUMMARY"
+              echo "$(basename "$log_file")" >> "$GITHUB_STEP_SUMMARY"
+              tail -n 25 "$log_file" >> "$GITHUB_STEP_SUMMARY"
+              echo "\`\`\`" >> "$GITHUB_STEP_SUMMARY"
+            done
+          else
+            echo "Sem logs E2E gerados." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Upload E2E logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: e2e-logs-${{ github.run_number }}-${{ github.run_attempt }}
-          path: Nhac/e2e-logs
+          name: e2e-diagnostics-${{ matrix.api_level }}-${{ matrix.profile }}-${{ github.run_number }}-${{ github.run_attempt }}
+          path: |
+            Nhac/e2e-logs
+            Nhac/integration_test/screenshots
+            Nhac/build/**/outputs/**/*.mp4
           if-no-files-found: warn
           retention-days: 14

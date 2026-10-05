@@ -23,12 +23,14 @@ class NetworkException extends AppException {
 class CustomCheckoutException extends AppException {
   final String title;
   final String? produtoId;
+  final String? pedidoAtivoId;
   final List<dynamic>? suggestions;
 
   CustomCheckoutException({
     required String message,
     required this.title,
     this.produtoId,
+    this.pedidoAtivoId,
     this.suggestions,
     String? code,
   }) : super(message, code: code);
@@ -37,7 +39,9 @@ class CustomCheckoutException extends AppException {
 Exception mapException(Object error) {
   if (error is DioException) {
     if (error.error is app_exc.AppException) {
-      return error.error as app_exc.AppException;
+      final mapped = error.error as app_exc.AppException;
+      if (mapped.code != null) return AppException(mapped.message, code: mapped.code);
+      return mapped;
     }
 
     if (error.response?.data != null && error.response!.data is Map) {
@@ -45,7 +49,7 @@ Exception mapException(Object error) {
       if (data.containsKey('message')) {
         return AppException(
           data['message'].toString(),
-          code: data['error']?.toString(),
+          code: (data['errorCode'] ?? data['error'])?.toString(),
         );
       }
     }

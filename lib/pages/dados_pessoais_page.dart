@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:lottie/lottie.dart';
+import 'package:nhac/components/estado_com_retry.dart';
 import 'package:nhac/components/nhac_menu_tile.dart';
-
 
 class DadosPessoaisPage extends StatelessWidget {
   final bool? isGoogleUserOverride;
@@ -19,13 +18,15 @@ class DadosPessoaisPage extends StatelessWidget {
     if (usuario == null) {
       return Scaffold(
         backgroundColor: const Color(0xFFFFE7E5),
+        appBar: AppBar(title: const Text('Dados pessoais')),
         body: Center(
-          child: Lottie.asset(
-            'assets/animations/botao_loading_nhac.json',
-            width: 150,
-            height: 150,
-          ),
-        ),
+            child: userProvider.isLoading
+                ? const LoadingNhac(telaCheia: false)
+                : BannerErroInline(
+                    mensagem: userProvider.erro ??
+                        'Os dados pessoais ainda não foram carregados.',
+                    aoTentarNovamente: userProvider.carregarDadosUsuario,
+                  )),
       );
     }
 
@@ -59,33 +60,39 @@ class DadosPessoaisPage extends StatelessWidget {
             const SizedBox(height: 16.0),
             NhacMenuTile(
               titulo: 'Foto de Perfil',
-              subtitulo: (usuario.imagemUrl?.isNotEmpty ?? false) ? 'Alterar foto' : 'Adicionar foto',
+              subtitulo: (usuario.imagemUrl?.isNotEmpty ?? false)
+                  ? 'Alterar foto'
+                  : 'Adicionar foto',
               onTap: () async => context.push('/editar-foto'),
             ),
             NhacMenuTile(
-              titulo: 'Nome', 
-              subtitulo: usuario.nome, 
-              onTap: () async {
-                if (GoRouterState.of(context).matchedLocation != '/editar-nome-preferencia') {
-                  await context.push('/editar-nome-preferencia');
-                }
-              }
-            ),
+                titulo: 'Nome',
+                subtitulo: usuario.nome,
+                onTap: () async {
+                  if (GoRouterState.of(context).matchedLocation !=
+                      '/editar-nome-preferencia') {
+                    await context.push('/editar-nome-preferencia');
+                  }
+                }),
             if (usuario.email.isNotEmpty)
               NhacMenuTile(
                 titulo: 'E-mail',
-                subtitulo: usuario.email,
-                onTap: isGoogleUser ? () async {} : () async => context.push('/editar-email'),
+                subtitulo: isGoogleUser
+                    ? '${usuario.email}\nGerenciado pela sua conta Google'
+                    : usuario.email,
+                onTap: isGoogleUser
+                    ? null
+                    : () async => context.push('/editar-email'),
               ),
             NhacMenuTile(
-              titulo: 'Telefone', 
-              subtitulo: usuario.telefone, 
-              onTap: () async {},
+              titulo: 'Telefone',
+              subtitulo:
+                  '${usuario.telefone}\nNão pode ser alterado pelo aplicativo',
             ),
             if (hasPassword)
               NhacMenuTile(
-                titulo: 'Senha', 
-                subtitulo: '**************', 
+                titulo: 'Senha',
+                subtitulo: '**************',
                 onTap: () async => context.push('/editar-senha'),
               ),
           ],

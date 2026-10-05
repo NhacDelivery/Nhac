@@ -4,77 +4,59 @@ name: Nhac
 description: Aplicativo de delivery com identidade coral e interfaces móveis em português.
 colors:
   primary: "#FF6961"
-  surface: "#FFE7E5"
-  feed-text: "#5D201C"
-  feed-background: "#FFFFFF"
+  background: "#FFE7E5"
+  text: "#5D201C"
+  surface: "#FFFFFF"
 typography:
-  sans:
+  body:
     fontFamily: "Roboto, sans-serif"
 omitted:
-  - section: rounded
-    reason: "Geometria adaptativa definida pelos componentes Flutter existentes."
   - section: spacing
-    reason: "Dimensões adaptadas por flutter_screenutil nos componentes existentes."
-components:
-  notification: {}
-  button: {}
+    reason: "Existing Flutter screens use ScreenUtil values directly; no shared spacing token owner yet."
+  - section: rounded
+    reason: "Existing Flutter components define their own radii."
+  - section: components
+    reason: "Shared Flutter widgets remain the runtime owner."
 ---
-
-# Nhac Design System
 
 ## Overview
 
-O app aproxima a experiência de um cardápio de bairro: coral, imagens de comida e
-formas arredondadas. É um produto de delivery para uso móvel; o feed permite ler
-publicações reais e interagir. A linguagem atual é português brasileiro.
-A assinatura é o coral Nhac, preservado nesta integração. Evitar um visual de
-painel corporativo ou uma reformulação da identidade para esta feature.
-
-Este documento espelha o código existente: `lib/globals/themes.dart` é a fonte
-canônica da paleta e da fonte. `lib/pages/feed_page.dart` e
-`lib/pages/feed_post_detail_page.dart` mantêm os estilos específicos do feed.
-A publicação usa Material e a paleta de `lightTheme`, com fotos em miniaturas
-arredondadas e formulário rolável para manter campos e ações acessíveis no celular.
-Não há geração de tokens. Mudanças futuras devem reconciliar documento e código.
+Nhac is a Brazilian food delivery app used while choosing, ordering, and following a meal. The food and the actual order status are the signature; avoid decorative dashboards or promises the backend cannot confirm. Existing Flutter widgets and `lib/globals/themes.dart` remain the runtime source of truth. This file records their accepted visual identity without changing it.
 
 ## Colors
 
-Coral identifica ações e seleção. Superfície rosa apoia a marca; fundo branco e
-texto marrom são os valores existentes do feed. Não foram alterados nesta integração.
+Coral `#FF6961` identifies actions and active states; pale pink `#FFE7E5` is the app background; brown `#5D201C` carries readable headings; white contains cards and forms. Error and warning copy must state the condition in text.
 
 ## Typography
 
-Roboto vem do tema atual. Pesos e tamanhos usam as definições existentes das telas
-e a adaptação de `flutter_screenutil`. Mensagens de recuperação precisam ser legíveis.
+Roboto is the existing app family. Use clear hierarchy and keep long addresses, payment status, and route errors readable on narrow phones.
 
 ## Layout
+
+Mobile first. The bottom navigation exposes only implemented destinations. Checkout keeps the amount and confirmation state together; tracking reserves space for map failure and retry.
+
+## Elevation & Depth
+
+Existing cards and sheets own their shadows. Do not introduce a new elevation scale during workflow fixes.
+
+## Shapes
+
+Retain the rounded cards, chips, and sheets already used throughout the app.
+
+## Components
+
+The store keeps loaded cards in place while fetching another page; the load-more control lives in the list footer. Tracking publishes order details before waiting for route geometry. Use existing shared buttons, loading indicator, product cards, and `context.showError`/`showSuccess` feedback. The map, Pix state, and chat preserve user input during network delays.
+
+## Do's and Don'ts
+
+Show confirmed freight as confirmed; label an estimate and block finalization until it is confirmed. Show promotions only when a real product discount exists. Do not show inert navigation or placeholder commerce actions.
+
+## Feed integrado
+
 
 Preservar SafeArea, listas com slivers e a barra inferior dos detalhes. Paginação
 é explícita, com “Carregar mais”. O campo de comentário deve continuar alcançável
 com o teclado aberto; verificação em dispositivo ainda necessária.
 
-## Elevation & Depth
 
-Os cards e barras existentes usam bordas, superfícies e sombras discretas.
-Esta feature não estabelece novos níveis de elevação.
-
-## Shapes
-
-Preservar os raios existentes dos cards, imagens e botões; não aplicar uma escala
-nova em telas isoladas.
-
-## Components
-
-Ações e formulários usam Material. Erros de operações usam
-`ErrorUIHelper` → `AppUiUtils` → `showAppNotification`.
-Listas têm estados de carregamento, vazio, falha e nova tentativa.
-Skeletons existentes continuam na listagem; detalhes usam indicador Material.
-Ícones seguem Material e ações interativas recebem nome acessível.
-A integração não altera animações existentes nem adiciona movimento decorativo.
-
-## Do's and Don'ts
-
-- Preservar tema e navegação das telas existentes.
-- Mostrar contagens vindas da API e preservar comentário quando o envio falhar.
-- Ignorar respostas antigas ao trocar categoria.
-- Não preencher estado vazio ou erro com posts, comentários ou números fictícios.
+Publicações, comentários e contagens vêm da API. Não preencher falhas com conteúdo fictício.

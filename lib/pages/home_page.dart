@@ -27,7 +27,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late PageController _pageController;
   final ScrollController _scrollController = ScrollController();
   bool _isScrolledDown = false;
-  late CartProvider _cartProvider;
+  CartProvider? _cartProvider;
   late final AnimationController _cartBarController;
   late final AnimationController _cartBounceController;
   final GlobalKey _cartIconKey = GlobalKey();
@@ -52,15 +52,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final userProvider = context.read<UserProvider>();
       _cartProvider = context.read<CartProvider>();
       final enderecoProvider = context.read<EnderecoProvider>();
 
       userProvider.carregarDadosUsuario();
-      _cartProvider.carregarCarrinhoLocal();
+      _cartProvider!.carregarCarrinhoLocal();
       enderecoProvider.buscarEnderecos();
 
-      _cartProvider.addListener(_onCartChanged);
+      _cartProvider!.addListener(_onCartChanged);
     });
   }
 
@@ -89,7 +90,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   @override
   void dispose() {
-    _cartProvider.removeListener(_onCartChanged);
+    _cartProvider?.removeListener(_onCartChanged);
     _pageController.dispose();
     _scrollController.dispose();
     _cartBarController.dispose();
@@ -132,197 +133,185 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       },
       child: Scaffold(
         extendBody: true,
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(24.w, 0, 24.w, 10.h),
+            child: _buildDynamicNavBar(),
+          ),
+        ),
         backgroundColor: const Color(0xFFFFE7E5),
-      body: NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          if (notification is ScrollUpdateNotification &&
-              notification.metrics.axis == Axis.vertical) {
-            if (notification.metrics.pixels > 150 && !_isScrolledDown) {
-              setState(() {
-                _isScrolledDown = true;
-              });
-            } else if (notification.metrics.pixels <= 150 && _isScrolledDown) {
-              setState(() {
-                _isScrolledDown = false;
-              });
+        body: NotificationListener<ScrollNotification>(
+          onNotification: (notification) {
+            if (notification is ScrollUpdateNotification &&
+                notification.metrics.axis == Axis.vertical) {
+              if (notification.metrics.pixels > 150 && !_isScrolledDown) {
+                setState(() {
+                  _isScrolledDown = true;
+                });
+              } else if (notification.metrics.pixels <= 150 &&
+                  _isScrolledDown) {
+                setState(() {
+                  _isScrolledDown = false;
+                });
+              }
             }
-          }
-          return false;
-        },
-        child: PrimaryScrollController(
-          controller: _scrollController,
-          child: Stack(
-            children: [
-              PageView(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (index) {
-                  setState(() {
-                    _selectedIndex = index;
-                  });
-                },
-                children: [
-                  const HomeContent(),
-                  CarrinhoPage(isActive: _selectedIndex == 1),
-                  const FeedPage(),
-                  const ProfileContent(),
-                ],
-              ),
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                height: 40.h,
-                child: IgnorePointer(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          const Color(0xFFFFE7E5).withValues(alpha: 0.7),
-                          const Color(0xFFFFE7E5).withValues(alpha: 0.6),
-                          const Color(0xFFFFE7E5).withValues(alpha: 0.0),
-                        ],
-                      ),
-                    ),
-                  ),
+            return false;
+          },
+          child: PrimaryScrollController(
+            controller: _scrollController,
+            child: Stack(
+              children: [
+                PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  onPageChanged: (index) {
+                    setState(() {
+                      _selectedIndex = index;
+                    });
+                  },
+                  children: [
+                    HomeContent(isActive: _selectedIndex == 0),
+                    CarrinhoPage(isActive: _selectedIndex == 1),
+                    const FeedPage(),
+                    ProfileContent(isActive: _selectedIndex == 3),
+                  ],
                 ),
-              ),
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: 50.h + bottomPadding,
-                child: IgnorePointer(
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [
-                          const Color(0xFFFFE7E5).withValues(alpha: 0.0),
-                          const Color(0xFFFFE7E5).withValues(alpha: 0.6),
-                          const Color(0xFFFFE7E5),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
-                bottom: (_isScrolledDown && _selectedIndex == 0)
-                    ? (bottomPadding + 101.h) 
-                    : (bottomPadding + 22.5.h),
-                right: 24.w + 12.5.w, 
-                child: IgnorePointer(
-                  ignoring: !(_isScrolledDown && _selectedIndex == 0),
-                  child: AnimatedOpacity(
-                    duration: const Duration(milliseconds: 200),
-                    opacity: (_isScrolledDown && _selectedIndex == 0) ? 1.0 : 0.0,
-                    child: Semantics(
-                    button: true,
-                    label: 'Voltar ao topo da página',
-                    child: GestureDetector(
-                  key: E2EKeys.homeScrollTop,
-                  onTap: (_isScrolledDown && _selectedIndex == 0) ? _scrollToTop : null,
-                  child: Container(
-                    width: 50.w,
-                    height: 50.w,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF6961),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFFFF6961).withValues(alpha: 0.3),
-                          blurRadius: 10.r,
-                          offset: Offset(0, 4.h),
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 40.h,
+                  child: IgnorePointer(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            const Color(0xFFFFE7E5).withValues(alpha: 0.7),
+                            const Color(0xFFFFE7E5).withValues(alpha: 0.6),
+                            const Color(0xFFFFE7E5).withValues(alpha: 0.0),
+                          ],
                         ),
-                      ],
+                      ),
                     ),
-                    child: Icon(
-                      Icons.arrow_upward_rounded,
-                      color: Colors.white,
-                      size: 24.sp,
-                    ),
-                  ),
-                    ),
-                  ),
                   ),
                 ),
-              ),
-              AnimatedBuilder(
-                animation: _cartBarController,
-                builder: (context, child) {
-                  final t =
-                      Curves.easeOutCubic.transform(_cartBarController.value);
-                  final baseBottom = bottomPadding + 95.h;
-                  final interpolatedBottom = (baseBottom - 80.h) + (80.h * t);
-                  final scaleX = 0.2 + 0.8 * t;
-                  final opacity = t.clamp(0.0, 1.0);
-
-                  if (t == 0) return const SizedBox.shrink();
-
-                  return Positioned(
-                    bottom: interpolatedBottom,
-                    left: 24.w,
-                    right: 24.w,
-                    child: Transform.scale(
-                      scaleX: scaleX,
-                      scaleY: 1.0,
-                      child: Opacity(
-                        opacity: opacity,
-                        child: Consumer<CartProvider>(
-                          builder: (context, cart, _) => _buildCartTotalBar(
-                            cart.valorTotal,
-                            key: _selectedIndex == 1
-                                ? E2EKeys.cartCheckout
-                                : null,
-                            onPressed: () {
-                              if (_selectedIndex == 1) {
-                                context.push('/checkout');
-                              } else {
-                                context.push('/carrinho');
-                              }
-                            },
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  height: 50.h + bottomPadding,
+                  child: IgnorePointer(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            const Color(0xFFFFE7E5).withValues(alpha: 0.0),
+                            const Color(0xFFFFE7E5).withValues(alpha: 0.6),
+                            const Color(0xFFFFE7E5),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  bottom: (_isScrolledDown && _selectedIndex == 0)
+                      ? (bottomPadding + 101.h)
+                      : (bottomPadding + 22.5.h),
+                  right: 24.w + 12.5.w,
+                  child: IgnorePointer(
+                    ignoring: !(_isScrolledDown && _selectedIndex == 0),
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity:
+                          (_isScrolledDown && _selectedIndex == 0) ? 1.0 : 0.0,
+                      child: Semantics(
+                        button: true,
+                        label: 'Voltar ao topo da página',
+                        child: GestureDetector(
+                          key: E2EKeys.homeScrollTop,
+                          onTap: (_isScrolledDown && _selectedIndex == 0)
+                              ? _scrollToTop
+                              : null,
+                          child: Container(
+                            width: 50.w,
+                            height: 50.w,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFF6961),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFFFF6961)
+                                      .withValues(alpha: 0.3),
+                                  blurRadius: 10.r,
+                                  offset: Offset(0, 4.h),
+                                ),
+                              ],
+                            ),
+                            child: Icon(
+                              Icons.arrow_upward_rounded,
+                              color: Colors.white,
+                              size: 24.sp,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  );
-                },
-              ),
-              AnimatedPositioned(
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
-                bottom: bottomPadding + 10.h,
-                left: _isScrolledDown
-                    ? MediaQuery.of(context).size.width - 24.w - 75.w
-                    : 24.w,
-                right: 24.w,
-                child: AnimatedBuilder(
+                  ),
+                ),
+                AnimatedBuilder(
                   animation: _cartBarController,
                   builder: (context, child) {
-                    final t = _cartBarController.value;
-                    final bounceAmount = math.sin(t * math.pi) * 8.h;
-                    final isReversing =
-                        _cartBarController.status == AnimationStatus.reverse;
-                    final offsetY = isReversing ? bounceAmount : -bounceAmount;
-                    return Transform.translate(
-                      offset: Offset(0, offsetY),
-                      child: child,
+                    final t =
+                        Curves.easeOutCubic.transform(_cartBarController.value);
+                    final baseBottom = bottomPadding + 95.h;
+                    final interpolatedBottom = (baseBottom - 80.h) + (80.h * t);
+                    final scaleX = 0.2 + 0.8 * t;
+                    final opacity = t.clamp(0.0, 1.0);
+
+                    if (t == 0) return const SizedBox.shrink();
+
+                    return Positioned(
+                      bottom: interpolatedBottom,
+                      left: 24.w,
+                      right: 24.w,
+                      child: Transform.scale(
+                        scaleX: scaleX,
+                        scaleY: 1.0,
+                        child: Opacity(
+                          opacity: opacity,
+                          child: Consumer<CartProvider>(
+                            builder: (context, cart, _) => _buildCartTotalBar(
+                              cart.valorTotal,
+                              key: _selectedIndex == 1
+                                  ? E2EKeys.cartCheckout
+                                  : null,
+                              onPressed: () {
+                                if (_selectedIndex == 1) {
+                                  context.push('/checkout');
+                                } else {
+                                  context.push('/carrinho');
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
                     );
                   },
-                  child: _buildDynamicNavBar(),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
-    ),
     );
   }
 
@@ -358,9 +347,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           borderRadius: BorderRadius.circular(50.r),
           child: AnimatedCrossFade(
             duration: const Duration(milliseconds: 300),
-            crossFadeState: _isScrolledDown
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
+            crossFadeState: CrossFadeState.showFirst,
             alignment: Alignment.center,
             layoutBuilder:
                 (topChild, topChildKey, bottomChild, bottomChildKey) {
@@ -445,102 +432,105 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       child: GestureDetector(
         key: index == 1 ? E2EKeys.cartOpen : null,
         onTap: () {
-        final oldIndex = _selectedIndex;
-        setState(() {
-          _selectedIndex = index;
-        });
-        _pageController.animateToPage(
-          index,
+          final oldIndex = _selectedIndex;
+          setState(() {
+            _selectedIndex = index;
+          });
+          _pageController.animateToPage(
+            index,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.fastOutSlowIn,
+          );
+
+          if (index == 1) {
+            final cart = context.read<CartProvider>();
+            if (cart.itens.isNotEmpty) {
+              _cartBarController.forward();
+            }
+          } else if (oldIndex == 1) {
+            _cartBarController.animateBack(0,
+                duration: const Duration(milliseconds: 150));
+          }
+        },
+        child: AnimatedContainer(
           duration: const Duration(milliseconds: 400),
           curve: Curves.fastOutSlowIn,
-        );
-
-        if (index == 1) {
-          final cart = context.read<CartProvider>();
-          if (cart.itens.isNotEmpty) {
-            _cartBarController.forward();
-          }
-        } else if (oldIndex == 1) {
-          _cartBarController.animateBack(0,
-              duration: const Duration(milliseconds: 150));
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.fastOutSlowIn,
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? 20.w : 12.w,
-          vertical: 12.h,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFFFEBD9) : Colors.transparent,
-          borderRadius: BorderRadius.circular(50.r),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            index == 1
-                ? AnimatedBuilder(
-                    animation: _cartBounceController,
-                    builder: (context, child) {
-                      final scale = 1.0 + 0.3 * math.sin(_cartBounceController.value * math.pi);
-                      return Transform.scale(
-                        scale: scale,
-                        child: child,
-                      );
-                    },
-                    child: Selector<CartProvider, int>(
-                      selector: (context, provider) => provider.totalDeUnidades,
-                      builder: (context, count, child) {
-                        return Badge(
-                          key: _cartIconKey,
-                          label: count > 0 ? Text(count.toString()) : null,
-                          isLabelVisible: count > 0,
-                          backgroundColor: const Color(0xFFFF6961),
-                          child: Icon(
-                            icon,
-                            size: 28.sp,
-                            color: isSelected
-                                ? const Color(0xFFFF6961)
-                                : const Color(0xFFA0A0A0),
-                          ),
+          padding: EdgeInsets.symmetric(
+            horizontal: isSelected ? 20.w : 12.w,
+            vertical: 12.h,
+          ),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFFFFEBD9) : Colors.transparent,
+            borderRadius: BorderRadius.circular(50.r),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              index == 1
+                  ? AnimatedBuilder(
+                      animation: _cartBounceController,
+                      builder: (context, child) {
+                        final scale = 1.0 +
+                            0.3 *
+                                math.sin(_cartBounceController.value * math.pi);
+                        return Transform.scale(
+                          scale: scale,
+                          child: child,
                         );
                       },
+                      child: Selector<CartProvider, int>(
+                        selector: (context, provider) =>
+                            provider.totalDeUnidades,
+                        builder: (context, count, child) {
+                          return Badge(
+                            key: _cartIconKey,
+                            label: count > 0 ? Text(count.toString()) : null,
+                            isLabelVisible: count > 0,
+                            backgroundColor: const Color(0xFFFF6961),
+                            child: Icon(
+                              icon,
+                              size: 28.sp,
+                              color: isSelected
+                                  ? const Color(0xFFFF6961)
+                                  : const Color(0xFFA0A0A0),
+                            ),
+                          );
+                        },
+                      ),
+                    )
+                  : Icon(
+                      icon,
+                      size: 28.sp,
+                      color: isSelected
+                          ? const Color(0xFFFF6961)
+                          : const Color(0xFFA0A0A0),
                     ),
-                  )
-                : Icon(
-                    icon,
-                    size: 28.sp,
-                    color: isSelected
-                        ? const Color(0xFFFF6961)
-                        : const Color(0xFFA0A0A0),
-                  ),
-            AnimatedSize(
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.fastOutSlowIn,
-              child: SizedBox(
-                width: isSelected ? null : 0,
-                child: isSelected
-                    ? Padding(
-                        padding: EdgeInsets.only(left: 8.w),
-                        child: Text(
-                          label,
-                          maxLines: 1,
-                          overflow: TextOverflow.clip,
-                          style: TextStyle(
-                            color: const Color(0xFFFF6961),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15.sp,
+              AnimatedSize(
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.fastOutSlowIn,
+                child: SizedBox(
+                  width: isSelected ? null : 0,
+                  child: isSelected
+                      ? Padding(
+                          padding: EdgeInsets.only(left: 8.w),
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            overflow: TextOverflow.clip,
+                            style: TextStyle(
+                              color: const Color(0xFFFF6961),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15.sp,
+                            ),
                           ),
-                        ),
-                      )
-                    : const SizedBox.shrink(),
+                        )
+                      : const SizedBox.shrink(),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
     );
   }
 
@@ -566,7 +556,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Total com frete',
+                Text('Subtotal dos produtos',
                     style: TextStyle(color: Colors.grey, fontSize: 12.sp)),
                 _AnimatedTotalText(
                     total: total, currencyFormat: currencyFormat),

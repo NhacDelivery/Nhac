@@ -1,7 +1,13 @@
+import 'package:nhac/components/estado_enderecos.dart';
+import 'package:nhac/components/selecionar_endereco_padrao.dart';
 import 'dart:async';
+import 'package:nhac/services/home_order_route_observer.dart';
+import 'package:nhac/services/api_client.dart';
+import 'package:nhac/services/shared_get.dart';
 import 'package:nhac/components/home/home_category_chips.dart';
-import 'package:nhac/components/home/home_order_tracking_card.dart';
+import 'package:nhac/components/home/home_orders.dart';
 import 'package:nhac/globals/exceptions.dart';
+import 'package:nhac/utils/app_exceptions.dart' as api_errors;
 import 'package:nhac/models/loja/lojas.dart';
 import 'package:nhac/models/produto/produtos.dart';
 import 'package:nhac/utils/endereco_utils.dart';
@@ -14,7 +20,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:lottie/lottie.dart';
 import 'package:flutter/material.dart';
-import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/components/home/home_banner_carousel.dart';
@@ -32,21 +37,56 @@ import 'package:provider/provider.dart';
 import 'package:nhac/components/fly_to_cart_overlay.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
 import 'package:nhac/globals/app_constants.dart';
+import 'package:nhac/components/estado_com_retry.dart';
 
 @NowaGenerated()
 class HomeContent extends StatefulWidget {
   @NowaGenerated({'loader': 'auto-constructor'})
-  const HomeContent({super.key});
+  const HomeContent({
+    super.key,
+    this.isActive = true,
+    this.lojaRepository,
+    this.produtoRepository,
+  });
+
+  final bool isActive;
+  final LojaRepository? lojaRepository;
+  final ProdutoRepository? produtoRepository;
 
   @override
   State<HomeContent> createState() => _HomeContentState();
 }
 
-class _HomeContentState extends State<HomeContent> {
+class _HomeContentState extends State<HomeContent>
+    with RouteAware, WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+  final _ordersKey = GlobalKey<HomeOrdersState>();
+  bool _visible = true;
+  bool _foreground = true;
+  bool get _active => widget.isActive && _visible && _foreground;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) homeOrderRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPushNext() => _visible = false;
+  @override
+  void didPopNext() => _visible = true;
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) =>
+      _foreground = state == AppLifecycleState.resumed;
+
   String _currentAddress = 'Buscando localização...';
   static bool _jaCarregouUmaVez = false;
   late bool _isLoading;
   Timer? _loadingTimer;
+  Timer? _refreshTimer;
+  bool _atualizandoCatalogo = false;
 
   final List<LojasModel> _lojas = [];
   int _currentPageLojas = 0;
@@ -54,24 +94,44 @@ class _HomeContentState extends State<HomeContent> {
   bool _hasMoreLojas = true;
   bool _errorLojas = false;
   String _mensagemErroLojas = 'Ocorreu um erro ao carregar os restaurantes.';
+  EstadoConteudo _estadoLojas = EstadoConteudo.loading;
 
-  final LojaRepository _lojaRepository = LojaRepository();
-  final ProdutoRepository _produtoRepository = ProdutoRepository();
+  late final LojaRepository _lojaRepository;
+  late final ProdutoRepository _produtoRepository;
 
   final List<ProdutosModel> _produtosNecessidades = [];
-  bool _isLoadingProdutosNecessidades = true;
 
   final List<ProdutosModel> _produtosPromocao = [];
-  bool _isLoadingProdutosPromocao = true;
+
+  EstadoConteudo _estadoProdutosNecessidades = EstadoConteudo.loading;
+  EstadoConteudo _estadoProdutosPromocao = EstadoConteudo.loading;
 
   Map<String, bool> _lojaAbertaMap = {};
 
   @override
   void initState() {
     super.initState();
+    _lojaRepository = widget.lojaRepository ?? LojaRepository();
+    _produtoRepository = widget.produtoRepository ?? ProdutoRepository();
     _isLoading = !_jaCarregouUmaVez;
 
-    _carregarDadosIniciais();
+    WidgetsBinding.instance.addObserver(this);
+    _carregarCatalogoInicial();
+    _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted &&
+          _active &&
+          LocalCacheService.cacheHomeVencido &&
+          !_atualizandoCatalogo) {
+        _atualizandoCatalogo = true;
+        // Não limpa o cache - mantém dados para stale-while-revalidate
+        LocalCacheService.ultimaAtualizacaoHome = null;
+        _currentPageLojas = 0;
+        _hasMoreLojas = true;
+        _carregarDadosIniciais(
+          isRefresh: true,
+        ).whenComplete(() => _atualizandoCatalogo = false);
+      }
+    });
     _carregarGpsComCache();
 
     if (_isLoading) {
@@ -88,23 +148,55 @@ class _HomeContentState extends State<HomeContent> {
 
   @override
   void dispose() {
+    homeOrderRouteObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
     _loadingTimer?.cancel();
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _carregarDadosIniciais() async {
+  Future<void> _carregarCatalogoInicial() async {
+    try {
+      await LocalCacheService.restaurarCatalogoHome();
+    } catch (e) {
+      debugPrint('Não foi possível restaurar o catálogo local: $e');
+    }
+    if (!mounted) return;
+    await _carregarDadosIniciais();
+  }
+
+  Future<void>? _catalogoPendente;
+  Future<void> _carregarDadosIniciais({bool isRefresh = false}) {
+    return _catalogoPendente ??= _carregarCatalogo(isRefresh: isRefresh)
+        .whenComplete(() => _catalogoPendente = null);
+  }
+
+  Future<void> _carregarCatalogo({bool isRefresh = false}) async {
+    if (isRefresh) {
+      final cache = SharedGet.forClient(ApiClient().dio);
+      cache.invalidatePrefix('/produtos');
+      cache.invalidatePrefix('/lojas');
+    }
     await Future.wait([
-      _fetchProdutosNecessidades(),
-      _fetchProdutosPromocao(),
-      _fetchLojas(),
+      _fetchProdutosNecessidades(isRefresh: isRefresh),
+      _fetchProdutosPromocao(isRefresh: isRefresh),
+      _fetchLojas(isRefresh: isRefresh),
     ]);
-    _aplicarStatusLojas();
+    if (mounted) setState(_aplicarStatusLojas);
+    if (!_errorLojas &&
+        _estadoProdutosNecessidades != EstadoConteudo.erro &&
+        _estadoProdutosPromocao != EstadoConteudo.erro) {
+      LocalCacheService.ultimaAtualizacaoHome = DateTime.now();
+      try {
+        await LocalCacheService.salvarCatalogoHome();
+      } catch (e) {
+        debugPrint('Não foi possível salvar o catálogo local: $e');
+      }
+    }
 
     if (mounted) {
       _loadingTimer?.cancel();
       setState(() {
-        _isLoadingProdutosNecessidades = false;
-        _isLoadingProdutosPromocao = false;
         if (_isLoading) {
           _isLoading = false;
           _jaCarregouUmaVez = true;
@@ -120,7 +212,7 @@ class _HomeContentState extends State<HomeContent> {
   void _aplicarStatusLojas() {
     if (!mounted) return;
 
-    setState(() {
+    {
       // Constrói o mapa a partir dos próprios produtos — sem requisição HTTP
       final todos = [..._produtosNecessidades, ..._produtosPromocao];
       _lojaAbertaMap = {
@@ -129,19 +221,25 @@ class _HomeContentState extends State<HomeContent> {
       };
 
       _produtosNecessidades.removeWhere((p) {
-        return !(_lojaAbertaMap[p.lojaId] ?? false);
+        return !p.lojaAberta || !(_lojaAbertaMap[p.lojaId] ?? false);
       });
 
       _produtosPromocao.removeWhere((p) {
-        return !(_lojaAbertaMap[p.lojaId] ?? false);
+        return p.preco >= 20 ||
+            !p.lojaAberta ||
+            !(_lojaAbertaMap[p.lojaId] ?? false);
       });
 
       _produtosNecessidades.shuffle();
       _produtosPromocao.shuffle();
 
       // Limit the number of products to 10 to not overflow the UI and look nice
-      if (_produtosNecessidades.length > 10) _produtosNecessidades.removeRange(10, _produtosNecessidades.length);
-      if (_produtosPromocao.length > 10) _produtosPromocao.removeRange(10, _produtosPromocao.length);
+      if (_produtosNecessidades.length > 10) {
+        _produtosNecessidades.removeRange(10, _produtosNecessidades.length);
+      }
+      if (_produtosPromocao.length > 10) {
+        _produtosPromocao.removeRange(10, _produtosPromocao.length);
+      }
 
       // Sort products to put open stores first.
       int compareLojas(ProdutosModel a, ProdutosModel b) {
@@ -154,72 +252,167 @@ class _HomeContentState extends State<HomeContent> {
 
       _produtosNecessidades.sort(compareLojas);
       _produtosPromocao.sort(compareLojas);
-    });
+      if (_estadoProdutosNecessidades == EstadoConteudo.conteudo &&
+          _produtosNecessidades.isEmpty) {
+        _estadoProdutosNecessidades = EstadoConteudo.vazio;
+      }
+      if (_estadoProdutosPromocao == EstadoConteudo.conteudo &&
+          _produtosPromocao.isEmpty) {
+        _estadoProdutosPromocao = EstadoConteudo.vazio;
+      }
+    }
   }
 
-  Future<void> _fetchProdutosNecessidades() async {
-    if (LocalCacheService.produtosNecessidadesCache != null) {
+  Future<void> _fetchProdutosNecessidades({bool isRefresh = false}) async {
+    if (!isRefresh) {
+      if (mounted) {
+        setState(() {
+          _estadoProdutosNecessidades = EstadoConteudo.loading;
+        });
+      }
+    }
+
+    // Carrega do cache primeiro (stale-while-revalidate)
+    if (LocalCacheService.produtosNecessidadesCache != null && !isRefresh) {
       if (mounted) {
         setState(() {
           _produtosNecessidades.clear();
-          _produtosNecessidades.addAll(LocalCacheService.produtosNecessidadesCache!.cast<ProdutosModel>());
+          _produtosNecessidades.addAll(
+            LocalCacheService.produtosNecessidadesCache!.cast<ProdutosModel>(),
+          );
+          _aplicarStatusLojas();
+          _estadoProdutosNecessidades = _produtosNecessidades.isEmpty
+              ? EstadoConteudo.vazio
+              : EstadoConteudo.conteudo;
         });
+      }
+      // Mesmo com cache, tenta buscar dados frescos em background
+      if (!isRefresh) {
+        await _fetchProdutosNecessidades(isRefresh: true);
       }
       return;
     }
 
     try {
       final produtos = await _produtoRepository.buscarNecessidades();
+      if (!mounted) return;
       LocalCacheService.produtosNecessidadesCache = List.from(produtos);
       if (mounted) {
         setState(() {
           _produtosNecessidades.clear();
           _produtosNecessidades.addAll(produtos);
+          _aplicarStatusLojas();
+          _estadoProdutosNecessidades = _produtosNecessidades.isEmpty
+              ? EstadoConteudo.vazio
+              : EstadoConteudo.conteudo;
         });
       }
     } catch (e) {
       debugPrint("Erro ao buscar necessidades da API: $e");
+      if (mounted) {
+        // Se é refresh e já temos dados, mantém os dados (stale-while-revalidate)
+        if (isRefresh && _produtosNecessidades.isNotEmpty) {
+          setState(() {
+            _estadoProdutosNecessidades = EstadoConteudo.erro;
+          });
+        } else {
+          setState(() {
+            _estadoProdutosNecessidades = EstadoConteudo.erro;
+          });
+        }
+      }
     }
   }
 
-  Future<void> _fetchProdutosPromocao() async {
-    if (LocalCacheService.produtosPromocaoCache != null) {
+  Future<void> _fetchProdutosPromocao({bool isRefresh = false}) async {
+    if (!isRefresh) {
+      if (mounted) {
+        setState(() {
+          _estadoProdutosPromocao = EstadoConteudo.loading;
+        });
+      }
+    }
+
+    // Carrega do cache primeiro (stale-while-revalidate)
+    if (LocalCacheService.produtosPromocaoCache != null && !isRefresh) {
       if (mounted) {
         setState(() {
           _produtosPromocao.clear();
-          _produtosPromocao.addAll(LocalCacheService.produtosPromocaoCache!.cast<ProdutosModel>());
+          _produtosPromocao.addAll(
+            LocalCacheService.produtosPromocaoCache!.cast<ProdutosModel>(),
+          );
+          _aplicarStatusLojas();
+          _estadoProdutosPromocao = _produtosPromocao.isEmpty
+              ? EstadoConteudo.vazio
+              : EstadoConteudo.conteudo;
         });
+      }
+      // Mesmo com cache, tenta buscar dados frescos em background
+      if (!isRefresh) {
+        await _fetchProdutosPromocao(isRefresh: true);
       }
       return;
     }
 
     try {
       final promocoes = await _produtoRepository.buscarPromocoes();
+      if (!mounted) return;
       LocalCacheService.produtosPromocaoCache = List.from(promocoes);
       if (mounted) {
         setState(() {
           _produtosPromocao.clear();
           _produtosPromocao.addAll(promocoes);
+          _aplicarStatusLojas();
+          _estadoProdutosPromocao = _produtosPromocao.isEmpty
+              ? EstadoConteudo.vazio
+              : EstadoConteudo.conteudo;
         });
       }
     } catch (e) {
       debugPrint("Erro ao buscar promoções da API: $e");
+      if (mounted) {
+        // Se é refresh e já temos dados, mantém os dados (stale-while-revalidate)
+        if (isRefresh && _produtosPromocao.isNotEmpty) {
+          setState(() {
+            _estadoProdutosPromocao = EstadoConteudo.erro;
+          });
+        } else {
+          setState(() {
+            _estadoProdutosPromocao = EstadoConteudo.erro;
+          });
+        }
+      }
     }
   }
 
-  Future<void> _fetchLojas() async {
-    if (_isLoadingLojas || !_hasMoreLojas || !mounted) return;
+  Future<void> _fetchLojas({bool isRefresh = false}) async {
+    if (_isLoadingLojas || (!_hasMoreLojas && !isRefresh) || !mounted) return;
 
-    if (LocalCacheService.lojasCache != null && _currentPageLojas == 0) {
+    // Carrega do cache primeiro (stale-while-revalidate) - apenas na carga inicial
+    if (!isRefresh &&
+        LocalCacheService.lojasCache != null &&
+        _currentPageLojas == 0) {
       if (mounted) {
         setState(() {
           _lojas.clear();
           _lojas.addAll(LocalCacheService.lojasCache!.cast<LojasModel>());
           _currentPageLojas = LocalCacheService.currentPageLojasCache;
           _hasMoreLojas = LocalCacheService.hasMoreLojasCache;
+          _estadoLojas =
+              _lojas.isEmpty ? EstadoConteudo.vazio : EstadoConteudo.conteudo;
         });
       }
+      // Mesmo com cache, tenta buscar dados frescos em background
+      await _fetchLojas(isRefresh: true);
       return;
+    }
+
+    if (!isRefresh && _currentPageLojas == 0) {
+      if (mounted) {
+        setState(() {
+          _estadoLojas = EstadoConteudo.loading;
+        });
+      }
     }
 
     setState(() {
@@ -228,15 +421,24 @@ class _HomeContentState extends State<HomeContent> {
     });
 
     try {
-      final novasLojas =
-          await _lojaRepository.buscarLojas(page: _currentPageLojas, size: 10);
+      final novasLojas = await _lojaRepository.buscarLojas(
+        page: isRefresh ? 0 : _currentPageLojas,
+        size: 10,
+      );
 
       if (novasLojas.isEmpty) {
         if (mounted) {
           setState(() {
+            if (isRefresh || _currentPageLojas == 0) _lojas.clear();
+            LocalCacheService.lojasCache = List.from(_lojas);
             _hasMoreLojas = false;
             _isLoadingLojas = false;
             LocalCacheService.hasMoreLojasCache = false;
+            if (isRefresh || _currentPageLojas == 0) {
+              _currentPageLojas = 0;
+              LocalCacheService.currentPageLojasCache = 0;
+              _estadoLojas = EstadoConteudo.vazio;
+            }
           });
         }
         return;
@@ -244,294 +446,353 @@ class _HomeContentState extends State<HomeContent> {
 
       if (mounted) {
         setState(() {
+          if (isRefresh || _currentPageLojas == 0) _lojas.clear();
           _lojas.addAll(novasLojas);
-          _currentPageLojas++;
+          _aplicarStatusLojas();
+          _currentPageLojas = isRefresh ? 1 : _currentPageLojas + 1;
+          _hasMoreLojas = novasLojas.length >= 10;
 
           if (novasLojas.length < 10) {
             _hasMoreLojas = false;
           }
 
           _isLoadingLojas = false;
+          _estadoLojas = EstadoConteudo.conteudo;
 
           LocalCacheService.lojasCache = List.from(_lojas);
           LocalCacheService.currentPageLojasCache = _currentPageLojas;
           LocalCacheService.hasMoreLojasCache = _hasMoreLojas;
         });
       }
-    } on NetworkException catch (e) {
+    } catch (e) {
       debugPrint("Erro de rede ao buscar lojas: $e");
       if (mounted) {
         setState(() {
           _isLoadingLojas = false;
           _errorLojas = true;
-          _mensagemErroLojas = e.message;
+          _mensagemErroLojas = e is AppException
+              ? e.message
+              : e is api_errors.AppException
+                  ? e.message
+                  : 'Não foi possível carregar os restaurantes. Tente novamente.';
+          // Se é refresh e já temos dados, mantém os dados (stale-while-revalidate)
+          if (isRefresh && _lojas.isNotEmpty) {
+            _estadoLojas = EstadoConteudo.conteudo;
+            _mensagemErroLojas =
+                'Não foi possível atualizar. Exibindo dados anteriores, que podem estar desatualizados.';
+          } else if (_currentPageLojas == 0) {
+            _estadoLojas = EstadoConteudo.erro;
           }
-          );
+        });
       }
     }
   }
 
   Widget _buildListaDeLojas() {
-    if (_errorLojas && _lojas.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(24.w),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12.r),
-        ),
-        child: Column(
-          children: [
-            Icon(Icons.error_outline,
-                color: const Color(0xFFFF6961), size: 48.r),
-            SizedBox(height: 16.h),
-            Text(
-              _mensagemErroLojas,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.grey, fontSize: 14.sp),
-            ),
-            SizedBox(height: 16.h),
-            ElevatedButton(
-              onPressed: _fetchLojas,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFFF6961),
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(50.r),
-                ),
-              ),
-              child: const Text('Tentar novamente'),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_lojas.isEmpty && _isLoadingLojas) {
-      return Column(
-        children: List.generate(
+    // Para a primeira página, usa o padrão de estado com retry
+    if (_lojas.isEmpty) {
+      return EstadoComRetry<List<LojasModel>>(
+        estado: _estadoLojas,
+        dados: _lojas,
+        aoTentarNovamente: () => _fetchLojas(isRefresh: true),
+        builderConteudo: (lojas) => _buildLojasList(lojas),
+        builderLoading: () => Column(
+          children: List.generate(
             3,
             (index) => Padding(
-                  padding: EdgeInsets.only(bottom: 16.h),
-                  child: _buildBoxSkeleton(
-                      width: double.infinity, height: 90.h, borderRadius: 12.r),
-                )),
-      );
-    }
-
-    if (_lojas.isEmpty && !_isLoadingLojas) {
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.all(24.w),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12.r),
-        ),
-        child: const Center(
-          child: Text(
-            'Nenhum restaurante encontrado na região.',
-            style: TextStyle(color: Colors.grey),
+              padding: EdgeInsets.only(bottom: 16.h),
+              child: _buildBoxSkeleton(
+                width: double.infinity,
+                height: 90.h,
+                borderRadius: 12.r,
+              ),
+            ),
           ),
         ),
+        builderVazio: () => Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(24.w),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: const Center(
+            child: Text(
+              'Nenhum restaurante encontrado na região.',
+              style: TextStyle(color: Colors.grey),
+            ),
+          ),
+        ),
+        builderErro: (erro, tentarNovamente) => Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(24.w),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.error_outline,
+                color: const Color(0xFFFF6961),
+                size: 48.r,
+              ),
+              SizedBox(height: 16.h),
+              Text(
+                _mensagemErroLojas,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 14.sp),
+              ),
+              SizedBox(height: 16.h),
+              ElevatedButton(
+                onPressed: tentarNovamente,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFF6961),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(50.r),
+                  ),
+                ),
+                child: const Text('Tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+        alturaMinima: 200.h,
       );
     }
 
+    // Para páginas subsequentes, mostra a lista com banner de erro inline se houver erro no refresh
+    return Column(
+      children: [
+        if (_errorLojas && _estadoLojas == EstadoConteudo.conteudo)
+          BannerErroInline(
+            mensagem: _mensagemErroLojas,
+            aoTentarNovamente: () => _fetchLojas(isRefresh: true),
+          ),
+        _buildLojasList(_lojas),
+      ],
+    );
+  }
+
+  Widget _buildLojasList(List<LojasModel> lojas) {
     return Column(
       children: [
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           padding: EdgeInsets.zero,
-          itemCount: _lojas.length,
+          itemCount: lojas.length,
           itemBuilder: (context, index) {
-            final loja = _lojas[index];
+            final loja = lojas[index];
 
             return Container(
-                margin: EdgeInsets.only(bottom: 16.h),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16.r),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF5D201C).withValues(alpha: 0.05),
-                      blurRadius: 10.r,
-                      offset: const Offset(0.0, 4.0),
-                    ),
-                  ],
-                ),
-                child: InkWell(
-                  key: E2EKeys.homeStore(loja.id),
-                  borderRadius: BorderRadius.circular(16.r),
-                  onTap: () {
-                    if (loja.isAberto) {
-                      Navigator.push(
-                        context,
-                        PageRouteBuilder(
-                          pageBuilder:
-                              (context, animation, secondaryAnimation) =>
-                                  LojaPage(loja: loja),
-                          transitionsBuilder:
-                              (context, animation, secondaryAnimation, child) {
-                            var curvedAnimation = CurvedAnimation(
-                              parent: animation,
-                              curve: Curves.easeOutQuart,
-                              reverseCurve: Curves.easeInQuart,
-                            );
+              margin: EdgeInsets.only(bottom: 16.h),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16.r),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF5D201C).withValues(alpha: 0.05),
+                    blurRadius: 10.r,
+                    offset: const Offset(0.0, 4.0),
+                  ),
+                ],
+              ),
+              child: InkWell(
+                key: E2EKeys.homeStore(loja.id),
+                borderRadius: BorderRadius.circular(16.r),
+                onTap: () {
+                  if (loja.isAberto) {
+                    Navigator.push(
+                      context,
+                      PageRouteBuilder(
+                        pageBuilder: (context, animation, secondaryAnimation) =>
+                            LojaPage(loja: loja),
+                        transitionsBuilder:
+                            (context, animation, secondaryAnimation, child) {
+                          var curvedAnimation = CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutQuart,
+                            reverseCurve: Curves.easeInQuart,
+                          );
 
-                            var enterTween = Tween(
-                                begin: const Offset(1.0, 0.0),
-                                end: Offset.zero);
+                          var enterTween = Tween(
+                            begin: const Offset(1.0, 0.0),
+                            end: Offset.zero,
+                          );
 
-                            Widget page = SlideTransition(
-                              position: enterTween.animate(curvedAnimation),
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: const Color(0xFF5D201C)
-                                          .withValues(alpha: 0.1),
-                                      blurRadius: 10,
-                                      spreadRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                                child: child,
+                          Widget page = SlideTransition(
+                            position: enterTween.animate(curvedAnimation),
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(
+                                      0xFF5D201C,
+                                    ).withValues(alpha: 0.1),
+                                    blurRadius: 10,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
                               ),
-                            );
+                              child: child,
+                            ),
+                          );
 
-                            return page;
-                          },
-                          transitionDuration: const Duration(milliseconds: 400),
-                          reverseTransitionDuration:
-                              const Duration(milliseconds: 400),
+                          return page;
+                        },
+                        transitionDuration: const Duration(milliseconds: 400),
+                        reverseTransitionDuration: const Duration(
+                          milliseconds: 400,
                         ),
-                      );
-                    } else {
-                      context.showError('${loja.nome} está fechado no momento.');
-                    }
-                  },
-                  child: Opacity(
-                    opacity: loja.isAberto ? 1.0 : 0.5,
-                    child: Padding(
-                      padding: EdgeInsets.all(12.w),
-                      child: Row(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12.r),
-                            child: CachedNetworkImage(
-                              imageUrl: loja.imagemUrl,
-                              width: 70.w,
-                              height: 70.w,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Shimmer.fromColors(
-                                baseColor: Colors.grey.shade300,
-                                highlightColor: Colors.grey.shade100,
-                                child: Container(
-                                  width: 70.w,
-                                  height: 70.w,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              errorWidget: (context, url, error) => Container(
+                      ),
+                    );
+                  } else {
+                    context.showError('${loja.nome} está fechado no momento.');
+                  }
+                },
+                child: Opacity(
+                  opacity: loja.isAberto ? 1.0 : 0.5,
+                  child: Padding(
+                    padding: EdgeInsets.all(12.w),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12.r),
+                          child: CachedNetworkImage(
+                            imageUrl: loja.imagemUrl,
+                            width: 70.w,
+                            height: 70.w,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Shimmer.fromColors(
+                              baseColor: Colors.grey.shade300,
+                              highlightColor: Colors.grey.shade100,
+                              child: Container(
                                 width: 70.w,
                                 height: 70.w,
-                                color: Colors.grey.shade100,
-                                child: Icon(Icons.store,
-                                    color: Colors.grey, size: 24.r),
+                                color: Colors.white,
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              width: 70.w,
+                              height: 70.w,
+                              color: Colors.grey.shade100,
+                              child: Icon(
+                                Icons.store,
+                                color: Colors.grey,
+                                size: 24.r,
                               ),
                             ),
                           ),
-                          SizedBox(width: 16.w),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        loja.nome,
+                        ),
+                        SizedBox(width: 16.w),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      loja.nome,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16.sp,
+                                        color: const Color(0xFF5D201C),
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.star,
+                                        color: Colors.amber,
+                                        size: 16.r,
+                                      ),
+                                      SizedBox(width: 4.w),
+                                      Text(
+                                        (loja.dadosOperacionais
+                                                    ?.avaliacaoMedia ??
+                                                0.0)
+                                            .toStringAsFixed(1),
                                         style: TextStyle(
+                                          color: Colors.amber,
                                           fontWeight: FontWeight.bold,
-                                          fontSize: 16.sp,
-                                          color: const Color(0xFF5D201C),
+                                          fontSize: 13.sp,
                                         ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                    ),
-                                    Row(
-                                      children: [
-                                        Icon(Icons.star,
-                                            color: Colors.amber, size: 16.r),
-                                        SizedBox(width: 4.w),
-                                        Text(
-                                          (loja.dadosOperacionais?.avaliacaoMedia ?? 0.0)
-                                              .toStringAsFixed(1),
-                                          style: TextStyle(
-                                            color: Colors.amber,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 13.sp,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                                    ],
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 4.h),
+                              Text(
+                                loja.categoria,
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 13.sp,
                                 ),
-                                SizedBox(height: 4.h),
-                                Text(
-                                  loja.categoria,
-                                  style: TextStyle(
+                              ),
+                              SizedBox(height: 8.h),
+                              Row(
+                                children: [
+                                  Text(
+                                    loja.dadosOperacionais == null
+                                        ? 'Prazo indisponível'
+                                        : '${loja.dadosOperacionais!.tempoEntregaMin}-${loja.dadosOperacionais!.tempoEntregaMax} min',
+                                    style: TextStyle(
                                       color: Colors.grey.shade600,
-                                      fontSize: 13.sp),
-                                ),
-                                SizedBox(height: 8.h),
-                                Row(
-                                  children: [
-                                    Text(
-                                      '${loja.dadosOperacionais?.tempoEntregaMin}-${loja.dadosOperacionais?.tempoEntregaMax} min',
-                                      style: TextStyle(
-                                          color: Colors.grey.shade600,
-                                          fontSize: 12.sp),
+                                      fontSize: 12.sp,
                                     ),
-                                    Padding(
-                                      padding:
-                                          EdgeInsets.symmetric(horizontal: 6.w),
-                                      child: Text('•',
-                                          style: TextStyle(
-                                              color: Colors.grey.shade400)),
+                                  ),
+                                  Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 6.w,
                                     ),
-                                    Text(
-                                      loja.dadosOperacionais?.taxaEntregaBase ==
-                                              0
-                                          ? 'Entrega Grátis'
-                                          : 'R\$ ${loja.dadosOperacionais?.taxaEntregaBase.toStringAsFixed(2)}',
+                                    child: Text(
+                                      '•',
                                       style: TextStyle(
-                                        color: loja.dadosOperacionais
-                                                    ?.taxaEntregaBase ==
-                                                0
-                                            ? Colors.green
-                                            : Colors.grey.shade600,
-                                        fontWeight: loja.dadosOperacionais
-                                                    ?.taxaEntregaBase ==
-                                                0
-                                            ? FontWeight.bold
-                                            : FontWeight.normal,
-                                        fontSize: 12.sp,
+                                        color: Colors.grey.shade400,
                                       ),
                                     ),
-                                  ],
-                                ),
-                              ],
-                            ),
+                                  ),
+                                  Text(
+                                    loja.dadosOperacionais?.taxaEntregaBase == 0
+                                        ? 'Entrega Grátis'
+                                        : loja.dadosOperacionais == null
+                                            ? 'Frete a confirmar'
+                                            : 'R\$ ${loja.dadosOperacionais!.taxaEntregaBase.toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                      color: loja.dadosOperacionais
+                                                  ?.taxaEntregaBase ==
+                                              0
+                                          ? Colors.green
+                                          : Colors.grey.shade600,
+                                      fontWeight: loja.dadosOperacionais
+                                                  ?.taxaEntregaBase ==
+                                              0
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                      fontSize: 12.sp,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                ));
+                ),
+              ),
+            );
           },
         ),
         if (_isLoadingLojas)
@@ -584,11 +845,16 @@ class _HomeContentState extends State<HomeContent> {
 
     try {
       Position position = await Geolocator.getCurrentPosition(
-          locationSettings:
-              const LocationSettings(accuracy: LocationAccuracy.high));
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 8),
+        ),
+      );
 
-      List<Placemark> placemarks =
-          await placemarkFromCoordinates(position.latitude, position.longitude);
+      List<Placemark> placemarks = await placemarkFromCoordinates(
+        position.latitude,
+        position.longitude,
+      );
 
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks[0];
@@ -600,7 +866,8 @@ class _HomeContentState extends State<HomeContent> {
           final authService = context.read<AuthService>();
           final enderecoProvider = context.read<EnderecoProvider>();
 
-          if (authService.isAuthenticated && enderecoProvider.enderecos.isEmpty) {
+          if (authService.isAuthenticated &&
+              enderecoProvider.enderecos.isEmpty) {
             final novoEndereco = EnderecoModel(
               id: '',
               rua: place.street ?? 'Desconhecida',
@@ -611,7 +878,7 @@ class _HomeContentState extends State<HomeContent> {
               cep: place.postalCode ?? '00000-000',
               isPadrao: true,
             );
-            enderecoProvider.adicionarEndereco(novoEndereco).catchError((_) {});
+            await enderecoProvider.adicionarEnderecoAutomatico(novoEndereco);
           }
         }
       }
@@ -623,16 +890,24 @@ class _HomeContentState extends State<HomeContent> {
   Future<void> _onRefresh() async {
     _currentPageLojas = 0;
     _hasMoreLojas = true;
-    _lojas.clear();
-    LocalCacheService.limparCacheHome();
+    // Não limpa o cache - mantém dados para stale-while-revalidate
+    // Apenas invalida o timestamp para forçar refetch
+    LocalCacheService.ultimaAtualizacaoHome = null;
+    // O GPS atualiza o endereço em segundo plano; não bloqueia os pedidos.
+    _pegarLocalizacaoUsuario();
     await Future.wait([
-      _pegarLocalizacaoUsuario(),
       context.read<UserProvider>().carregarDadosUsuario(),
-      _carregarDadosIniciais(),
+      _carregarDadosIniciais(isRefresh: true),
+      _ordersKey.currentState?.refresh() ?? Future<void>.value(),
     ]);
   }
 
   void _abrirSelecaoEndereco(BuildContext context) {
+    final enderecos = context.read<EnderecoProvider>();
+    if (enderecos.isLoading || enderecos.erro != null) {
+      context.showInfo(enderecos.erro ?? 'Aguarde a consulta dos endereços.');
+      return;
+    }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -643,6 +918,7 @@ class _HomeContentState extends State<HomeContent> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final enderecoisPadrao = context.select<EnderecoProvider, EnderecoModel?>(
       (p) => p.enderecos.where((e) => e.isPadrao).firstOrNull,
     );
@@ -673,12 +949,19 @@ class _HomeContentState extends State<HomeContent> {
             refreshIndicatorExtent: 140.h,
             refreshTriggerPullDistance: 180.h,
             onRefresh: _onRefresh,
-            builder: (context, refreshState, pulledExtent,
-                refreshTriggerPullDistance, refreshIndicatorExtent) {
+            builder: (
+              context,
+              refreshState,
+              pulledExtent,
+              refreshTriggerPullDistance,
+              refreshIndicatorExtent,
+            ) {
               return Center(
                 child: Opacity(
-                  opacity:
-                      (pulledExtent / refreshIndicatorExtent).clamp(0.0, 1.0),
+                  opacity: (pulledExtent / refreshIndicatorExtent).clamp(
+                    0.0,
+                    1.0,
+                  ),
                   child: Lottie.asset(
                     'assets/animations/loading_nhac.json',
                     width: 240.w,
@@ -694,6 +977,7 @@ class _HomeContentState extends State<HomeContent> {
             padding: EdgeInsets.all(24.w),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
+                const EstadoEnderecos(),
                 SizedBox(height: 16.h),
                 TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 800),
@@ -723,8 +1007,9 @@ class _HomeContentState extends State<HomeContent> {
                                     shape: BoxShape.circle,
                                     boxShadow: [
                                       BoxShadow(
-                                        color: const Color(0xFF5D201C)
-                                            .withValues(alpha: 0.05),
+                                        color: const Color(
+                                          0xFF5D201C,
+                                        ).withValues(alpha: 0.05),
                                         blurRadius: 10.r,
                                         offset: const Offset(0.0, 4.0),
                                       ),
@@ -745,8 +1030,9 @@ class _HomeContentState extends State<HomeContent> {
                                       Text(
                                         'Sua Localização',
                                         style: TextStyle(
-                                            color: Colors.grey,
-                                            fontSize: 12.sp),
+                                          color: Colors.grey,
+                                          fontSize: 12.sp,
+                                        ),
                                       ),
                                       Text(
                                         enderecoTopo,
@@ -769,14 +1055,17 @@ class _HomeContentState extends State<HomeContent> {
                             onTap: () => _abrirSelecaoEndereco(context),
                             child: Container(
                               padding: EdgeInsets.symmetric(
-                                  horizontal: 12.w, vertical: 8.h),
+                                horizontal: 12.w,
+                                vertical: 8.h,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(50.r),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF5D201C)
-                                        .withValues(alpha: 0.05),
+                                    color: const Color(
+                                      0xFF5D201C,
+                                    ).withValues(alpha: 0.05),
                                     blurRadius: 10.r,
                                     offset: const Offset(0.0, 4.0),
                                   ),
@@ -793,9 +1082,11 @@ class _HomeContentState extends State<HomeContent> {
                                       fontSize: 12.sp,
                                     ),
                                   ),
-                                  Icon(Icons.chevron_right,
-                                      color: const Color(0xFFFF6961),
-                                      size: 18.r),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: const Color(0xFFFF6961),
+                                    size: 18.r,
+                                  ),
                                 ],
                               ),
                             ),
@@ -812,16 +1103,26 @@ class _HomeContentState extends State<HomeContent> {
                               Navigator.push(
                                 context,
                                 PageRouteBuilder(
-                                  pageBuilder: (context, animation,
-                                          secondaryAnimation) =>
+                                  pageBuilder: (
+                                    context,
+                                    animation,
+                                    secondaryAnimation,
+                                  ) =>
                                       const SearchPage(),
-                                  transitionsBuilder: (context, animation,
-                                      secondaryAnimation, child) {
+                                  transitionsBuilder: (
+                                    context,
+                                    animation,
+                                    secondaryAnimation,
+                                    child,
+                                  ) {
                                     return FadeTransition(
-                                        opacity: animation, child: child);
+                                      opacity: animation,
+                                      child: child,
+                                    );
                                   },
-                                  transitionDuration:
-                                      const Duration(milliseconds: 300),
+                                  transitionDuration: const Duration(
+                                    milliseconds: 300,
+                                  ),
                                 ),
                               );
                             },
@@ -835,8 +1136,9 @@ class _HomeContentState extends State<HomeContent> {
                                 borderRadius: BorderRadius.circular(50.r),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF5D201C)
-                                        .withValues(alpha: 0.05),
+                                    color: const Color(
+                                      0xFF5D201C,
+                                    ).withValues(alpha: 0.05),
                                     blurRadius: 10.r,
                                     offset: const Offset(0.0, 4.0),
                                   ),
@@ -844,19 +1146,26 @@ class _HomeContentState extends State<HomeContent> {
                               ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.search,
-                                      color: Colors.grey, size: 22.r),
+                                  Icon(
+                                    Icons.search,
+                                    color: Colors.grey,
+                                    size: 22.r,
+                                  ),
                                   SizedBox(width: 8.w),
                                   Expanded(
                                     child: Text(
                                       'Procurar',
                                       style: TextStyle(
-                                          color: Colors.grey.shade400,
-                                          fontSize: 16.sp),
+                                        color: Colors.grey.shade400,
+                                        fontSize: 16.sp,
+                                      ),
                                     ),
                                   ),
-                                  Icon(Icons.tune,
-                                      color: Colors.grey, size: 22.r),
+                                  Icon(
+                                    Icons.tune,
+                                    color: Colors.grey,
+                                    size: 22.r,
+                                  ),
                                 ],
                               ),
                             ),
@@ -891,19 +1200,20 @@ class _HomeContentState extends State<HomeContent> {
                               physics: const NeverScrollableScrollPhysics(),
                               children: [
                                 _buildBoxSkeleton(
-                                    width: double.infinity,
-                                    height: 180.h,
-                                    borderRadius: 20.r),
+                                  width: double.infinity,
+                                  height: 180.h,
+                                  borderRadius: 20.r,
+                                ),
                               ],
                             ),
                           )
                         : const HomeBannerCarousel(
-                            key: ValueKey('carousel_content')),
+                            key: ValueKey('carousel_content'),
+                          ),
                   ),
                 ),
                 SizedBox(height: 28.h),
-                const HomeOrderTrackingCard(),
-                SizedBox(height: 28.h),
+                HomeOrders(key: _ordersKey, isActive: widget.isActive),
                 TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 800),
                   tween: Tween(begin: 0.0, end: 1.0),
@@ -920,7 +1230,6 @@ class _HomeContentState extends State<HomeContent> {
                   child: const HomeCategoryChips(),
                 ),
                 SizedBox(height: 28.h),
-
                 TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 800),
                   tween: Tween(begin: 0.0, end: 1.0),
@@ -934,19 +1243,27 @@ class _HomeContentState extends State<HomeContent> {
                       ),
                     );
                   },
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 600),
-                    child: _isLoadingProdutosNecessidades
-                        ? _buildSectionSkeleton(
-                            key: const ValueKey('section1_skeleton'))
-                        : HomeProductSection(
-                            key: const ValueKey('section1_content'),
-                            title: 'Temos tudo que você precisa',
-                            onSeeAll: () => context.push('/search'),
-                            products: _produtosNecessidades,
-                            lojaAberta: _lojaAbertaMap,
-                            onFlyToCart: FlyToCartOverlay.of(context)?.fly,
-                          ),
+                  child: EstadoComRetry<List<ProdutosModel>>(
+                    mensagemErro:
+                        'Não foi possível atualizar os produtos. Os dados anteriores podem estar desatualizados.',
+                    estado: _estadoProdutosNecessidades,
+                    dados: _produtosNecessidades,
+                    aoTentarNovamente: () =>
+                        _fetchProdutosNecessidades(isRefresh: true),
+                    builderConteudo: (produtos) => HomeProductSection(
+                      title: 'Temos tudo que você precisa',
+                      onSeeAll: () => context.push('/search'),
+                      products: produtos,
+                      lojaAberta: _lojaAbertaMap,
+                      onFlyToCart: FlyToCartOverlay.of(context)?.fly,
+                    ),
+                    builderLoading: () => _buildSectionSkeleton(),
+                    builderVazio: () => _buildEmptySection(
+                      titulo: 'Temos tudo que você precisa',
+                      mensagem:
+                          'Nenhum produto essencial no momento. Volte mais tarde!',
+                    ),
+                    alturaMinima: 280.h,
                   ),
                 ),
                 SizedBox(height: 28.h),
@@ -963,19 +1280,26 @@ class _HomeContentState extends State<HomeContent> {
                       ),
                     );
                   },
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 600),
-                    child: _isLoadingProdutosPromocao
-                        ? _buildSectionSkeleton(
-                            key: const ValueKey('section2_skeleton'))
-                        : HomeProductSection(
-                            key: const ValueKey('section2_content'),
-                            title: 'Tudo abaixo de R\$ 20',
-                            onSeeAll: () => context.push('/search'),
-                            products: _produtosPromocao,
-                            lojaAberta: _lojaAbertaMap,
-                            onFlyToCart: FlyToCartOverlay.of(context)?.fly,
-                          ),
+                  child: EstadoComRetry<List<ProdutosModel>>(
+                    mensagemErro:
+                        'Não foi possível atualizar as promoções. Os dados anteriores podem estar desatualizados.',
+                    estado: _estadoProdutosPromocao,
+                    dados: _produtosPromocao,
+                    aoTentarNovamente: () =>
+                        _fetchProdutosPromocao(isRefresh: true),
+                    builderConteudo: (produtos) => HomeProductSection(
+                      title: 'Tudo abaixo de R\$ 20',
+                      onSeeAll: () => context.push('/search'),
+                      products: produtos,
+                      lojaAberta: _lojaAbertaMap,
+                      onFlyToCart: FlyToCartOverlay.of(context)?.fly,
+                    ),
+                    builderLoading: () => _buildSectionSkeleton(),
+                    builderVazio: () => _buildEmptySection(
+                      titulo: 'Tudo abaixo de R\$ 20',
+                      mensagem: 'Nenhuma promoção disponível no momento.',
+                    ),
+                    alturaMinima: 280.h,
                   ),
                 ),
                 SizedBox(height: 28.h),
@@ -1017,8 +1341,11 @@ class _HomeContentState extends State<HomeContent> {
     );
   }
 
-  Widget _buildBoxSkeleton(
-      {double? width, double? height, double borderRadius = 8}) {
+  Widget _buildBoxSkeleton({
+    double? width,
+    double? height,
+    double borderRadius = 8,
+  }) {
     return Shimmer.fromColors(
       baseColor: Colors.grey.shade300,
       highlightColor: Colors.grey.shade100,
@@ -1072,7 +1399,10 @@ class _HomeContentState extends State<HomeContent> {
         children: [
           Expanded(
             child: _buildBoxSkeleton(
-                width: 160.w, height: double.infinity, borderRadius: 16.r),
+              width: 160.w,
+              height: double.infinity,
+              borderRadius: 16.r,
+            ),
           ),
           Padding(
             padding: EdgeInsets.all(12.w),
@@ -1105,6 +1435,55 @@ class _HomeContentState extends State<HomeContent> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildEmptySection({
+    required String titulo,
+    required String mensagem,
+  }) {
+    return SizedBox(
+      height: 280.h,
+      child: Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: 32.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 140.w,
+                height: 140.h,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFE7E5),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.search_off_rounded,
+                  size: 64.r,
+                  color: const Color(0xFFFF6961).withValues(alpha: 0.5),
+                ),
+              ),
+              SizedBox(height: 24.h),
+              Text(
+                titulo,
+                style: TextStyle(
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF5D201C),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              SizedBox(height: 8.h),
+              Text(
+                mensagem,
+                style: TextStyle(fontSize: 14.sp, color: Colors.grey.shade600),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1162,49 +1541,55 @@ class _SelecaoEnderecoBottomSheet extends StatelessWidget {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final endereco = enderecos[index];
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  onTap: () {
-                    context
-                        .read<EnderecoProvider>()
-                        .definirComoPadrao(endereco.id);
-                    Navigator.pop(context);
-                  },
-                  leading: Container(
-                    padding: EdgeInsets.all(8.w),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF6961).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      endereco.bairro.toLowerCase().contains('trabalho') ||
-                              (endereco.complemento ?? '')
-                                  .toLowerCase()
-                                  .contains('trabalho')
-                          ? Icons.work_outline
-                          : Icons.home_outlined,
-                      color: const Color(0xFFFF6961),
-                      size: 20.r,
-                    ),
-                  ),
-                  title: Text(
-                    '${endereco.rua}, ${endereco.numero}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15.sp,
-                    ),
-                  ),
-                  subtitle: Text(
-                    '${endereco.bairro}${(endereco.complemento ?? '').isNotEmpty ? ' - ${endereco.complemento}' : ''}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13.sp),
-                  ),
-                  trailing: endereco.isPadrao
-                      ? Icon(Icons.check_circle,
-                          color: const Color(0xFFFF6961), size: 22.r)
-                      : null,
-                );
+                return Material(
+                    type: MaterialType.transparency,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () async {
+                        if (!await selecionarEnderecoPadrao(
+                            context, endereco.id)) {
+                          return;
+                        }
+                        if (context.mounted) Navigator.pop(context);
+                      },
+                      leading: Container(
+                        padding: EdgeInsets.all(8.w),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6961).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          endereco.bairro.toLowerCase().contains('trabalho') ||
+                                  (endereco.complemento ?? '')
+                                      .toLowerCase()
+                                      .contains('trabalho')
+                              ? Icons.work_outline
+                              : Icons.home_outlined,
+                          color: const Color(0xFFFF6961),
+                          size: 20.r,
+                        ),
+                      ),
+                      title: Text(
+                        '${endereco.rua}, ${endereco.numero}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15.sp,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${endereco.bairro}${(endereco.complemento ?? '').isNotEmpty ? ' - ${endereco.complemento}' : ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.sp),
+                      ),
+                      trailing: endereco.isPadrao
+                          ? Icon(
+                              Icons.check_circle,
+                              color: const Color(0xFFFF6961),
+                              size: 22.r,
+                            )
+                          : null,
+                    ));
               },
             ),
           ),
@@ -1233,14 +1618,15 @@ class _SelecaoEnderecoBottomSheet extends StatelessWidget {
                       child: Icon(Icons.add, color: Colors.grey, size: 20.r),
                     ),
                     SizedBox(width: 16.w),
-                    Text(
+                    Expanded(
+                        child: Text(
                       'Adicionar novo endereço',
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 15.sp,
                         color: Colors.grey,
                       ),
-                    ),
+                    )),
                   ],
                 ),
               ),

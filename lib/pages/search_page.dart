@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -5,7 +6,7 @@ import 'package:shimmer/shimmer.dart';
 import '../models/produto/produtos.dart';
 import '../models/loja/lojas.dart';
 import '../components/product_card.dart';
-import '../components/loading_nhac.dart';
+import '../components/estado_com_retry.dart';
 import '../repositories/produto_repository.dart';
 import '../repositories/loja_repository.dart';
 import '../services/local_cache_service.dart';
@@ -22,19 +23,31 @@ enum _FiltroBusca { tudo, produtos, lojas }
 class _ResultadoBusca {
   final List<ProdutosModel> produtos;
   final List<LojasModel> lojas;
+  final Map<String, String> erros;
+  final Map<String, int> proximasPaginas;
   final Map<String, bool> lojaAberta; // lojaId -> está aberta?
-  _ResultadoBusca(
-      {required this.produtos,
-      required this.lojas,
-      this.lojaAberta = const {}});
+  _ResultadoBusca({
+    required this.produtos,
+    required this.lojas,
+    this.lojaAberta = const {},
+    this.erros = const {},
+    this.proximasPaginas = const {},
+  });
 
   bool get vazio => produtos.isEmpty && lojas.isEmpty;
 }
 
 class SearchPage extends StatefulWidget {
   final String? initialCategory;
+  final ProdutoRepository? produtoRepository;
+  final LojaRepository? lojaRepository;
 
-  const SearchPage({super.key, this.initialCategory});
+  const SearchPage({
+    super.key,
+    this.initialCategory,
+    this.produtoRepository,
+    this.lojaRepository,
+  });
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -48,30 +61,45 @@ class _SearchPageState extends State<SearchPage>
   // já que o backend filtra produtos/lojas por valor exato.
   static const _categoriasSugeridas = [
     {'nome': 'Combos', 'icon': Icons.fastfood_rounded},
-    {'nome': 'Prato Principal', 'icon': Icons.restaurant_rounded},
-    {'nome': 'Acompanhamento', 'icon': Icons.rice_bowl_rounded},
+    {'nome': 'Pratos Executivos', 'icon': Icons.restaurant_rounded},
+    {'nome': 'Acompanhamentos', 'icon': Icons.rice_bowl_rounded},
     {'nome': 'Sobremesas', 'icon': Icons.icecream_rounded},
     {'nome': 'Bebidas', 'icon': Icons.local_drink_rounded},
   ];
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
-  final ProdutoRepository _produtoRepository = ProdutoRepository();
-  final LojaRepository _lojaRepository = LojaRepository();
+  late final ProdutoRepository _produtoRepository;
+  late final LojaRepository _lojaRepository;
 
-  Future<_ResultadoBusca>? _searchFuture;
   _FiltroBusca _filtro = _FiltroBusca.tudo;
   List<String> _historico = [];
+  List<ProdutosModel> _sugestoesReais = [];
   bool _temTexto = false;
+
+  // Estado para stale-while-revalidate
+  _ResultadoBusca? _ultimoResultado;
+  EstadoConteudo _estadoBusca = EstadoConteudo.conteudo;
+  String? _ultimoErro;
+  String? _termoAtual;
+  Timer? _debounce;
+  int _versaoBusca = 0;
+  bool _buscaCategoria = false;
+  bool _carregandoMais = false;
 
   @override
   void initState() {
     super.initState();
+    _produtoRepository = widget.produtoRepository ?? ProdutoRepository();
+    _lojaRepository = widget.lojaRepository ?? LojaRepository();
     _animationController = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 800));
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
     _animationController.forward();
 
     _carregarHistorico();
+    _carregarSugestoes();
     _searchController.addListener(() {
       final temTexto = _searchController.text.isNotEmpty;
       if (temTexto != _temTexto) setState(() => _temTexto = temTexto);
@@ -95,6 +123,7 @@ class _SearchPageState extends State<SearchPage>
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _animationController.dispose();
     _searchController.dispose();
     _searchFocus.dispose();
@@ -103,18 +132,40 @@ class _SearchPageState extends State<SearchPage>
 
   Widget _buildAnimatedItem(Widget child, int index) {
     final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
-        CurvedAnimation(
-            parent: _animationController,
-            curve: Interval((index * 0.1).clamp(0.0, 1.0),
-                (index * 0.1 + 0.5).clamp(0.0, 1.0),
-                curve: Curves.easeOutCubic)));
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Interval(
+          (index * 0.1).clamp(0.0, 1.0),
+          (index * 0.1 + 0.5).clamp(0.0, 1.0),
+          curve: Curves.easeOutCubic,
+        ),
+      ),
+    );
     return AnimatedBuilder(
-        animation: animation,
-        builder: (context, child) => Opacity(
-            opacity: animation.value,
-            child: Transform.translate(
-                offset: Offset(0, 30 * (1 - animation.value)), child: child)),
-        child: child);
+      animation: animation,
+      builder: (context, child) => Opacity(
+        opacity: animation.value,
+        child: Transform.translate(
+          offset: Offset(0, 30 * (1 - animation.value)),
+          child: child,
+        ),
+      ),
+      child: child,
+    );
+  }
+
+  Future<void> _carregarSugestoes() async {
+    try {
+      final produtos = await _produtoRepository.buscarNecessidades();
+      if (mounted) {
+        setState(() => _sugestoesReais = produtos
+            .where((p) => p.lojaAberta && p.nome.trim().isNotEmpty)
+            .take(4)
+            .toList());
+      }
+    } catch (_) {
+      // Sugestões são opcionais; pesquisa e categorias continuam disponíveis.
+    }
   }
 
   Future<void> _carregarHistorico() async {
@@ -133,17 +184,84 @@ class _SearchPageState extends State<SearchPage>
 
   void _buscarPorCategoriaInicial(String categoria) {
     if (categoria.isEmpty) return;
+    _debounce?.cancel();
+    _versaoBusca++;
+    _carregandoMais = false;
+    _buscaCategoria = true;
+    _ultimoResultado = null;
     _animationController.forward(from: 0.0);
     setState(() {
       _filtro = _FiltroBusca.tudo;
-      _searchFuture = _produtoRepository.buscarPorCategoria(categoria).then(
-            (produtos) async => _ResultadoBusca(
-              produtos: produtos,
-              lojas: const [],
-              lojaAberta: _statusDasLojas(produtos),
-            ),
-          );
+      _termoAtual = categoria;
+      _ultimoErro = null;
+      _estadoBusca = EstadoConteudo.loading;
     });
+    _buscarCategoriaComCache(categoria);
+  }
+
+  /// Busca por categoria com suporte a stale-while-revalidate
+  Future<void> _buscarCategoriaComCache(String categoria) async {
+    final versao = _versaoBusca;
+    final cache = await LocalCacheService.carregarResultadosBusca(
+      'categoria:$categoria',
+    );
+    if (!mounted || versao != _versaoBusca) return;
+    if (cache != null) {
+      final produtos = (cache['produtos'] as List)
+          .map(
+            (p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map)),
+          )
+          .toList();
+
+      if (!mounted || versao != _versaoBusca) return;
+      _ultimoResultado = _ResultadoBusca(
+        produtos: produtos,
+        lojas: const [],
+        lojaAberta: _statusDasLojas(produtos),
+      );
+      _estadoBusca = _ultimoResultado!.vazio
+          ? EstadoConteudo.vazio
+          : EstadoConteudo.conteudo;
+      setState(() {});
+    }
+
+    try {
+      final resultado = await _buscarTudo(categoria, somenteCategoria: true);
+      if (!mounted || versao != _versaoBusca) return;
+      if (resultado.erros.isNotEmpty && _ultimoResultado != null &&
+          !_ultimoResultado!.vazio) {
+        _ultimoErro = resultado.erros.values.join(' ');
+        _estadoBusca = EstadoConteudo.erro;
+        setState(() {});
+        return;
+      }
+      _ultimoResultado = resultado;
+      _estadoBusca = resultado.vazio && resultado.erros.isEmpty
+          ? EstadoConteudo.vazio
+          : EstadoConteudo.conteudo;
+      _ultimoErro = null;
+      setState(() {});
+      final produtos = resultado.produtos;
+      if (resultado.erros.isEmpty) {
+        LocalCacheService.salvarResultadosBusca(
+          'categoria:$categoria',
+          produtos: produtos,
+          lojas: const [],
+          lojaAberta: _statusDasLojas(produtos),
+        ).catchError(
+            (Object e) => debugPrint('Falha ao salvar categoria local: $e'));
+      }
+    } catch (e) {
+      if (!mounted || versao != _versaoBusca) return;
+      if (_ultimoResultado != null) {
+        _estadoBusca = EstadoConteudo.erro;
+      } else {
+        _estadoBusca = EstadoConteudo.erro;
+        _ultimoResultado = null;
+      }
+      _ultimoErro = 'Não foi possível carregar a pesquisa. Tente novamente.';
+      setState(() {});
+    }
   }
 
   /// Constrói o mapa de status aberta/fechada a partir do campo `lojaAberta`
@@ -158,56 +276,180 @@ class _SearchPageState extends State<SearchPage>
 
   /// Busca unificada: produtos por NOME + produtos por CATEGORIA (mesclados,
   /// sem duplicar) + lojas por NOME — tudo a partir do mesmo termo digitado.
-  void _iniciarBusca(String termo) {
+  void _iniciarBusca(String termo, {bool fecharTeclado = true}) {
+    _debounce?.cancel();
+    _versaoBusca++;
+    _carregandoMais = false;
+    _buscaCategoria = false;
     final termoLimpo = termo.trim();
     if (termoLimpo.isEmpty) return;
-    _searchController.text = termoLimpo;
-    _searchFocus.unfocus();
+    if (fecharTeclado) {
+      _searchController.text = termoLimpo;
+      _searchFocus.unfocus();
+    }
     _salvarNoHistorico(termoLimpo);
     _animationController.forward(from: 0.0);
     setState(() {
       _filtro = _FiltroBusca.tudo;
-      _searchFuture = _buscarTudo(termoLimpo);
+      _termoAtual = termoLimpo;
+      _ultimoResultado = null;
+      _ultimoErro = null;
+      _estadoBusca = EstadoConteudo.loading;
     });
+    _buscarComCache(termoLimpo);
   }
 
-  Future<_ResultadoBusca> _buscarTudo(String termo) async {
-    // O filtro de categoria no backend é por valor exato (ex: "Pizza"), então
-    // digitar "pizza" (minúsculo) batia só na busca por nome. Aqui a gente
-    // resolve o termo digitado pro nome exato da categoria quando ele
-    // corresponde a uma das categorias conhecidas, senão manda como veio.
-    final categoriaParaBuscar = _resolverCategoria(termo);
+  /// Busca com suporte a stale-while-revalidate:
+  /// 1. Tenta carregar cache imediatamente
+  /// 2. Faz fetch em background
+  /// 3. Se fetch falhar, mantém cache (stale) com banner de retry
+  Future<void> _buscarComCache(String termo) async {
+    final versao = _versaoBusca;
+    // 1. Carrega cache imediatamente se existir
+    final cache = await LocalCacheService.carregarResultadosBusca(termo);
+    if (!mounted || versao != _versaoBusca) return;
+    if (cache != null) {
+      final produtos = (cache['produtos'] as List)
+          .map(
+            (p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map)),
+          )
+          .toList();
+      final lojas = (cache['lojas'] as List)
+          .map((l) => LojasModel.fromMap(Map<String, dynamic>.from(l as Map)))
+          .toList();
+      final lojaAberta = Map<String, bool>.from(cache['lojaAberta'] as Map);
 
-    final resultados = await Future.wait([
-      _produtoRepository
-          .buscarProdutosPorNome(termo)
-          .catchError((_) => <ProdutosModel>[]),
-      if (categoriaParaBuscar != null)
-        _produtoRepository
-            .buscarPorCategoria(categoriaParaBuscar)
-            .catchError((_) => <ProdutosModel>[])
-      else
-        Future.value(<ProdutosModel>[]),
-      _lojaRepository
-          .buscarLojasPorNome(termo)
-          .catchError((_) => <LojasModel>[]),
-    ]);
-
-    final produtosPorNome = resultados[0] as List<ProdutosModel>;
-    final produtosPorCategoria = resultados[1] as List<ProdutosModel>;
-    final lojas = resultados[2] as List<LojasModel>;
-
-    final produtosUnicos = <String, ProdutosModel>{};
-    for (final p in [...produtosPorNome, ...produtosPorCategoria]) {
-      produtosUnicos[p.id] = p;
+      _ultimoResultado = _ResultadoBusca(
+        produtos: produtos,
+        lojas: lojas,
+        lojaAberta: lojaAberta,
+      );
+      _estadoBusca = _ultimoResultado!.vazio
+          ? EstadoConteudo.vazio
+          : EstadoConteudo.conteudo;
+      setState(() {});
     }
 
-    final produtosFinais = produtosUnicos.values.toList();
+    // 2. Faz fetch em background
+    try {
+      final resultado = await _buscarTudo(termo);
+      if (!mounted || versao != _versaoBusca) return;
+
+      if (resultado.erros.isNotEmpty && _ultimoResultado != null &&
+          !_ultimoResultado!.vazio) {
+        _ultimoErro = resultado.erros.values.join(' ');
+        _estadoBusca = EstadoConteudo.erro;
+        setState(() {});
+        return;
+      }
+      _ultimoResultado = resultado;
+      _estadoBusca = resultado.vazio && resultado.erros.isEmpty
+          ? EstadoConteudo.vazio
+          : EstadoConteudo.conteudo;
+      _ultimoErro = null;
+      setState(() {});
+      if (resultado.erros.isEmpty) {
+        LocalCacheService.salvarResultadosBusca(
+          termo,
+          produtos: resultado.produtos,
+          lojas: resultado.lojas,
+          lojaAberta: resultado.lojaAberta,
+        ).catchError((Object e) {
+          debugPrint('Não foi possível salvar a busca local: $e');
+        });
+      }
+    } catch (e) {
+      if (!mounted || versao != _versaoBusca) return;
+
+      // Se temos cache, mantém (stale) com estado de erro para banner
+      if (_ultimoResultado != null) {
+        _estadoBusca = EstadoConteudo.erro;
+      } else {
+        _estadoBusca = EstadoConteudo.erro;
+        _ultimoResultado = null;
+      }
+      _ultimoErro = 'Não foi possível carregar a pesquisa. Tente novamente.';
+      setState(() {});
+    }
+  }
+
+  Future<_ResultadoBusca> _buscarTudo(
+    String termo, {
+    bool somenteCategoria = false,
+    _ResultadoBusca? anterior,
+  }) async {
+    final categoria = somenteCategoria ? termo : _resolverCategoria(termo);
+    final paginas = anterior?.proximasPaginas ??
+        {
+          if (!somenteCategoria) 'nome': 0,
+          if (categoria != null) 'categoria': 0,
+          if (!somenteCategoria) 'lojas': 0,
+        };
+    final produtos = {
+      for (final p in anterior?.produtos ?? <ProdutosModel>[]) p.id: p
+    };
+    final lojas = {for (final l in anterior?.lojas ?? <LojasModel>[]) l.id: l};
+    final erros = <String, String>{};
+    final proximas = <String, int>{};
+    await Future.wait(paginas.entries.map((entry) async {
+      final fonte = entry.key;
+      final pagina = entry.value;
+      try {
+        if (fonte == 'lojas') {
+          final novos = pagina == 0
+              ? await _lojaRepository.buscarLojasPorNome(termo)
+              : await _lojaRepository.buscarLojasPorNome(termo, page: pagina);
+          for (final loja in novos) {
+            lojas[loja.id] = loja;
+          }
+          if (novos.length == 50) proximas[fonte] = pagina + 1;
+        } else {
+          final novos = fonte == 'nome'
+              ? (pagina == 0
+                  ? await _produtoRepository.buscarProdutosPorNome(termo)
+                  : await _produtoRepository.buscarProdutosPorNome(termo,
+                      page: pagina))
+              : (pagina == 0
+                  ? await _produtoRepository.buscarPorCategoria(categoria!)
+                  : await _produtoRepository.buscarPorCategoria(categoria!,
+                      page: pagina));
+          for (final produto in novos) {
+            produtos[produto.id] = produto;
+          }
+          if (novos.length == (fonte == 'nome' ? 20 : 50)) {
+            proximas[fonte] = pagina + 1;
+          }
+        }
+      } catch (_) {
+        erros[fonte] = fonte == 'lojas'
+            ? 'Não foi possível carregar as lojas.'
+            : fonte == 'nome'
+                ? 'Não foi possível carregar os produtos por nome.'
+                : 'Não foi possível carregar os produtos da categoria.';
+        proximas[fonte] = pagina;
+      }
+    }));
     return _ResultadoBusca(
-      produtos: produtosFinais,
-      lojas: lojas,
-      lojaAberta: _statusDasLojas(produtosFinais),
-    );
+        produtos: produtos.values.toList(),
+        lojas: lojas.values.toList(),
+        lojaAberta: _statusDasLojas(produtos.values.toList()),
+        erros: erros,
+        proximasPaginas: proximas);
+  }
+
+  Future<void> _carregarMais() async {
+    if (_carregandoMais || _termoAtual == null || _ultimoResultado == null) {
+      return;
+    }
+    final versao = _versaoBusca;
+    setState(() => _carregandoMais = true);
+    final resultado = await _buscarTudo(_termoAtual!,
+        somenteCategoria: _buscaCategoria, anterior: _ultimoResultado);
+    if (!mounted || versao != _versaoBusca) return;
+    setState(() {
+      _ultimoResultado = resultado;
+      _carregandoMais = false;
+    });
   }
 
   static final Map<String, String> _categoriasConhecidas = {
@@ -221,7 +463,9 @@ class _SearchPageState extends State<SearchPage>
     var resultado = texto.trim().toLowerCase();
     for (var i = 0; i < comAcento.length; i++) {
       resultado = resultado.replaceAll(
-          comAcento[i].toLowerCase(), semAcento[i].toLowerCase());
+        comAcento[i].toLowerCase(),
+        semAcento[i].toLowerCase(),
+      );
     }
     return resultado;
   }
@@ -233,9 +477,14 @@ class _SearchPageState extends State<SearchPage>
   }
 
   void _limparBusca() {
+    _debounce?.cancel();
+    _versaoBusca++;
+    _carregandoMais = false;
     setState(() {
       _searchController.clear();
-      _searchFuture = null;
+      _termoAtual = null;
+      _ultimoResultado = null;
+      _ultimoErro = null;
       _filtro = _FiltroBusca.tudo;
     });
   }
@@ -250,10 +499,14 @@ class _SearchPageState extends State<SearchPage>
           const begin = Offset(0.0, 1.0);
           const end = Offset.zero;
           const curve = Curves.easeOutCubic;
-          var tween =
-              Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          var tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: curve));
           return SlideTransition(
-              position: animation.drive(tween), child: child);
+            position: animation.drive(tween),
+            child: child,
+          );
         },
         transitionDuration: const Duration(milliseconds: 300),
       ),
@@ -270,10 +523,14 @@ class _SearchPageState extends State<SearchPage>
           const begin = Offset(0.0, 1.0);
           const end = Offset.zero;
           const curve = Curves.easeOutCubic;
-          var tween =
-              Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+          var tween = Tween(
+            begin: begin,
+            end: end,
+          ).chain(CurveTween(curve: curve));
           return SlideTransition(
-              position: animation.drive(tween), child: child);
+            position: animation.drive(tween),
+            child: child,
+          );
         },
         transitionDuration: const Duration(milliseconds: 300),
       ),
@@ -291,7 +548,7 @@ class _SearchPageState extends State<SearchPage>
             AnimatedSize(
               duration: const Duration(milliseconds: 220),
               curve: Curves.easeOut,
-              child: _searchFuture != null
+              child: _termoAtual != null
                   ? _buildFiltros()
                   : const SizedBox(width: double.infinity),
             ),
@@ -310,48 +567,73 @@ class _SearchPageState extends State<SearchPage>
                     child: child,
                   ),
                 ),
-                child: _searchFuture == null
+                child: _termoAtual == null
                     ? _buildEstadoInicial()
-                    : FutureBuilder<_ResultadoBusca>(
-                        key: ValueKey(_searchFuture),
-                        future: _searchFuture,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return const Center(
-                              key: ValueKey('loading'),
-                                child:
-                                  LoadingNhac(telaCheia: false, tamanho: 40),
-                            );
-                          }
-                          if (snapshot.hasError) {
-                            return _buildMensagemEstado(
-                              key: const ValueKey('erro'),
-                              icone: Icons.error_outline_rounded,
-                              titulo: 'Ops, algo deu errado',
-                              subtitulo:
-                                  'Não foi possível concluir a busca. Tente novamente.',
-                            );
-                          }
-                          if (!snapshot.hasData || snapshot.data!.vazio) {
-                            return _buildMensagemEstado(
-                              key: const ValueKey('vazio'),
-                              icone: Icons.search_off_rounded,
-                              titulo: 'Nada encontrado',
-                              subtitulo: 'Tente pesquisar com outras palavras.',
-                            );
-                          }
-
-                          return KeyedSubtree(
-                            key: const ValueKey('resultados'),
-                            child: _buildResultados(snapshot.data!),
-                          );
-                        },
-                      ),
+                    : _buildResultadosComEstado(),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildResultadosComEstado() {
+    final resultadoAnterior = _ultimoResultado;
+    if (_estadoBusca == EstadoConteudo.erro &&
+        resultadoAnterior != null &&
+        !resultadoAnterior.vazio) {
+      return Column(
+        children: [
+          BannerErroInline(
+            mensagem: _ultimoErro ?? 'Exibindo resultados anteriores.',
+            aoTentarNovamente: () => _buscaCategoria
+                ? _buscarCategoriaComCache(_termoAtual!)
+                : _buscarComCache(_termoAtual!),
+          ),
+          Expanded(child: _buildResultados(resultadoAnterior)),
+        ],
+      );
+    }
+    return EstadoComRetry<_ResultadoBusca>(
+      estado: _estadoBusca,
+      dados: _estadoBusca == EstadoConteudo.erro ? null : _ultimoResultado,
+      mensagemErro: _ultimoErro,
+      aoTentarNovamente: _termoAtual != null
+          ? () => _buscaCategoria
+              ? _buscarCategoriaComCache(_termoAtual!)
+              : _buscarComCache(_termoAtual!)
+          : null,
+      builderErro: (mensagem, tentarNovamente) => SingleChildScrollView(
+        child: Padding(
+          padding: EdgeInsets.all(24.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                color: Color(0xFFFF6961),
+                size: 40,
+              ),
+              const SizedBox(height: 12),
+              Text(mensagem, textAlign: TextAlign.center),
+              TextButton(
+                onPressed: tentarNovamente,
+                child: const Text('Tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+      ),
+      builderVazio: () => _buildMensagemEstado(
+        key: const ValueKey('vazio'),
+        icone: Icons.search_off_rounded,
+        titulo: 'Nada encontrado',
+        subtitulo: 'Tente pesquisar com outras palavras.',
+      ),
+      builderConteudo: (resultado) => KeyedSubtree(
+        key: const ValueKey('resultados'),
+        child: _buildResultados(resultado),
       ),
     );
   }
@@ -366,16 +648,21 @@ class _SearchPageState extends State<SearchPage>
             child: Container(
               padding: EdgeInsets.all(8.w),
               decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                        color: const Color(0xFFFCDABB).withValues(alpha: 0.4),
-                        blurRadius: 10.r,
-                        offset: Offset(0, 4.h))
-                  ]),
-              child: Icon(Icons.arrow_back,
-                  color: const Color(0xFF5D201C), size: 20.sp),
+                color: Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFCDABB).withValues(alpha: 0.4),
+                    blurRadius: 10.r,
+                    offset: Offset(0, 4.h),
+                  ),
+                ],
+              ),
+              child: Icon(
+                Icons.arrow_back,
+                color: const Color(0xFF5D201C),
+                size: 20.sp,
+              ),
             ),
           ),
           SizedBox(width: 16.w),
@@ -385,18 +672,21 @@ class _SearchPageState extends State<SearchPage>
               child: Material(
                 color: Colors.transparent,
                 child: Container(
-                  padding:
-                      EdgeInsets.symmetric(horizontal: 16.w, vertical: 4.h),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 16.w,
+                    vertical: 4.h,
+                  ),
                   decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(50.r),
-                      boxShadow: [
-                        BoxShadow(
-                            color:
-                                const Color(0xFFFCDABB).withValues(alpha: 0.4),
-                            blurRadius: 10.r,
-                            offset: Offset(0, 4.h))
-                      ]),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(50.r),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFFCDABB).withValues(alpha: 0.4),
+                        blurRadius: 10.r,
+                        offset: Offset(0, 4.h),
+                      ),
+                    ],
+                  ),
                   child: Row(
                     children: [
                       const Icon(Icons.search_rounded, color: Colors.grey),
@@ -407,10 +697,28 @@ class _SearchPageState extends State<SearchPage>
                           focusNode: _searchFocus,
                           textInputAction: TextInputAction.search,
                           onSubmitted: _iniciarBusca,
+                          onChanged: (texto) {
+                            _debounce?.cancel();
+                            _versaoBusca++;
+                            _carregandoMais = false;
+                            if (!_searchController
+                                .value.composing.isCollapsed) {
+                              return;
+                            }
+                            if (texto.trim().isEmpty) {
+                              _limparBusca();
+                              return;
+                            }
+                            _debounce = Timer(
+                              const Duration(milliseconds: 400),
+                              () => _iniciarBusca(texto, fecharTeclado: false),
+                            );
+                          },
                           style: TextStyle(
-                              color: _corTexto,
-                              fontSize: 14.sp,
-                              fontWeight: FontWeight.w600),
+                            color: _corTexto,
+                            fontSize: 14.sp,
+                            fontWeight: FontWeight.w600,
+                          ),
                           decoration: InputDecoration(
                             isDense: true,
                             border: InputBorder.none,
@@ -426,14 +734,20 @@ class _SearchPageState extends State<SearchPage>
                       AnimatedSwitcher(
                         duration: const Duration(milliseconds: 180),
                         child: _temTexto
-                            ? GestureDetector(
+                            ? IconButton(
                                 key: const ValueKey('clear'),
-                                onTap: _limparBusca,
-                                child: Icon(Icons.close_rounded,
-                                    color: _corTexto.withValues(alpha: 0.5),
-                                    size: 18.r),
+                                tooltip: 'Limpar busca',
+                                onPressed: () {
+                                  _limparBusca();
+                                  _searchFocus.requestFocus();
+                                },
+                                icon: Icon(
+                                  Icons.close_rounded,
+                                  color: _corTexto.withValues(alpha: 0.5),
+                                  size: 18.r,
+                                ),
                               )
-                            : const Icon(Icons.tune, color: Colors.grey),
+                            : const SizedBox.shrink(),
                       ),
                     ],
                   ),
@@ -486,24 +800,111 @@ class _SearchPageState extends State<SearchPage>
     );
   }
 
-  Widget _buildSuggestionItem(IconData icon, String text,
-      {bool isTrending = false}) {
+  Widget _buildMenuSuggestion(ProdutosModel produto) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: 10.h),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16.r),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => _abrirProduto(produto),
+          child: Padding(
+            padding: EdgeInsets.all(12.w),
+            child: Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12.r),
+                  child: CachedNetworkImage(
+                    imageUrl: produto.imagemUrl,
+                    width: 56.w,
+                    height: 56.w,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => _buildSuggestionPlaceholder(),
+                    errorWidget: (_, __, ___) => _buildSuggestionPlaceholder(),
+                  ),
+                ),
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        produto.nome,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 14.sp,
+                          fontWeight: FontWeight.w600,
+                          color: _corTexto,
+                        ),
+                      ),
+                      SizedBox(height: 4.h),
+                      Text(
+                        'R\$ ${produto.preco.toStringAsFixed(2).replaceAll('.', ',')}',
+                        style: TextStyle(
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.w700,
+                          color: _corPrimaria,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(width: 8.w),
+                Container(
+                  padding: EdgeInsets.all(6.r),
+                  decoration: const BoxDecoration(
+                    color: _corAccentClaro,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    color: _corPrimaria,
+                    size: 20.r,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSuggestionPlaceholder() => Container(
+        color: _corAccentClaro,
+        child: Icon(Icons.restaurant_menu_rounded, color: _corPrimaria),
+      );
+
+  Widget _buildSuggestionItem(
+    IconData icon,
+    String text, {
+    bool isTrending = false,
+  }) {
     return ListTile(
       leading: Container(
-          padding: EdgeInsets.all(8.w),
-          decoration: BoxDecoration(
-              color: isTrending
-                  ? const Color(0xFFFF6961).withValues(alpha: 0.1)
-                  : Colors.grey.shade100,
-              shape: BoxShape.circle),
-          child: Icon(icon,
-              color: isTrending ? const Color(0xFFFF6961) : Colors.grey,
-              size: 20.sp)),
-      title: Text(text,
-          style: TextStyle(
-              color: isTrending ? const Color(0xFF5D201C) : Colors.black87,
-              fontWeight: isTrending ? FontWeight.w600 : FontWeight.normal,
-              fontSize: 15.sp)),
+        padding: EdgeInsets.all(8.w),
+        decoration: BoxDecoration(
+          color: isTrending
+              ? const Color(0xFFFF6961).withValues(alpha: 0.1)
+              : Colors.grey.shade100,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(
+          icon,
+          color: isTrending ? const Color(0xFFFF6961) : Colors.grey,
+          size: 20.sp,
+        ),
+      ),
+      title: Text(
+        text,
+        style: TextStyle(
+          color: isTrending ? const Color(0xFF5D201C) : Colors.black87,
+          fontWeight: isTrending ? FontWeight.w600 : FontWeight.normal,
+          fontSize: 15.sp,
+        ),
+      ),
       trailing: Icon(Icons.north_west, color: Colors.grey, size: 16.sp),
       contentPadding: EdgeInsets.only(bottom: 8.h),
       onTap: () {
@@ -516,8 +917,9 @@ class _SearchPageState extends State<SearchPage>
   Widget _buildEstadoInicial() {
     return ListView(
       key: const ValueKey('inicial'),
-      physics:
-          const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+      physics: const BouncingScrollPhysics(
+        parent: AlwaysScrollableScrollPhysics(),
+      ),
       padding: EdgeInsets.symmetric(horizontal: 24.w),
       children: [
         if (_historico.isNotEmpty) ...[
@@ -526,56 +928,68 @@ class _SearchPageState extends State<SearchPage>
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               _buildAnimatedItem(
-                  Text('Sugestões',
-                      style: TextStyle(
-                          fontSize: 18.sp,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF5D201C))),
-                  0),
+                Text(
+                  'Sugestões',
+                  style: TextStyle(
+                    fontSize: 18.sp,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF5D201C),
+                  ),
+                ),
+                0,
+              ),
               _buildAnimatedItem(
                 GestureDetector(
                   onTap: () async {
                     setState(() => _historico = []);
                     await LocalCacheService.salvarHistoricoPesquisa([]);
                   },
-                  child: Text('Limpar',
-                      style: TextStyle(
-                          fontSize: 13.sp,
-                          color: const Color(0xFFFF6961),
-                          fontWeight: FontWeight.w600)),
+                  child: Text(
+                    'Limpar',
+                    style: TextStyle(
+                      fontSize: 13.sp,
+                      color: const Color(0xFFFF6961),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
                 0,
               ),
             ],
           ),
           SizedBox(height: 16.h),
-          ..._historico.asMap().entries.map((entry) => _buildAnimatedItem(
-              _buildSuggestionItem(Icons.history, entry.value), entry.key + 1)),
+          ..._historico.asMap().entries.map(
+                (entry) => _buildAnimatedItem(
+                  _buildSuggestionItem(Icons.history, entry.value),
+                  entry.key + 1,
+                ),
+              ),
+          SizedBox(height: 24.h),
+        ],
+        if (_sugestoesReais.isNotEmpty) ...[
+          Text(
+            'Explore o cardápio',
+            style: TextStyle(
+              fontSize: 18.sp,
+              fontWeight: FontWeight.bold,
+              color: _corTexto,
+            ),
+          ),
+          SizedBox(height: 12.h),
+          ..._sugestoesReais.map(_buildMenuSuggestion),
           SizedBox(height: 24.h),
         ],
         _buildAnimatedItem(
-            Text('Em alta',
-                style: TextStyle(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF5D201C))),
-            3),
-        SizedBox(height: 16.h),
-        _buildAnimatedItem(
-            _buildSuggestionItem(Icons.trending_up, 'Refrigerante Viver',
-                isTrending: true),
-            4),
-        _buildAnimatedItem(
-            _buildSuggestionItem(Icons.trending_up, 'Carne', isTrending: true),
-            5),
-        SizedBox(height: 24.h),
-        _buildAnimatedItem(
-            Text('Categorias',
-                style: TextStyle(
-                    fontSize: 18.sp,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF5D201C))),
-            6),
+          Text(
+            'Categorias',
+            style: TextStyle(
+              fontSize: 18.sp,
+              fontWeight: FontWeight.bold,
+              color: const Color(0xFF5D201C),
+            ),
+          ),
+          6,
+        ),
         SizedBox(height: 16.h),
         GridView.builder(
           shrinkWrap: true,
@@ -611,18 +1025,24 @@ class _SearchPageState extends State<SearchPage>
                         width: 34.w,
                         height: 34.w,
                         decoration: const BoxDecoration(
-                            color: _corAccentClaro, shape: BoxShape.circle),
-                        child: Icon(cat['icon'] as IconData,
-                            color: _corPrimaria, size: 18.r),
+                          color: _corAccentClaro,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          cat['icon'] as IconData,
+                          color: _corPrimaria,
+                          size: 18.r,
+                        ),
                       ),
                       SizedBox(width: 10.w),
                       Expanded(
                         child: Text(
                           cat['nome'] as String,
                           style: TextStyle(
-                              fontSize: 13.sp,
-                              fontWeight: FontWeight.w600,
-                              color: _corTexto),
+                            fontSize: 13.sp,
+                            fontWeight: FontWeight.w600,
+                            color: _corTexto,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -656,21 +1076,28 @@ class _SearchPageState extends State<SearchPage>
               width: 72.w,
               height: 72.w,
               decoration: const BoxDecoration(
-                  color: _corAccentClaro, shape: BoxShape.circle),
+                color: _corAccentClaro,
+                shape: BoxShape.circle,
+              ),
               child: Icon(icone, color: _corPrimaria, size: 34.r),
             ),
             SizedBox(height: 16.h),
-            Text(titulo,
-                style: TextStyle(
-                    fontSize: 16.sp,
-                    fontWeight: FontWeight.bold,
-                    color: _corTexto)),
+            Text(
+              titulo,
+              style: TextStyle(
+                fontSize: 16.sp,
+                fontWeight: FontWeight.bold,
+                color: _corTexto,
+              ),
+            ),
             SizedBox(height: 6.h),
             Text(
               subtitulo,
               textAlign: TextAlign.center,
               style: TextStyle(
-                  fontSize: 13.sp, color: _corTexto.withValues(alpha: 0.6)),
+                fontSize: 13.sp,
+                color: _corTexto.withValues(alpha: 0.6),
+              ),
             ),
           ],
         ),
@@ -684,7 +1111,7 @@ class _SearchPageState extends State<SearchPage>
     final mostrarProdutos =
         _filtro != _FiltroBusca.lojas && resultado.produtos.isNotEmpty;
 
-    if (!mostrarLojas && !mostrarProdutos) {
+    if (!mostrarLojas && !mostrarProdutos && resultado.erros.isEmpty) {
       return _buildMensagemEstado(
         key: const ValueKey('filtro-vazio'),
         icone: Icons.search_off_rounded,
@@ -698,27 +1125,34 @@ class _SearchPageState extends State<SearchPage>
     return ListView(
       padding: EdgeInsets.fromLTRB(16.w, 8.h, 16.w, 24.h),
       children: [
+        for (final erro in resultado.erros.values)
+          BannerErroInline(
+              mensagem: erro,
+              aoTentarNovamente: _carregandoMais ? null : _carregarMais),
         if (mostrarLojas) ...[
-          Text('Lojas',
-              style: TextStyle(
-                  fontSize: 15.sp,
-                  fontWeight: FontWeight.bold,
-                  color: _corTexto)),
+          Text(
+            'Lojas',
+            style: TextStyle(
+              fontSize: 15.sp,
+              fontWeight: FontWeight.bold,
+              color: _corTexto,
+            ),
+          ),
           SizedBox(height: 10.h),
           ...List.generate(resultado.lojas.length, (i) {
-            return _buildAnimatedItem(
-              _buildLojaTile(resultado.lojas[i]),
-              i,
-            );
+            return _buildAnimatedItem(_buildLojaTile(resultado.lojas[i]), i);
           }),
           SizedBox(height: 20.h),
         ],
         if (mostrarProdutos) ...[
-          Text('Produtos',
-              style: TextStyle(
-                  fontSize: 15.sp,
-                  fontWeight: FontWeight.bold,
-                  color: _corTexto)),
+          Text(
+            'Produtos',
+            style: TextStyle(
+              fontSize: 15.sp,
+              fontWeight: FontWeight.bold,
+              color: _corTexto,
+            ),
+          ),
           SizedBox(height: 10.h),
           GridView.builder(
             shrinkWrap: true,
@@ -745,6 +1179,15 @@ class _SearchPageState extends State<SearchPage>
             },
           ),
         ],
+        if (resultado.proximasPaginas.isNotEmpty)
+          Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: TextButton(
+                onPressed: _carregandoMais ? null : _carregarMais,
+                child: Text(_carregandoMais
+                    ? 'Carregando...'
+                    : 'Carregar mais resultados'),
+              )),
       ],
     );
   }
@@ -778,15 +1221,21 @@ class _SearchPageState extends State<SearchPage>
                 placeholder: (context, url) => Shimmer.fromColors(
                   baseColor: Colors.grey.shade300,
                   highlightColor: Colors.grey.shade100,
-                  child:
-                      Container(width: 52.w, height: 52.w, color: Colors.white),
+                  child: Container(
+                    width: 52.w,
+                    height: 52.w,
+                    color: Colors.white,
+                  ),
                 ),
                 errorWidget: (context, url, error) => Container(
                   width: 52.w,
                   height: 52.w,
                   color: _corAccentClaro,
-                  child: Icon(Icons.storefront_rounded,
-                      color: _corPrimaria, size: 24.r),
+                  child: Icon(
+                    Icons.storefront_rounded,
+                    color: _corPrimaria,
+                    size: 24.r,
+                  ),
                 ),
               ),
             ),
@@ -800,9 +1249,10 @@ class _SearchPageState extends State<SearchPage>
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.bold,
-                        color: _corTexto),
+                      fontSize: 14.sp,
+                      fontWeight: FontWeight.bold,
+                      color: _corTexto,
+                    ),
                   ),
                   SizedBox(height: 4.h),
                   Row(
@@ -821,16 +1271,20 @@ class _SearchPageState extends State<SearchPage>
                       Text(
                         loja.isAberto ? loja.categoria : 'Fechada no momento',
                         style: TextStyle(
-                            fontSize: 12.sp,
-                            color: _corTexto.withValues(alpha: 0.6)),
+                          fontSize: 12.sp,
+                          color: _corTexto.withValues(alpha: 0.6),
+                        ),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right_rounded,
-                color: _corTexto.withValues(alpha: 0.3), size: 22.r),
+            Icon(
+              Icons.chevron_right_rounded,
+              color: _corTexto.withValues(alpha: 0.3),
+              size: 22.r,
+            ),
           ],
         ),
       ),
