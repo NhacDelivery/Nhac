@@ -117,16 +117,72 @@ class _LojaPageState extends State<LojaPage>
     ],
   );
 
+  Widget _buildInfoCard({
+    required IconData icon,
+    required String title,
+    required List<Widget> children,
+  }) => Container(
+    margin: EdgeInsets.only(bottom: 16.h),
+    padding: EdgeInsets.all(20.w),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20.r),
+      boxShadow: [BoxShadow(
+        color: const Color(0xFF5D201C).withValues(alpha: 0.05),
+        blurRadius: 12.r,
+        offset: const Offset(0, 4),
+      )],
+    ),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Container(
+          padding: EdgeInsets.all(10.w),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFE7E5),
+            borderRadius: BorderRadius.circular(12.r),
+          ),
+          child: Icon(icon, color: const Color(0xFFFF6961), size: 22.r),
+        ),
+        SizedBox(width: 12.w),
+        Expanded(child: Text(title, style: TextStyle(
+          fontSize: 17.sp, fontWeight: FontWeight.bold,
+          color: const Color(0xFF5D201C),
+        ))),
+      ]),
+      SizedBox(height: 16.h),
+      ...children,
+    ]),
+  );
+
+  Widget _infoText(String text) => Text(text, style: TextStyle(
+    fontSize: 14.sp, height: 1.5, color: const Color(0xFF675956),
+  ));
+
   Widget _buildEspacoTab() {
     final endereco = _loja.endereco;
-    return ListView(padding: const EdgeInsets.all(20), children: [
-      Text(_loja.nome, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 12),
-      Text(_loja.descricao.isEmpty ? 'A loja ainda não informou uma descrição.' : _loja.descricao),
-      if (endereco != null) ListTile(
-        leading: const Icon(Icons.location_on_outlined),
-        title: Text('${endereco.rua}, ${endereco.numero}'),
-        subtitle: Text('${endereco.cidade} - ${endereco.estado}'),
+    final linhas = endereco == null ? <String>[] : [
+      [endereco.rua, endereco.numero].where((s) => s.trim().isNotEmpty).join(', '),
+      [endereco.cidade, endereco.estado].where((s) => s.trim().isNotEmpty).join(' - '),
+      if (endereco.cep.trim().isNotEmpty) 'CEP ${endereco.cep}',
+    ].where((s) => s.isNotEmpty).toList();
+    return ListView(padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 32.h), children: [
+      _buildInfoCard(
+        icon: Icons.storefront_outlined,
+        title: 'Sobre a loja',
+        children: [
+          Text(_loja.nome, style: TextStyle(fontSize: 16.sp,
+            fontWeight: FontWeight.w600, color: const Color(0xFF5D201C))),
+          SizedBox(height: 8.h),
+          _infoText(_loja.descricao.trim().isEmpty
+            ? 'A loja ainda não informou uma descrição.' : _loja.descricao),
+        ],
+      ),
+      _buildInfoCard(
+        icon: Icons.location_on_outlined,
+        title: 'Onde estamos',
+        children: [
+          _infoText(linhas.isEmpty ? 'A loja ainda não informou o endereço.' : linhas.join('\n')),
+        ],
       ),
     ]);
   }
@@ -138,13 +194,51 @@ class _LojaPageState extends State<LojaPage>
       'Quarta': horarios.quarta, 'Quinta': horarios.quinta,
       'Sexta': horarios.sexta, 'Sábado': horarios.sabado, 'Domingo': horarios.domingo,
     };
-    return ListView(padding: const EdgeInsets.all(20), children: [
-      Text(!_lojaConfirmada ? 'Conferindo disponibilidade da loja' : _loja.isAberto ? 'Loja aberta' : 'Loja fechada'),
-      if (_erroLoja) BannerErroInline(mensagem: 'Não foi possível conferir a disponibilidade.', aoTentarNovamente: _atualizarLoja),
-      const SizedBox(height: 16),
-      const Text('Horários de funcionamento', style: TextStyle(fontWeight: FontWeight.bold)),
-      if (dias.isEmpty) const Text('A loja ainda não informou os horários.'),
-      for (final dia in dias.entries) ListTile(title: Text(dia.key), trailing: Text(dia.value)),
+    final status = !_lojaConfirmada ? 'Conferindo disponibilidade'
+        : _loja.isAberto ? 'Loja aberta' : 'Loja fechada';
+    return ListView(padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 32.h), children: [
+      _buildInfoCard(
+        icon: Icons.access_time_rounded,
+        title: 'Disponibilidade',
+        children: [
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFE7E5),
+              borderRadius: BorderRadius.circular(12.r),
+            ),
+            child: Text(status, style: TextStyle(fontSize: 14.sp,
+              color: const Color(0xFF5D201C), fontWeight: FontWeight.w600)),
+          ),
+          if (_erroLoja) ...[
+            SizedBox(height: 12.h),
+            BannerErroInline(mensagem: 'Não foi possível conferir a disponibilidade.',
+              aoTentarNovamente: _atualizarLoja),
+          ],
+        ],
+      ),
+      _buildInfoCard(
+        icon: Icons.calendar_month_outlined,
+        title: 'Horários de funcionamento',
+        children: [
+          if (dias.isEmpty) _infoText('A loja ainda não informou os horários.'),
+          for (var i = 0; i < dias.length; i++) ...[
+            if (i > 0) Divider(height: 24.h, color: const Color(0xFFFFE7E5)),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: Text(dias.keys.elementAt(i), style: TextStyle(
+                fontSize: 14.sp, color: const Color(0xFF5D201C),
+                fontWeight: FontWeight.w500,
+              ))),
+              SizedBox(width: 12.w),
+              Flexible(child: Text(dias.values.elementAt(i).trim().isEmpty
+                ? 'Não informado' : dias.values.elementAt(i),
+                textAlign: TextAlign.end, style: TextStyle(
+                  fontSize: 14.sp, color: const Color(0xFF675956), height: 1.4,
+                ))),
+            ]),
+          ],
+        ],
+      ),
     ]);
   }
 

@@ -1,6 +1,3 @@
-import 'package:provider/provider.dart';
-import 'package:nhac/services/auth_service.dart';
-import 'package:nhac/pages/notificacoes_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -95,7 +92,7 @@ class _FeedPageState extends State<FeedPage>
       if (!mounted || requestId != _requestId) return;
       setState(() {
         final ids = _posts.map((post) => post.id).toSet();
-        _posts.addAll(posts.where((post) => !ids.contains(post.id)));
+        _posts.addAll(posts.where((post) => ids.add(post.id)));
         _page++;
         _hasMore = posts.length == 20;
       });
@@ -154,7 +151,7 @@ class _FeedPageState extends State<FeedPage>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Título + ícone de notificação
+                  // Título + criar publicação
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -181,26 +178,6 @@ class _FeedPageState extends State<FeedPage>
                           context.showSuccess('Publicação criada.');
                           _tabController.index = 0;
                           await _carregarPosts('Destaques');
-                        },
-                      ),
-                      IconButton(
-                        tooltip: 'Notificações',
-                        icon: Icon(
-                          Icons.notifications_none_outlined,
-                          color: const Color(0xFF5D201C),
-                          size: 26.r,
-                        ),
-                        onPressed: () {
-                          final usuarioId = context
-                              .read<AuthService>()
-                              .usuarioId;
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute<void>(
-                              builder: (_) =>
-                                  NotificacoesPage(usuarioId: usuarioId),
-                            ),
-                          );
                         },
                       ),
                     ],
@@ -369,10 +346,17 @@ class _FeedPageState extends State<FeedPage>
               sliver: SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) => Padding(
+                    key: ValueKey(_posts[index].id),
                     padding: EdgeInsets.only(top: index == 0 ? 12.h : 0),
                     child: _buildPostCard(_posts[index]),
                   ),
                   childCount: _posts.length,
+                  findChildIndexCallback: (key) {
+                    final index = _posts.indexWhere(
+                      (post) => ValueKey(post.id) == key,
+                    );
+                    return index < 0 ? null : index;
+                  },
                 ),
               ),
             ),
@@ -396,7 +380,19 @@ class _FeedPageState extends State<FeedPage>
     return GestureDetector(
       onTap: () async {
         await context.push('/feed-post', extra: post);
-        if (mounted) await _carregarPosts(_categorias[_tabController.index]);
+        if (!mounted) return;
+        // Preserva a paginação e a geometria da lista ao voltar do detalhe.
+        final requestId = _requestId;
+        try {
+          final atualizado = await _repository.buscarPost(post.id);
+          if (!mounted || requestId != _requestId) return;
+          final index = _posts.indexWhere((item) => item.id == post.id);
+          if (index >= 0) setState(() => _posts[index] = atualizado);
+        } catch (error) {
+          if (mounted && requestId == _requestId) {
+            ErrorUIHelper.handle(context, error);
+          }
+        }
       },
       child: Hero(
         tag: 'post_hero_${post.id}',

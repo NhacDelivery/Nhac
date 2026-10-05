@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:nhac/components/home/home_order_tracking_card.dart';
+import 'package:nhac/components/home/home_orders_carousel.dart';
 import 'package:nhac/models/pedido_model.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/services/auth_service.dart';
@@ -213,16 +214,19 @@ class HomeOrdersState extends State<HomeOrders>
               height: 20,
               child: CircularProgressIndicator(color: Color(0xFFFF6961))),
         ),
-      for (final order in _orders)
+      if (_orders.isNotEmpty)
         Padding(
           padding: const EdgeInsets.only(bottom: 28),
-          child: HomeOrderTrackingCard(
+          child: HomeOrdersCarousel(
+            orderIds: _orders.map((order) => order.id).toList(),
+            children: [for (final order in _orders) HomeOrderTrackingCard(
               key: ValueKey(order.id),
               initialPedido: order,
               isActive: _active,
               pedidoRepository: _repository,
               socketService: widget.socketFactory?.call(order.id),
-              onPedidoChanged: _orderChanged),
+              onPedidoChanged: _orderChanged)],
+          ),
         ),
     ]);
   }
