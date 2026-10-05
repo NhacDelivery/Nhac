@@ -141,3 +141,30 @@ Edição continua disponível pela API. Não mostrar números fictícios de comp
 Contexto de negócio: principal do JWT determina autoria; FeedService determina
 permissões e promoção da loja; a API exige autenticação. ApiClient é o responsável
 pela expiração da sessão. Idioma das ações e recuperação: português brasileiro.
+
+
+## Feed e avaliações (05/10/2026)
+
+Fonte: FeedService e AvaliacaoProdutoService no backend feature/feed-api.
+Permissões retornadas pela API: autor/admin editam e excluem posts; autor do comentário,
+autor do post e admin excluem comentários. Confirmação Flutter antes de excluir.
+Curtidas no cartão usam a resposta confirmada; comentar abre o campo em foco.
+Hashtags cadastradas aparecem separadamente. Salvos reutiliza cartões e paginação explícita.
+Comentários usam ordem/filtro de autor no servidor e deduplicação por ID. Consultas do post
+e comentários são independentes. Refresh conserva a lista e oferece retry.
+Seguir acompanha a loja mencionada via favoritos persistidos; sem loja o botão não aparece.
+Destaques ordena por salvos/curtidas/data; Novidades por data. O primeiro comentário é destacado,
+com desempate por ID e sem contagem fictícia de curtidas.
+Tentativas de envio conservam chave e payload em armazenamento seguro por conta/API/escopo.
+Reabrir restaura e repetir recupera o mesmo recurso. O servidor confere fingerprint sob lock
+da conta e mantém registro de recursos excluídos para impedir recriação no replay.
+Compartilhar usa nhac://app/publicacao/{id}; Android/iOS registram o esquema e a rota consulta
+o servidor após login. Requer app instalado. Universal Links dependem de domínio e arquivos
+de associação não disponíveis nesta mudança.
+Avaliações individuais de produtos usam uma nota por pedido/produto, somente do comprador
+para itens de pedidos ENTREGUE, com fotos de upload HTTPS. Positivas: notas 4 e 5. Filtros
+consultam o servidor antes de paginar. Resumo do produto não converte notas da loja em notas individuais.
+Em destaque na loja usa desconto > 0; Vendidos ordena quantidades de pedidos ENTREGUE.
+Percentual positivo da loja usa suas avaliações com nota >= 4 e não afirma percentual por produto.
+Recuperação do checkout subtrai só produto/quantidade/loja do payload original e grava um recibo
+junto ao carrinho, conservando itens adicionais e evitando novo consumo no replay.

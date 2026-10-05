@@ -1,3 +1,5 @@
+import 'package:nhac/pages/feed_link_page.dart';
+import 'package:nhac/pages/feed_page.dart';
 import 'package:nhac/pages/produto_link_page.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/pages/feed_publish_page.dart';
@@ -122,6 +124,7 @@ Page _buildSlideRightToLeftPage({
 }
 
 final authServiceRoteador = AuthService();
+String? pendingFeedPath;
 
 @NowaGenerated()
 final GoRouter appRouter = GoRouter(
@@ -129,6 +132,13 @@ final GoRouter appRouter = GoRouter(
   observers: [homeOrderRouteObserver],
   refreshListenable: authServiceRoteador,
   redirect: (BuildContext context, GoRouterState state) {
+    if (state.uri.path.startsWith('/publicacao/'))
+      pendingFeedPath = state.uri.path;
+    if (estaSessaoProntaParaFeed()) {
+      final path = pendingFeedPath!;
+      pendingFeedPath = null;
+      if (state.uri.path != path) return path;
+    }
     if (!authServiceRoteador.carregado) {
       if (state.matchedLocation == '/splash') return null;
       return state.matchedLocation.startsWith('/produto/')
@@ -138,7 +148,9 @@ final GoRouter appRouter = GoRouter(
 
     final bool estaAutenticado = authServiceRoteador.isAuthenticated;
 
-    final bool telaPublica = state.matchedLocation.startsWith('/produto/') ||
+    final bool telaPublica =
+        state.matchedLocation.startsWith('/publicacao/') ||
+        state.matchedLocation.startsWith('/produto/') ||
         state.matchedLocation == '/' ||
         state.matchedLocation == '/splash' ||
         state.matchedLocation == '/bem-vindo' ||
@@ -152,7 +164,7 @@ final GoRouter appRouter = GoRouter(
 
     final bool noMeioDoCadastro =
         state.matchedLocation == '/verificacao_numero' ||
-            state.matchedLocation.startsWith('/cadastro');
+        state.matchedLocation.startsWith('/cadastro');
 
     if (!estaAutenticado && !telaPublica) {
       return '/bem-vindo';
@@ -162,6 +174,7 @@ final GoRouter appRouter = GoRouter(
         telaPublica &&
         state.matchedLocation != '/splash' &&
         !state.matchedLocation.startsWith('/produto/') &&
+        !state.matchedLocation.startsWith('/publicacao/') &&
         !noMeioDoCadastro) {
       return '/home-page';
     }
@@ -170,8 +183,17 @@ final GoRouter appRouter = GoRouter(
   },
   routes: [
     GoRoute(
+      path: '/publicacao/:id',
+      builder: (_, state) => FeedLinkPage(id: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/feed-salvos',
+      builder: (_, __) => const Scaffold(body: FeedPage(salvos: true)),
+    ),
+    GoRoute(
       path: '/produto/:id',
-      builder: (context, state) => ProdutoLinkPage(produtoId: state.pathParameters['id']!),
+      builder: (context, state) =>
+          ProdutoLinkPage(produtoId: state.pathParameters['id']!),
     ),
     GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
     GoRoute(
@@ -454,7 +476,8 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/feed-publicar',
       pageBuilder: (context, state) => _buildSlideRightToLeftPage(
-        key: state.pageKey, child: const FeedPublishPage(),
+        key: state.pageKey,
+        child: const FeedPublishPage(),
       ),
     ),
     GoRoute(
@@ -473,7 +496,10 @@ final GoRouter appRouter = GoRouter(
         final post = state.extra as FeedPostModel;
         return CustomTransitionPage(
           key: state.pageKey,
-          child: FeedPostDetailPage(post: post),
+          child: FeedPostDetailPage(
+            post: post,
+            focarComentario: state.uri.queryParameters['comentar'] == 'true',
+          ),
           transitionDuration: const Duration(milliseconds: 400),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
@@ -483,3 +509,8 @@ final GoRouter appRouter = GoRouter(
     ),
   ],
 );
+
+bool estaSessaoProntaParaFeed() =>
+    authServiceRoteador.carregado &&
+    authServiceRoteador.isAuthenticated &&
+    pendingFeedPath != null;

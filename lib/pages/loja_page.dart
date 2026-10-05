@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:nhac/components/estado_com_retry.dart';
 import 'package:nhac/repositories/avaliacao_repository.dart';
 import 'package:nhac/models/produto/avaliacoes.dart';
@@ -6,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+
 import '../models/loja/lojas.dart';
 import '../models/produto/produtos.dart';
 import '../components/product_card.dart';
@@ -15,7 +17,9 @@ import '../pages/produto_detalhes_page.dart';
 import '../repositories/produto_repository.dart';
 import '../repositories/loja_repository.dart';
 import '../services/auth_service.dart';
+
 import 'package:provider/provider.dart';
+
 import '../globals/ui_utils.dart';
 import '../e2e/e2e_keys.dart';
 import '../globals/app_constants.dart';
@@ -45,6 +49,29 @@ class _LojaPageState extends State<LojaPage>
 
   final List<ProdutosModel> _produtos = [];
   int _pagina = 0;
+  String _filtroProduto = 'Todos';
+  int _consultaProduto = 0;
+  Map<String, dynamic>? _resumoLoja;
+  Future<void> _consultarResumoLoja() async {
+    try {
+      final resumo = await AvaliacaoRepository().resumoLoja(_loja.id);
+      if (mounted) setState(() => _resumoLoja = resumo);
+    } catch (_) {}
+  }
+
+  void _filtrarProdutos(String filtro) {
+    if (filtro == _filtroProduto) return;
+    setState(() {
+      _filtroProduto = filtro;
+      _consultaProduto++;
+      _carregandoProdutos = false;
+      _pagina = 0;
+      _temMais = true;
+      _produtos.clear();
+    });
+    _carregarProdutos();
+  }
+
   bool _temMais = true;
   bool _carregandoProdutos = false;
   Object? _erroProdutos;
@@ -53,7 +80,10 @@ class _LojaPageState extends State<LojaPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _atualizarLoja();
-      _atualizacaoLoja ??= Timer.periodic(const Duration(seconds: 30), (_) => _atualizarLoja());
+      _atualizacaoLoja ??= Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => _atualizarLoja(),
+      );
     } else {
       _atualizacaoLoja?.cancel();
       _atualizacaoLoja = null;
@@ -72,7 +102,11 @@ class _LojaPageState extends State<LojaPage>
         _erroLoja = loja == null;
       });
     } catch (_) {
-      if (mounted) setState(() { _erroLoja = true; _lojaConfirmada = false; });
+      if (mounted)
+        setState(() {
+          _erroLoja = true;
+          _lojaConfirmada = false;
+        });
     } finally {
       _consultandoLoja = false;
     }
@@ -80,9 +114,15 @@ class _LojaPageState extends State<LojaPage>
 
   Future<void> _carregarAvaliacoes() async {
     if (_carregandoAvaliacoes || !_maisAvaliacoes) return;
-    setState(() { _carregandoAvaliacoes = true; _erroAvaliacoes = false; });
+    setState(() {
+      _carregandoAvaliacoes = true;
+      _erroAvaliacoes = false;
+    });
     try {
-      final novas = await AvaliacaoRepository().buscarAvaliacoes(_loja.id, page: _paginaAvaliacoes);
+      final novas = await AvaliacaoRepository().buscarAvaliacoes(
+        _loja.id,
+        page: _paginaAvaliacoes,
+      );
       if (!mounted) return;
       setState(() {
         final ids = _avaliacoes.map((a) => a.id).toSet();
@@ -100,20 +140,29 @@ class _LojaPageState extends State<LojaPage>
   Widget _buildAvaliacoesTab() => ListView(
     padding: const EdgeInsets.all(20),
     children: [
-      if (_erroAvaliacoes) BannerErroInline(
-        mensagem: 'Não foi possível carregar as avaliações.',
-        aoTentarNovamente: _carregarAvaliacoes,
-      ),
+      if (_erroAvaliacoes)
+        BannerErroInline(
+          mensagem: 'Não foi possível carregar as avaliações.',
+          aoTentarNovamente: _carregarAvaliacoes,
+        ),
       if (_avaliacoes.isEmpty && !_carregandoAvaliacoes && !_erroAvaliacoes)
         const Text('Esta loja ainda não recebeu avaliações.'),
-      for (final avaliacao in _avaliacoes) ListTile(
-        title: Text(avaliacao.nomeUsuario),
-        subtitle: Text(avaliacao.comentario.isEmpty ? 'Sem comentário' : avaliacao.comentario),
-        trailing: Text('★ ${avaliacao.nota.toStringAsFixed(1)}'),
-      ),
+      for (final avaliacao in _avaliacoes)
+        ListTile(
+          title: Text(avaliacao.nomeUsuario),
+          subtitle: Text(
+            avaliacao.comentario.isEmpty
+                ? 'Sem comentário'
+                : avaliacao.comentario,
+          ),
+          trailing: Text('★ ${avaliacao.nota.toStringAsFixed(1)}'),
+        ),
       if (_carregandoAvaliacoes) const LoadingNhac(telaCheia: false),
       if (_maisAvaliacoes && !_carregandoAvaliacoes && !_erroAvaliacoes)
-        TextButton(onPressed: _carregarAvaliacoes, child: const Text('Carregar mais avaliações')),
+        TextButton(
+          onPressed: _carregarAvaliacoes,
+          child: const Text('Carregar mais avaliações'),
+        ),
     ],
   );
 
@@ -127,123 +176,204 @@ class _LojaPageState extends State<LojaPage>
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(20.r),
-      boxShadow: [BoxShadow(
-        color: const Color(0xFF5D201C).withValues(alpha: 0.05),
-        blurRadius: 12.r,
-        offset: const Offset(0, 4),
-      )],
-    ),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Container(
-          padding: EdgeInsets.all(10.w),
-          decoration: BoxDecoration(
-            color: const Color(0xFFFFE7E5),
-            borderRadius: BorderRadius.circular(12.r),
-          ),
-          child: Icon(icon, color: const Color(0xFFFF6961), size: 22.r),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xFF5D201C).withValues(alpha: 0.05),
+          blurRadius: 12.r,
+          offset: const Offset(0, 4),
         ),
-        SizedBox(width: 12.w),
-        Expanded(child: Text(title, style: TextStyle(
-          fontSize: 17.sp, fontWeight: FontWeight.bold,
-          color: const Color(0xFF5D201C),
-        ))),
-      ]),
-      SizedBox(height: 16.h),
-      ...children,
-    ]),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(10.w),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFE7E5),
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: Icon(icon, color: const Color(0xFFFF6961), size: 22.r),
+            ),
+            SizedBox(width: 12.w),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 17.sp,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF5D201C),
+                ),
+              ),
+            ),
+          ],
+        ),
+        SizedBox(height: 16.h),
+        ...children,
+      ],
+    ),
   );
 
-  Widget _infoText(String text) => Text(text, style: TextStyle(
-    fontSize: 14.sp, height: 1.5, color: const Color(0xFF675956),
-  ));
+  Widget _infoText(String text) => Text(
+    text,
+    style: TextStyle(
+      fontSize: 14.sp,
+      height: 1.5,
+      color: const Color(0xFF675956),
+    ),
+  );
 
   Widget _buildEspacoTab() {
     final endereco = _loja.endereco;
-    final linhas = endereco == null ? <String>[] : [
-      [endereco.rua, endereco.numero].where((s) => s.trim().isNotEmpty).join(', '),
-      [endereco.cidade, endereco.estado].where((s) => s.trim().isNotEmpty).join(' - '),
-      if (endereco.cep.trim().isNotEmpty) 'CEP ${endereco.cep}',
-    ].where((s) => s.isNotEmpty).toList();
-    return ListView(padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 32.h), children: [
-      _buildInfoCard(
-        icon: Icons.storefront_outlined,
-        title: 'Sobre a loja',
-        children: [
-          Text(_loja.nome, style: TextStyle(fontSize: 16.sp,
-            fontWeight: FontWeight.w600, color: const Color(0xFF5D201C))),
-          SizedBox(height: 8.h),
-          _infoText(_loja.descricao.trim().isEmpty
-            ? 'A loja ainda não informou uma descrição.' : _loja.descricao),
-        ],
-      ),
-      _buildInfoCard(
-        icon: Icons.location_on_outlined,
-        title: 'Onde estamos',
-        children: [
-          _infoText(linhas.isEmpty ? 'A loja ainda não informou o endereço.' : linhas.join('\n')),
-        ],
-      ),
-    ]);
+    final linhas = endereco == null
+        ? <String>[]
+        : [
+            [
+              endereco.rua,
+              endereco.numero,
+            ].where((s) => s.trim().isNotEmpty).join(', '),
+            [
+              endereco.cidade,
+              endereco.estado,
+            ].where((s) => s.trim().isNotEmpty).join(' - '),
+            if (endereco.cep.trim().isNotEmpty) 'CEP ${endereco.cep}',
+          ].where((s) => s.isNotEmpty).toList();
+    return ListView(
+      padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 32.h),
+      children: [
+        _buildInfoCard(
+          icon: Icons.storefront_outlined,
+          title: 'Sobre a loja',
+          children: [
+            Text(
+              _loja.nome,
+              style: TextStyle(
+                fontSize: 16.sp,
+                fontWeight: FontWeight.w600,
+                color: const Color(0xFF5D201C),
+              ),
+            ),
+            SizedBox(height: 8.h),
+            _infoText(
+              _loja.descricao.trim().isEmpty
+                  ? 'A loja ainda não informou uma descrição.'
+                  : _loja.descricao,
+            ),
+          ],
+        ),
+        _buildInfoCard(
+          icon: Icons.location_on_outlined,
+          title: 'Onde estamos',
+          children: [
+            _infoText(
+              linhas.isEmpty
+                  ? 'A loja ainda não informou o endereço.'
+                  : linhas.join('\n'),
+            ),
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _buildDinamicaTab() {
     final horarios = _loja.horarios;
-    final dias = horarios == null ? <String, String>{} : {
-      'Segunda': horarios.segunda, 'Terça': horarios.terca,
-      'Quarta': horarios.quarta, 'Quinta': horarios.quinta,
-      'Sexta': horarios.sexta, 'Sábado': horarios.sabado, 'Domingo': horarios.domingo,
-    };
-    final status = !_lojaConfirmada ? 'Conferindo disponibilidade'
-        : _loja.isAberto ? 'Loja aberta' : 'Loja fechada';
-    return ListView(padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 32.h), children: [
-      _buildInfoCard(
-        icon: Icons.access_time_rounded,
-        title: 'Disponibilidade',
-        children: [
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFE7E5),
-              borderRadius: BorderRadius.circular(12.r),
+    final dias = horarios == null
+        ? <String, String>{}
+        : {
+            'Segunda': horarios.segunda,
+            'Terça': horarios.terca,
+            'Quarta': horarios.quarta,
+            'Quinta': horarios.quinta,
+            'Sexta': horarios.sexta,
+            'Sábado': horarios.sabado,
+            'Domingo': horarios.domingo,
+          };
+    final status = !_lojaConfirmada
+        ? 'Conferindo disponibilidade'
+        : _loja.isAberto
+        ? 'Loja aberta'
+        : 'Loja fechada';
+    return ListView(
+      padding: EdgeInsets.fromLTRB(20.w, 20.h, 20.w, 32.h),
+      children: [
+        _buildInfoCard(
+          icon: Icons.access_time_rounded,
+          title: 'Disponibilidade',
+          children: [
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFE7E5),
+                borderRadius: BorderRadius.circular(12.r),
+              ),
+              child: Text(
+                status,
+                style: TextStyle(
+                  fontSize: 14.sp,
+                  color: const Color(0xFF5D201C),
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-            child: Text(status, style: TextStyle(fontSize: 14.sp,
-              color: const Color(0xFF5D201C), fontWeight: FontWeight.w600)),
-          ),
-          if (_erroLoja) ...[
-            SizedBox(height: 12.h),
-            BannerErroInline(mensagem: 'Não foi possível conferir a disponibilidade.',
-              aoTentarNovamente: _atualizarLoja),
+            if (_erroLoja) ...[
+              SizedBox(height: 12.h),
+              BannerErroInline(
+                mensagem: 'Não foi possível conferir a disponibilidade.',
+                aoTentarNovamente: _atualizarLoja,
+              ),
+            ],
           ],
-        ],
-      ),
-      _buildInfoCard(
-        icon: Icons.calendar_month_outlined,
-        title: 'Horários de funcionamento',
-        children: [
-          if (dias.isEmpty) _infoText('A loja ainda não informou os horários.'),
-          for (var i = 0; i < dias.length; i++) ...[
-            if (i > 0) Divider(height: 24.h, color: const Color(0xFFFFE7E5)),
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Expanded(child: Text(dias.keys.elementAt(i), style: TextStyle(
-                fontSize: 14.sp, color: const Color(0xFF5D201C),
-                fontWeight: FontWeight.w500,
-              ))),
-              SizedBox(width: 12.w),
-              Flexible(child: Text(dias.values.elementAt(i).trim().isEmpty
-                ? 'Não informado' : dias.values.elementAt(i),
-                textAlign: TextAlign.end, style: TextStyle(
-                  fontSize: 14.sp, color: const Color(0xFF675956), height: 1.4,
-                ))),
-            ]),
+        ),
+        _buildInfoCard(
+          icon: Icons.calendar_month_outlined,
+          title: 'Horários de funcionamento',
+          children: [
+            if (dias.isEmpty)
+              _infoText('A loja ainda não informou os horários.'),
+            for (var i = 0; i < dias.length; i++) ...[
+              if (i > 0) Divider(height: 24.h, color: const Color(0xFFFFE7E5)),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      dias.keys.elementAt(i),
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        color: const Color(0xFF5D201C),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 12.w),
+                  Flexible(
+                    child: Text(
+                      dias.values.elementAt(i).trim().isEmpty
+                          ? 'Não informado'
+                          : dias.values.elementAt(i),
+                      textAlign: TextAlign.end,
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        color: const Color(0xFF675956),
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
-        ],
-      ),
-    ]);
+        ),
+      ],
+    );
   }
 
   Future<void> _carregarProdutos() async {
     if (_carregandoProdutos || !_temMais) return;
+    final consulta = ++_consultaProduto;
     setState(() {
       _carregandoProdutos = true;
       _erroProdutos = null;
@@ -252,8 +382,9 @@ class _LojaPageState extends State<LojaPage>
       final pagina = await _produtoRepository.buscarPaginaPorLoja(
         _loja.id,
         page: _pagina,
+        filtro: _filtroProduto,
       );
-      if (!mounted) return;
+      if (!mounted || consulta != _consultaProduto) return;
       setState(() {
         final ids = _produtos.map((p) => p.id).toSet();
         _produtos.addAll(pagina.produtos.where((p) => ids.add(p.id)));
@@ -261,9 +392,11 @@ class _LojaPageState extends State<LojaPage>
         _temMais = pagina.temMais;
       });
     } catch (e) {
-      if (mounted) setState(() => _erroProdutos = e);
+      if (mounted && consulta == _consultaProduto)
+        setState(() => _erroProdutos = e);
     } finally {
-      if (mounted) setState(() => _carregandoProdutos = false);
+      if (mounted && consulta == _consultaProduto)
+        setState(() => _carregandoProdutos = false);
     }
   }
 
@@ -283,10 +416,14 @@ class _LojaPageState extends State<LojaPage>
     WidgetsBinding.instance.addObserver(this);
     _atualizarLoja();
     _carregarAvaliacoes();
-    _atualizacaoLoja = Timer.periodic(const Duration(seconds: 30), (_) => _atualizarLoja());
+    _atualizacaoLoja = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _atualizarLoja(),
+    );
     _tabController = TabController(length: 4, vsync: this);
 
     _carregarProdutos();
+    _consultarResumoLoja();
     _carregarSeguidores();
   }
 
@@ -390,10 +527,11 @@ class _LojaPageState extends State<LojaPage>
                       SizedBox(height: 85.h),
                       _buildProfileInfo(),
                       SizedBox(height: 16.h),
-                      if (_erroLoja) BannerErroInline(
-                        mensagem: 'Não foi possível atualizar a disponibilidade da loja.',
-                        aoTentarNovamente: _atualizarLoja,
-                      ),
+                      if (_erroLoja)
+                        BannerErroInline(
+                          mensagem: 'Não foi possível atualizar a disponibilidade da loja.',
+                          aoTentarNovamente: _atualizarLoja,
+                        ),
                       _buildStatsCards(),
                       SizedBox(height: 16.h),
                     ],
@@ -548,16 +686,13 @@ class _LojaPageState extends State<LojaPage>
                       spacing: 8.w,
                       runSpacing: 4.h,
                       children: [
-                        _buildBadge(
-                          _loja.categoria,
-                          const Color(0xFF5D201C),
-                        ),
+                        _buildBadge(_loja.categoria, const Color(0xFF5D201C)),
                         Text(
                           _carregandoSeguidores
                               ? "Carregando..."
                               : _erroSeguidores
-                                  ? "Seguidores indisponíveis"
-                                  : "$_seguidores seguidores",
+                              ? "Seguidores indisponíveis"
+                              : "$_seguidores seguidores",
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 10.sp,
@@ -575,13 +710,15 @@ class _LojaPageState extends State<LojaPage>
                 onPressed: _carregandoSeguidores || _alterandoSeguir
                     ? null
                     : _erroSeguidores
-                        ? _carregarSeguidores
-                        : _toggleSeguir,
+                    ? _carregarSeguidores
+                    : _toggleSeguir,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      _isSeguindo ? Colors.white : const Color(0xFFFF6961),
-                  foregroundColor:
-                      _isSeguindo ? const Color(0xFFFF6961) : Colors.white,
+                  backgroundColor: _isSeguindo
+                      ? Colors.white
+                      : const Color(0xFFFF6961),
+                  foregroundColor: _isSeguindo
+                      ? const Color(0xFFFF6961)
+                      : Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
@@ -595,10 +732,10 @@ class _LojaPageState extends State<LojaPage>
                   _carregandoSeguidores || _alterandoSeguir
                       ? "..."
                       : _erroSeguidores
-                          ? "Tentar novamente"
-                          : _isSeguindo
-                              ? "Seguindo"
-                              : "Seguir",
+                      ? "Tentar novamente"
+                      : _isSeguindo
+                      ? "Seguindo"
+                      : "Seguir",
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 12.sp,
@@ -664,8 +801,9 @@ class _LojaPageState extends State<LojaPage>
           children: [
             _buildStatItem(
               "Avaliação",
-              (_loja.dadosOperacionais?.avaliacaoMedia ?? 0.0)
-                  .toStringAsFixed(1),
+              (_loja.dadosOperacionais?.avaliacaoMedia ?? 0.0).toStringAsFixed(
+                1,
+              ),
               "Média",
               const Color(0xFF5D201C),
             ),
@@ -677,14 +815,13 @@ class _LojaPageState extends State<LojaPage>
               const Color(0xFFFF6961),
             ),
             Container(width: 1, height: 40.h, color: Colors.grey.shade200),
-            Tooltip(
-              message: 'Percentual positivo dos produtos ainda indisponível.',
-              child: _buildStatItem(
-                'Produtos',
-                '—',
-                'Positivo',
-                const Color(0xFF5D201C),
-              ),
+            _buildStatItem(
+              'Avaliações',
+              _resumoLoja == null || (_resumoLoja!['total'] as num) == 0
+                  ? '—'
+                  : '${(_resumoLoja!['percentualPositivo'] as num).toStringAsFixed(0)}%',
+              'Notas 4 e 5',
+              const Color(0xFF5D201C),
             ),
           ],
         ),
@@ -734,18 +871,18 @@ class _LojaPageState extends State<LojaPage>
               children: [
                 NhacFilterChip(
                   label: 'Todos',
-                  selected: true,
-                  onSelected: () {},
+                  selected: _filtroProduto == 'Todos',
+                  onSelected: () => _filtrarProdutos('Todos'),
                 ),
-                const NhacFilterChip(
+                NhacFilterChip(
                   label: 'Em destaque',
-                  unavailableReason:
-                      'A loja ainda não disponibiliza os destaques.',
+                  selected: _filtroProduto == 'Em destaque',
+                  onSelected: () => _filtrarProdutos('Em destaque'),
                 ),
-                const NhacFilterChip(
+                NhacFilterChip(
                   label: 'Vendidos',
-                  unavailableReason:
-                      'A ordenação por vendas ainda não está disponível.',
+                  selected: _filtroProduto == 'Vendidos',
+                  onSelected: () => _filtrarProdutos('Vendidos'),
                 ),
               ],
             ),
@@ -811,20 +948,20 @@ class _LojaPageState extends State<LojaPage>
                             ProdutoDetalhesPage(produto: produto),
                         transitionsBuilder:
                             (context, animation, secondaryAnimation, child) {
-                          const begin = Offset(0.0, 1.0);
-                          const end = Offset.zero;
-                          const curve = Curves.easeOutCubic;
+                              const begin = Offset(0.0, 1.0);
+                              const end = Offset.zero;
+                              const curve = Curves.easeOutCubic;
 
-                          var tween = Tween(
-                            begin: begin,
-                            end: end,
-                          ).chain(CurveTween(curve: curve));
+                              var tween = Tween(
+                                begin: begin,
+                                end: end,
+                              ).chain(CurveTween(curve: curve));
 
-                          return SlideTransition(
-                            position: animation.drive(tween),
-                            child: child,
-                          );
-                        },
+                              return SlideTransition(
+                                position: animation.drive(tween),
+                                child: child,
+                              );
+                            },
                         transitionDuration: const Duration(milliseconds: 300),
                       ),
                     ),
@@ -843,38 +980,51 @@ class _LojaPageState extends State<LojaPage>
           SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.all(16.w),
-              child: Column(children: [
-                if (_erroProdutos != null)
-                  const Text('Não foi possível carregar mais produtos.'),
-                TextButton(
-                  key: const ValueKey('loja-carregar-mais'),
-                  style: ButtonStyle(
-                    minimumSize: const WidgetStatePropertyAll(Size(220, 48)),
-                    foregroundColor:
-                        const WidgetStatePropertyAll(Color(0xFF5D201C)),
-                    overlayColor: WidgetStateProperty.resolveWith((states) =>
-                        states.contains(WidgetState.focused) ||
+              child: Column(
+                children: [
+                  if (_erroProdutos != null)
+                    const Text('Não foi possível carregar mais produtos.'),
+                  TextButton(
+                    key: const ValueKey('loja-carregar-mais'),
+                    style: ButtonStyle(
+                      minimumSize: const WidgetStatePropertyAll(Size(220, 48)),
+                      foregroundColor: const WidgetStatePropertyAll(
+                        Color(0xFF5D201C),
+                      ),
+                      overlayColor: WidgetStateProperty.resolveWith(
+                        (states) =>
+                            states.contains(WidgetState.focused) ||
                                 states.contains(WidgetState.hovered)
                             ? const Color(0x155D201C)
-                            : null),
-                    side: WidgetStateProperty.resolveWith((states) => states
-                            .contains(WidgetState.focused)
-                        ? const BorderSide(color: Color(0xFF5D201C), width: 2)
-                        : BorderSide.none),
+                            : null,
+                      ),
+                      side: WidgetStateProperty.resolveWith(
+                        (states) => states.contains(WidgetState.focused)
+                            ? const BorderSide(
+                                color: Color(0xFF5D201C),
+                                width: 2,
+                              )
+                            : BorderSide.none,
+                      ),
+                    ),
+                    onPressed: _carregandoProdutos ? null : _carregarProdutos,
+                    child: _carregandoProdutos
+                        ? Semantics(
+                            liveRegion: true,
+                            label: 'Carregando mais produtos',
+                            child: const LoadingNhac(
+                              telaCheia: false,
+                              tamanho: 24,
+                            ),
+                          )
+                        : Text(
+                            _erroProdutos != null
+                                ? 'Tentar novamente'
+                                : 'Carregar mais produtos',
+                          ),
                   ),
-                  onPressed: _carregandoProdutos ? null : _carregarProdutos,
-                  child: _carregandoProdutos
-                      ? Semantics(
-                          liveRegion: true,
-                          label: 'Carregando mais produtos',
-                          child:
-                              const LoadingNhac(telaCheia: false, tamanho: 24),
-                        )
-                      : Text(_erroProdutos != null
-                          ? 'Tentar novamente'
-                          : 'Carregar mais produtos'),
-                ),
-              ]),
+                ],
+              ),
             ),
           ),
         SliverToBoxAdapter(child: SizedBox(height: 100.h)),

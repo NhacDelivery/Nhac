@@ -14,8 +14,8 @@ class CartProvider extends ChangeNotifier {
       _repositoryOverride ?? CartRepository(usuarioId: _sessionUserId);
 
   CartProvider({CartRepository? repository, AuthService? authService})
-      : _repositoryOverride = repository,
-        _authService = authService {
+    : _repositoryOverride = repository,
+      _authService = authService {
     _sessionUserId = authService?.usuarioId;
     authService?.addListener(_onSessionChanged);
   }
@@ -69,8 +69,10 @@ class CartProvider extends ChangeNotifier {
     if (_observacao != texto) {
       _observacao = texto;
       notifyListeners();
-      await _cartRepository.salvarCarrinhoLocal(_itens.values.toList(),
-          observacao: _observacao);
+      await _cartRepository.salvarCarrinhoLocal(
+        _itens.values.toList(),
+        observacao: _observacao,
+      );
     }
   }
 
@@ -88,7 +90,8 @@ class CartProvider extends ChangeNotifier {
         _lojaIdAtual.isNotEmpty &&
         _lojaIdAtual != lojaId) {
       throw Exception(
-          'Você só pode adicionar itens de uma loja por vez. Limpe o carrinho atual.');
+        'Você só pode adicionar itens de uma loja por vez. Limpe o carrinho atual.',
+      );
     }
 
     if (_itens.containsKey(idProduto)) {
@@ -106,8 +109,10 @@ class CartProvider extends ChangeNotifier {
 
     _lojaIdAtual = lojaId;
     _recalcularTotais();
-    await _cartRepository.salvarCarrinhoLocal(_itens.values.toList(),
-        observacao: _observacao);
+    await _cartRepository.salvarCarrinhoLocal(
+      _itens.values.toList(),
+      observacao: _observacao,
+    );
     return true;
   }
 
@@ -126,8 +131,10 @@ class CartProvider extends ChangeNotifier {
     }
 
     _recalcularTotais();
-    await _cartRepository.salvarCarrinhoLocal(_itens.values.toList(),
-        observacao: _observacao);
+    await _cartRepository.salvarCarrinhoLocal(
+      _itens.values.toList(),
+      observacao: _observacao,
+    );
   }
 
   Future<void> excluirItemDoCarrinho(String idProduto) async {
@@ -137,17 +144,32 @@ class CartProvider extends ChangeNotifier {
       _observacao = '';
     }
     _recalcularTotais();
-    await _cartRepository.salvarCarrinhoLocal(_itens.values.toList(),
-        observacao: _observacao);
+    await _cartRepository.salvarCarrinhoLocal(
+      _itens.values.toList(),
+      observacao: _observacao,
+    );
   }
 
   void marcarItemComoEsgotado(String idProduto) {
     if (_itens.containsKey(idProduto)) {
       _itens[idProduto]!.esgotado = true;
       notifyListeners();
-      _cartRepository.salvarCarrinhoLocal(_itens.values.toList(),
-          observacao: _observacao);
+      _cartRepository.salvarCarrinhoLocal(
+        _itens.values.toList(),
+        observacao: _observacao,
+      );
     }
+  }
+
+  Future<void> consumirPedidoRecuperado(
+    String pedidoId,
+    Map<String, dynamic> payload,
+  ) async {
+    final repository = _cartRepository;
+    final version = _sessionVersion;
+    await repository.consumirPedido(pedidoId, payload);
+    if (_disposed || version != _sessionVersion) return;
+    await carregarCarrinhoLocal();
   }
 
   Future<void> esvaziarCarrinho() async {

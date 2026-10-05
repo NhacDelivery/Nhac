@@ -29,6 +29,7 @@ class MentionedStoreModel {
 class FeedPostModel {
   final String id;
   final String nomeUsuario;
+  final String? usuarioId;
   final String? avatarUrl;
   final String? badge;
   final String? dispositivo;
@@ -39,6 +40,7 @@ class FeedPostModel {
   final int salvos;
   final bool curtido;
   final bool salvo;
+  final bool podeEditar;
   final List<String> hashTags;
   final bool isPatrocinado;
   final String? sponsorLabel;
@@ -49,6 +51,7 @@ class FeedPostModel {
     required this.id,
     required this.nomeUsuario,
     this.avatarUrl,
+    this.usuarioId,
     this.badge,
     this.dispositivo,
     required this.conteudo,
@@ -58,6 +61,7 @@ class FeedPostModel {
     this.salvos = 0,
     this.curtido = false,
     this.salvo = false,
+    this.podeEditar = false,
     this.hashTags = const [],
     this.isPatrocinado = false,
     this.sponsorLabel,
@@ -70,6 +74,14 @@ class FeedPostModel {
     return FeedPostModel(
       id: map['id'] as String,
       nomeUsuario: map['nomeUsuario'] as String,
+      usuarioId: map['usuarioId'] as String?,
+      topComment: map['topComment'] is Map
+          ? TopCommentModel(
+              nomeUsuario: map['topComment']['nomeUsuario'] as String,
+              conteudo: map['topComment']['conteudo'] as String,
+              curtidas: 0,
+            )
+          : null,
       avatarUrl: map['avatarUrl'] as String?,
       conteudo: map['conteudo'] as String,
       imagens: List<String>.from(map['imagens'] as List? ?? const []),
@@ -79,16 +91,18 @@ class FeedPostModel {
       salvos: (map['salvos'] as num? ?? 0).toInt(),
       curtido: map['curtido'] == true,
       salvo: map['salvo'] == true,
+      podeEditar: map['podeEditar'] == true,
       isPatrocinado: map['isPatrocinado'] == true,
       sponsorLabel: map['sponsorLabel'] as String?,
-      mentionedStore: store == null ? null : MentionedStoreModel(
-        id: store['id'] as String?,
-        nome: store['nome'] as String,
-        imageUrl: store['imageUrl'] as String? ?? '',
-        rating: (store['rating'] as num? ?? 0).toDouble(),
-        avaliacoes: store['avaliacoes'] as String? ?? '0 avaliações',
-      ),
+      mentionedStore: store == null
+          ? null
+          : MentionedStoreModel(
+              id: store['id'] as String?,
+              nome: store['nome'] as String,
+              imageUrl: store['imageUrl'] as String? ?? '',
+              rating: (store['rating'] as num? ?? 0).toDouble(),
+              avaliacoes: store['avaliacoes'] as String? ?? '0 avaliações',
+            ),
     );
   }
-
 }

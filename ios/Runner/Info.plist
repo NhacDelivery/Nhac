@@ -13,6 +13,8 @@
 		<string>Precisamos de acesso à sua galeria para você escolher sua foto de perfil.</string>
 		<key>NSCameraUsageDescription</key>
 		<string>Precisamos de acesso à sua câmera para você tirar uma foto de perfil.</string>
+        <key>CFBundleURLTypes</key>
+        <array><dict><key>CFBundleURLSchemes</key><array><string>nhac</string></array></dict></array>
 		<key>CFBundleDevelopmentRegion</key>
 		<string>$(DEVELOPMENT_LANGUAGE)</string>
 		<key>CFBundleDisplayName</key>

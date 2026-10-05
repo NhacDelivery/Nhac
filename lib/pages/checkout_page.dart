@@ -67,8 +67,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
       });
     } catch (_) {
       if (mounted) {
-        setState(() => _erroTentativa =
-            'Não foi possível conferir a tentativa anterior. Tente novamente antes de criar um pedido.');
+        setState(
+          () => _erroTentativa = 'Não foi possível conferir a tentativa anterior. Tente novamente antes de criar um pedido.',
+        );
       }
     } finally {
       if (mounted) setState(() => _consultandoTentativa = false);
@@ -87,12 +88,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (!mounted || auth.usuarioId != uid) return;
       await LocalCacheService.salvarPedidoAtivo(uid, resposta.pedidoId);
       if (!mounted || auth.usuarioId != uid) return;
-      await context.read<CartProvider>().esvaziarCarrinho();
+      await context.read<CartProvider>().consumirPedidoRecuperado(
+        resposta.pedidoId,
+        Map<String, dynamic>.from(_tentativaPendente!['payload'] as Map),
+      );
       await _tentativasCheckout.concluir(uid);
       if (!mounted || auth.usuarioId != uid) return;
-      context.go(pagamento == 'DINHEIRO'
-          ? '/rastreio?pedidoId=${Uri.encodeQueryComponent(resposta.pedidoId)}'
-          : '/pagamento?pedidoId=${Uri.encodeQueryComponent(resposta.pedidoId)}');
+      context.go(
+        pagamento == 'DINHEIRO'
+            ? '/rastreio?pedidoId=${Uri.encodeQueryComponent(resposta.pedidoId)}'
+            : '/pagamento?pedidoId=${Uri.encodeQueryComponent(resposta.pedidoId)}',
+      );
     } catch (e) {
       if (mounted && auth.usuarioId == uid) {
         context.showError(e.toString().replaceFirst('Exception: ', ''));
@@ -158,7 +164,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         final locais = await locationFromAddress(enderecoCompleto);
         if (locais.length != 1) {
           throw StateError(
-              'Não foi possível identificar um único local. Revise rua, número, cidade e CEP do endereço.');
+            'Não foi possível identificar um único local. Revise rua, número, cidade e CEP do endereço.',
+          );
         }
         latitude = locais.first.latitude;
         longitude = locais.first.longitude;
@@ -169,7 +176,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
           longitude.abs() > 180 ||
           (latitude == 0 && longitude == 0)) {
         throw StateError(
-            'O serviço de endereço não retornou coordenadas válidas. Revise o endereço.');
+          'O serviço de endereço não retornou coordenadas válidas. Revise o endereço.',
+        );
       }
       final resposta = await LojaRepository().calcularFrete(
         cartProvider.lojaId,
@@ -226,117 +234,120 @@ class _CheckoutPageState extends State<CheckoutPage> {
       context: context,
       barrierDismissible: false,
       builder: (dialogContext) => StatefulBuilder(
-          builder: (ctx, atualizar) => PopScope(
-              canPop: !salvando,
-              child: AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(24.r),
-                ),
-                backgroundColor: Colors.white,
-                title: Row(
-                  children: [
-                    Icon(Icons.home,
-                        color: const Color(0xFFFF6961), size: 28.r),
-                    SizedBox(width: 12.w),
-                    Expanded(
-                        child: Text(
-                      'Número da casa',
-                      style: TextStyle(
-                        fontSize: 20.sp,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF5D201C),
-                      ),
-                    )),
-                  ],
-                ),
-                content: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Para completar seu endereço, informe o número da casa.',
-                        style: TextStyle(
-                          fontSize: 14.sp,
-                          color: const Color(0xFF5D201C),
-                        ),
-                      ),
-                      SizedBox(height: 16.h),
-                      if (erro != null)
-                        Text(erro!, style: const TextStyle(color: Colors.red)),
-                      TextFormField(
-                        enabled: !salvando,
-                        controller: numeroController,
-                        keyboardType: TextInputType.number,
-                        decoration: InputDecoration(
-                          hintText: 'Número (ex: 123, S/N)',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12.r),
-                          ),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 16.w,
-                            vertical: 12.h,
-                          ),
-                        ),
-                        validator: (value) =>
-                            value == null || value.trim().isEmpty
-                                ? 'Campo obrigatório'
-                                : null,
-                      ),
-                    ],
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed:
-                        salvando ? null : () => Navigator.pop(dialogContext),
-                    child: Text(
-                      'Cancelar',
-                      style: TextStyle(color: Colors.grey.shade600),
+        builder: (ctx, atualizar) => PopScope(
+          canPop: !salvando,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24.r),
+            ),
+            backgroundColor: Colors.white,
+            title: Row(
+              children: [
+                Icon(Icons.home, color: const Color(0xFFFF6961), size: 28.r),
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: Text(
+                    'Número da casa',
+                    style: TextStyle(
+                      fontSize: 20.sp,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF5D201C),
                     ),
                   ),
-                  ElevatedButton(
-                    onPressed: salvando
-                        ? null
-                        : () async {
-                            if (salvando || !formKey.currentState!.validate()) {
-                              return;
-                            }
-                            atualizar(() {
-                              salvando = true;
-                              erro = null;
-                            });
-                            try {
-                              await provider.atualizarEndereco(
-                                  endereco.id,
-                                  endereco.copyWith(
-                                      numero: numeroController.text.trim()));
-                              if (!mounted || !dialogContext.mounted) return;
-                              Navigator.pop(dialogContext);
-                              if (provider.erro != null) {
-                                context.showInfo(provider.erro!);
-                              }
-                            } catch (_) {
-                              if (ctx.mounted) {
-                                atualizar(() => erro =
-                                    'Não foi possível salvar o número. Tente novamente.');
-                              }
-                            } finally {
-                              if (ctx.mounted) {
-                                atualizar(() => salvando = false);
-                              }
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFE645C),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(50.r),
+                ),
+              ],
+            ),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Para completar seu endereço, informe o número da casa.',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: const Color(0xFF5D201C),
+                    ),
+                  ),
+                  SizedBox(height: 16.h),
+                  if (erro != null)
+                    Text(erro!, style: const TextStyle(color: Colors.red)),
+                  TextFormField(
+                    enabled: !salvando,
+                    controller: numeroController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      hintText: 'Número (ex: 123, S/N)',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12.r),
+                      ),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16.w,
+                        vertical: 12.h,
                       ),
                     ),
-                    child: Text(salvando ? 'Salvando...' : 'Salvar'),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Campo obrigatório'
+                        : null,
                   ),
                 ],
-              ))),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: salvando ? null : () => Navigator.pop(dialogContext),
+                child: Text(
+                  'Cancelar',
+                  style: TextStyle(color: Colors.grey.shade600),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: salvando
+                    ? null
+                    : () async {
+                        if (salvando || !formKey.currentState!.validate()) {
+                          return;
+                        }
+                        atualizar(() {
+                          salvando = true;
+                          erro = null;
+                        });
+                        try {
+                          await provider.atualizarEndereco(
+                            endereco.id,
+                            endereco.copyWith(
+                              numero: numeroController.text.trim(),
+                            ),
+                          );
+                          if (!mounted || !dialogContext.mounted) return;
+                          Navigator.pop(dialogContext);
+                          if (provider.erro != null) {
+                            context.showInfo(provider.erro!);
+                          }
+                        } catch (_) {
+                          if (ctx.mounted) {
+                            atualizar(
+                              () => erro = 'Não foi possível salvar o número. Tente novamente.',
+                            );
+                          }
+                        } finally {
+                          if (ctx.mounted) {
+                            atualizar(() => salvando = false);
+                          }
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFE645C),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(50.r),
+                  ),
+                ),
+                child: Text(salvando ? 'Salvando...' : 'Salvar'),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
     await Future<void>.delayed(const Duration(milliseconds: 300));
     numeroController.dispose();
@@ -368,13 +379,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final subtotal = cartProvider.valorTotal;
     final frete = _taxaFrete;
 
-    final desconto =
-        _subtotalValidado == subtotal ? (_cupom?.descontoAplicado ?? 0) : 0.0;
+    final desconto = _subtotalValidado == subtotal
+        ? (_cupom?.descontoAplicado ?? 0)
+        : 0.0;
     final total = subtotal + frete - desconto;
     final tempoEntrega = _tempoEstimadoMinutos == null
         ? 'Tempo calculado no fechamento'
         : 'Até $_tempoEstimadoMinutos min';
-    final podeFinalizar = !_consultandoTentativa &&
+    final podeFinalizar =
+        !_consultandoTentativa &&
         _tentativaPendente == null &&
         _erroTentativa == null &&
         !enderecoProvider.isLoading &&
@@ -415,16 +428,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
           children: [
             if (_erroTentativa != null)
               BannerErroInline(
-                  mensagem: _erroTentativa!,
-                  aoTentarNovamente: _consultarTentativa),
+                mensagem: _erroTentativa!,
+                aoTentarNovamente: _consultarTentativa,
+              ),
             if (_tentativaPendente != null) ...[
               const Text(
-                  'Há uma tentativa anterior sem confirmação. Verifique o resultado antes de criar outro pedido.'),
+                'Há uma tentativa anterior sem confirmação. Verifique o resultado antes de criar outro pedido.',
+              ),
               TextButton(
-                  onPressed: _isSubmitting ? null : _recuperarTentativa,
-                  child: Text(_isSubmitting
+                onPressed: _isSubmitting ? null : _recuperarTentativa,
+                child: Text(
+                  _isSubmitting
                       ? 'Verificando...'
-                      : 'Verificar tentativa anterior')),
+                      : 'Verificar tentativa anterior',
+                ),
+              ),
             ],
             if (enderecoProvider.erro != null)
               BannerErroInline(
@@ -432,7 +450,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 aoTentarNovamente: _carregarDadosIniciais,
               ),
             if (cartProvider.itens.values.any((item) => item.esgotado))
-              const Text('Remova os produtos esgotados do carrinho para finalizar.'),
+              const Text(
+                'Remova os produtos esgotados do carrinho para finalizar.',
+              ),
             _buildSectionTitle('Endereço de entrega'),
             SizedBox(height: 8.h),
             Container(
@@ -462,10 +482,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           enderecoisPadrao != null
                               ? '${enderecoisPadrao.rua}, ${enderecoisPadrao.numero}'
                               : enderecoProvider.isLoading
-                                  ? 'Consultando endereços...'
-                                  : enderecoProvider.erro != null
-                                      ? 'Endereços indisponíveis'
-                                      : 'Nenhum endereço selecionado',
+                              ? 'Consultando endereços...'
+                              : enderecoProvider.erro != null
+                              ? 'Endereços indisponíveis'
+                              : 'Nenhum endereço selecionado',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 14.sp,
@@ -663,13 +683,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             _cupom == null
                                 ? 'Veja seus cupons e economize neste pedido'
                                 : (_subtotalValidado == subtotal
-                                    ? 'Desconto de ${currencyFormat.format(desconto)} aplicado'
-                                    : 'Carrinho alterado. Selecione o cupom novamente.'),
+                                      ? 'Desconto de ${currencyFormat.format(desconto)} aplicado'
+                                      : 'Carrinho alterado. Selecione o cupom novamente.'),
                             style: TextStyle(
                               fontSize: 12.sp,
-                              color: const Color(
-                                0xFF5D201C,
-                              ).withValues(alpha: 0.58),
+                              color: const Color(0xFF5D201C)
+                                  .withValues(alpha: 0.58),
                             ),
                           ),
                         ],
@@ -686,9 +705,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         onPressed: _isSubmitting
                             ? null
                             : () => setState(() {
-                                  _cupom = null;
-                                  _subtotalValidado = null;
-                                }),
+                                _cupom = null;
+                                _subtotalValidado = null;
+                              }),
                         icon: const Icon(
                           Icons.close_rounded,
                           color: Color(0xFFFF6961),
@@ -873,12 +892,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   ),
                   SizedBox(width: 12.w),
                   Expanded(
-                    child: Text(tempoEntrega,
-                        style: TextStyle(
-                          fontSize: 14.sp,
-                          fontWeight: FontWeight.w500,
-                          color: const Color(0xFF5D201C),
-                        )),
+                    child: Text(
+                      tempoEntrega,
+                      style: TextStyle(
+                        fontSize: 14.sp,
+                        fontWeight: FontWeight.w500,
+                        color: const Color(0xFF5D201C),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -945,8 +966,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
               Icon(
                 icon,
                 size: 24.r,
-                color:
-                    isSelected ? const Color(0xFFFF6961) : Colors.grey.shade500,
+                color: isSelected
+                    ? const Color(0xFFFF6961)
+                    : Colors.grey.shade500,
               ),
               SizedBox(width: 16.w),
               Expanded(
@@ -954,10 +976,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   title,
                   style: TextStyle(
                     fontSize: 15.sp,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color:
-                        isSelected ? const Color(0xFFFF6961) : Colors.black87,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                    color: isSelected
+                        ? const Color(0xFFFF6961)
+                        : Colors.black87,
                   ),
                 ),
               ),
@@ -1110,7 +1134,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
     if (cartProvider.itens.isEmpty ||
         cartProvider.itens.values.any((item) => item.esgotado)) {
-      context.showError('Remova os produtos esgotados do carrinho antes de finalizar.');
+      context.showError(
+        'Remova os produtos esgotados do carrinho antes de finalizar.',
+      );
       return;
     }
     if (!_freteConfirmado ||
@@ -1218,7 +1244,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
         context: context,
         barrierDismissible: false,
         builder: (dialogContext) => const PopScope(
-            canPop: false, child: LoadingNhac(telaCheia: false, tamanho: 100)),
+          canPop: false,
+          child: LoadingNhac(telaCheia: false, tamanho: 100),
+        ),
       );
 
       final respostaPedido = await _tentativasCheckout.enviar(uid, pedido);
@@ -1386,54 +1414,57 @@ class _AddressSelectionSheet extends StatelessWidget {
               itemBuilder: (context, index) {
                 final endereco = enderecos[index];
                 return Material(
-                    type: MaterialType.transparency,
-                    child: ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      onTap: () async {
-                        if (!await selecionarEnderecoPadrao(
-                            context, endereco.id)) {
-                          return;
-                        }
-                        if (context.mounted) Navigator.pop(context);
-                      },
-                      leading: Container(
-                        padding: EdgeInsets.all(8.w),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF6961).withValues(alpha: 0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          endereco.bairro.toLowerCase().contains('trabalho') ||
-                                  (endereco.complemento ?? '')
-                                      .toLowerCase()
-                                      .contains('trabalho')
-                              ? Icons.work_outline
-                              : Icons.home_outlined,
-                          color: const Color(0xFFFF6961),
-                          size: 20.r,
-                        ),
+                  type: MaterialType.transparency,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    onTap: () async {
+                      if (!await selecionarEnderecoPadrao(
+                        context,
+                        endereco.id,
+                      )) {
+                        return;
+                      }
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                    leading: Container(
+                      padding: EdgeInsets.all(8.w),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6961).withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
                       ),
-                      title: Text(
-                        '${endereco.rua}, ${endereco.numero}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15.sp,
-                        ),
+                      child: Icon(
+                        endereco.bairro.toLowerCase().contains('trabalho') ||
+                                (endereco.complemento ?? '')
+                                    .toLowerCase()
+                                    .contains('trabalho')
+                            ? Icons.work_outline
+                            : Icons.home_outlined,
+                        color: const Color(0xFFFF6961),
+                        size: 20.r,
                       ),
-                      subtitle: Text(
-                        '${endereco.bairro}${(endereco.complemento?.isNotEmpty ?? false) ? ' - ${endereco.complemento}' : ''}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(fontSize: 13.sp),
+                    ),
+                    title: Text(
+                      '${endereco.rua}, ${endereco.numero}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15.sp,
                       ),
-                      trailing: endereco.isPadrao
-                          ? Icon(
-                              Icons.check_circle,
-                              color: const Color(0xFFFF6961),
-                              size: 22.r,
-                            )
-                          : null,
-                    ));
+                    ),
+                    subtitle: Text(
+                      '${endereco.bairro}${(endereco.complemento?.isNotEmpty ?? false) ? ' - ${endereco.complemento}' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13.sp),
+                    ),
+                    trailing: endereco.isPadrao
+                        ? Icon(
+                            Icons.check_circle,
+                            color: const Color(0xFFFF6961),
+                            size: 22.r,
+                          )
+                        : null,
+                  ),
+                );
               },
             ),
           ),
@@ -1461,14 +1492,15 @@ class _AddressSelectionSheet extends StatelessWidget {
                     ),
                     SizedBox(width: 16.w),
                     Expanded(
-                        child: Text(
-                      'Adicionar novo endereço',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 15.sp,
-                        color: Colors.grey,
+                      child: Text(
+                        'Adicionar novo endereço',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15.sp,
+                          color: Colors.grey,
+                        ),
                       ),
-                    )),
+                    ),
                   ],
                 ),
               ),

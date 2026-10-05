@@ -60,3 +60,6 @@ com o teclado aberto; verificação em dispositivo ainda necessária.
 
 
 Publicações, comentários e contagens vêm da API. Não preencher falhas com conteúdo fictício.
+
+Ações do feed usam botões, contagens confirmadas e hashtags separadas. Salvos reutiliza
+cartões; avaliações individuais reutilizam NhacFilterChip e o upload existente.

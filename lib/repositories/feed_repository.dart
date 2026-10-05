@@ -13,10 +13,14 @@ class FeedRepository {
     List<String> imagens = const [],
     List<String> hashTags = const [],
     String? lojaId,
+    String? idempotencyKey,
   }) async {
     try {
       final response = await _dio.post(
         '/feed/posts',
+        options: idempotencyKey == null
+            ? null
+            : Options(headers: {'Idempotency-Key': idempotencyKey}),
         data: {
           'conteudo': conteudo.trim(),
           'imagens': imagens,
@@ -60,11 +64,18 @@ class FeedRepository {
   Future<List<FeedCommentModel>> buscarComentarios(
     String id, {
     int page = 0,
+    String ordem = 'Padrao',
+    bool autor = false,
   }) async {
     try {
       final response = await _dio.get(
         '/feed/posts/${Uri.encodeComponent(id)}/comentarios',
-        queryParameters: {'page': page, 'size': 20},
+        queryParameters: {
+          'page': page,
+          'size': 20,
+          'ordem': ordem,
+          'autor': autor,
+        },
       );
       return (response.data['content'] as List)
           .map(
@@ -76,11 +87,18 @@ class FeedRepository {
     }
   }
 
-  Future<FeedCommentModel> comentar(String id, String conteudo) async {
+  Future<FeedCommentModel> comentar(
+    String id,
+    String conteudo, {
+    String? idempotencyKey,
+  }) async {
     try {
       final response = await _dio.post(
         '/feed/posts/${Uri.encodeComponent(id)}/comentarios',
         data: {'conteudo': conteudo.trim()},
+        options: idempotencyKey == null
+            ? null
+            : Options(headers: {'Idempotency-Key': idempotencyKey}),
       );
       return FeedCommentModel.fromMap(Map<String, dynamic>.from(response.data));
     } catch (e) {
@@ -98,6 +116,61 @@ class FeedRepository {
           '/feed/posts/${Uri.encodeComponent(id)}/${salvar ? 'salvo' : 'curtida'}';
       final response = ativo ? await _dio.put(path) : await _dio.delete(path);
       return FeedPostModel.fromMap(Map<String, dynamic>.from(response.data));
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<List<FeedPostModel>> buscarSalvos({int page = 0}) async {
+    try {
+      final response = await _dio.get(
+        '/feed/posts/salvos',
+        queryParameters: {'page': page, 'size': 20},
+      );
+      return (response.data['content'] as List)
+          .map((item) => FeedPostModel.fromMap(Map<String, dynamic>.from(item)))
+          .toList();
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<FeedPostModel> editar(
+    FeedPostModel post,
+    String conteudo,
+    List<String> tags,
+  ) async {
+    try {
+      final response = await _dio.put(
+        '/feed/posts/${Uri.encodeComponent(post.id)}',
+        data: {
+          'conteudo': conteudo.trim(),
+          'hashTags': tags,
+          'imagens': post.imagens,
+          'lojaId': post.mentionedStore?.id,
+          'isPatrocinado': post.isPatrocinado,
+          'sponsorLabel': post.sponsorLabel,
+        },
+      );
+      return FeedPostModel.fromMap(Map<String, dynamic>.from(response.data));
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<void> excluir(String id) async {
+    try {
+      await _dio.delete('/feed/posts/${Uri.encodeComponent(id)}');
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<void> excluirComentario(String postId, String id) async {
+    try {
+      await _dio.delete(
+        '/feed/posts/${Uri.encodeComponent(postId)}/comentarios/${Uri.encodeComponent(id)}',
+      );
     } catch (e) {
       throw mapException(e);
     }

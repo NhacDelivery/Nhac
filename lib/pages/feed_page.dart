@@ -1,3 +1,5 @@
+import 'package:nhac/components/feed_content.dart';
+import 'package:nhac/services/feed_share_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -13,7 +15,8 @@ import 'package:nhac/utils/error_ui_helper.dart';
 import 'package:nhac/globals/ui_utils.dart';
 
 class FeedPage extends StatefulWidget {
-  const FeedPage({super.key});
+  final bool salvos;
+  const FeedPage({super.key, this.salvos = false});
 
   @override
   State<FeedPage> createState() => _FeedPageState();
@@ -30,6 +33,8 @@ class _FeedPageState extends State<FeedPage>
   int _page = 0;
   int _requestId = 0;
   String? _error;
+  String? _categoriaCarregada;
+  final Set<String> _curtindo = {};
 
   static const List<String> _categorias = [
     'Destaques',
@@ -64,10 +69,13 @@ class _FeedPageState extends State<FeedPage>
         _loadingMore = false;
       });
     try {
-      final posts = await _repository.buscarPosts(categoria: categoria);
+      final posts = widget.salvos
+          ? await _repository.buscarSalvos()
+          : await _repository.buscarPosts(categoria: categoria);
       if (!mounted || requestId != _requestId) return;
       setState(() {
         _posts = posts;
+        _categoriaCarregada = categoria;
         _page = 0;
         _hasMore = posts.length == 20;
       });
@@ -85,10 +93,12 @@ class _FeedPageState extends State<FeedPage>
     final requestId = _requestId;
     setState(() => _loadingMore = true);
     try {
-      final posts = await _repository.buscarPosts(
-        categoria: _categorias[_tabController.index],
-        page: _page + 1,
-      );
+      final posts = widget.salvos
+          ? await _repository.buscarSalvos(page: _page + 1)
+          : await _repository.buscarPosts(
+              categoria: _categorias[_tabController.index],
+              page: _page + 1,
+            );
       if (!mounted || requestId != _requestId) return;
       setState(() {
         final ids = _posts.map((post) => post.id).toSet();
@@ -155,31 +165,40 @@ class _FeedPageState extends State<FeedPage>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Feed',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 26.sp,
-                          color: const Color(0xFF5D201C),
+                      Expanded(
+                        child: Text(
+                          widget.salvos ? 'Publicações salvas' : 'Feed',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: widget.salvos ? 20.sp : 26.sp,
+                            color: const Color(0xFF5D201C),
+                          ),
                         ),
                       ),
-                      IconButton(
-                        tooltip: 'Criar publicação',
-                        icon: const Icon(
-                          Icons.edit_square,
-                          color: Color(0xFF5D201C),
+                      if (!widget.salvos)
+                        IconButton(
+                          tooltip: 'Publicações salvas',
+                          icon: const Icon(Icons.bookmarks_outlined),
+                          onPressed: () => context.push('/feed-salvos'),
                         ),
-                        onPressed: () async {
-                          final post = await context.push<FeedPostModel>(
-                            '/feed-publicar',
-                          );
-                          if (!mounted || post == null) return;
-                          if (!context.mounted) return;
-                          context.showSuccess('Publicação criada.');
-                          _tabController.index = 0;
-                          await _carregarPosts('Destaques');
-                        },
-                      ),
+                      if (!widget.salvos)
+                        IconButton(
+                          tooltip: 'Criar publicação',
+                          icon: const Icon(
+                            Icons.edit_square,
+                            color: Color(0xFF5D201C),
+                          ),
+                          onPressed: () async {
+                            final post = await context.push<FeedPostModel>(
+                              '/feed-publicar',
+                            );
+                            if (!mounted || post == null) return;
+                            if (!context.mounted) return;
+                            context.showSuccess('Publicação criada.');
+                            _tabController.index = 0;
+                            await _carregarPosts('Destaques');
+                          },
+                        ),
                     ],
                   ),
                   SizedBox(height: 16.h),
@@ -190,9 +209,11 @@ class _FeedPageState extends State<FeedPage>
                       Navigator.push(
                         context,
                         PageRouteBuilder(
-                          pageBuilder:
-                              (context, animation, secondaryAnimation) =>
-                                  const SearchPage(),
+                          pageBuilder: (
+                            context,
+                            animation,
+                            secondaryAnimation,
+                          ) => const SearchPage(),
                           transitionsBuilder:
                               (context, animation, secondaryAnimation, child) {
                                 return FadeTransition(
@@ -214,9 +235,8 @@ class _FeedPageState extends State<FeedPage>
                         borderRadius: BorderRadius.circular(50.r),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(
-                              0xFF5D201C,
-                            ).withValues(alpha: 0.05),
+                            color: const Color(0xFF5D201C)
+                                .withValues(alpha: 0.05),
                             blurRadius: 10.r,
                             offset: const Offset(0.0, 4.0),
                           ),
@@ -253,42 +273,45 @@ class _FeedPageState extends State<FeedPage>
           ),
 
           // ── TabBar de categorias ──────────────────────────────────────────
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _StickyTabBarDelegate(
-              child: Container(
-                color: const Color(0xFFFFE7E5),
-                child: TabBar(
-                  controller: _tabController,
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  labelColor: const Color(0xFFFF6961),
-                  unselectedLabelColor: Colors.grey,
-                  labelStyle: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14.sp,
-                  ),
-                  unselectedLabelStyle: TextStyle(
-                    fontWeight: FontWeight.w400,
-                    fontSize: 14.sp,
-                  ),
-                  indicator: UnderlineTabIndicator(
-                    borderSide: BorderSide(
-                      color: const Color(0xFFFF6961),
-                      width: 2.5,
+          if (!widget.salvos)
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _StickyTabBarDelegate(
+                child: Container(
+                  color: const Color(0xFFFFE7E5),
+                  child: TabBar(
+                    controller: _tabController,
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    labelColor: const Color(0xFFFF6961),
+                    unselectedLabelColor: Colors.grey,
+                    labelStyle: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14.sp,
                     ),
-                    borderRadius: BorderRadius.circular(2),
+                    unselectedLabelStyle: TextStyle(
+                      fontWeight: FontWeight.w400,
+                      fontSize: 14.sp,
+                    ),
+                    indicator: UnderlineTabIndicator(
+                      borderSide: BorderSide(
+                        color: const Color(0xFFFF6961),
+                        width: 2.5,
+                      ),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    indicatorSize: TabBarIndicatorSize.label,
+                    padding: EdgeInsets.symmetric(horizontal: 8.w),
+                    tabs: _categorias.map((c) => Tab(text: c)).toList(),
                   ),
-                  indicatorSize: TabBarIndicatorSize.label,
-                  padding: EdgeInsets.symmetric(horizontal: 8.w),
-                  tabs: _categorias.map((c) => Tab(text: c)).toList(),
                 ),
               ),
             ),
-          ),
 
           // ── Conteúdo: skeleton / vazio / posts ───────────────────────────
-          if (_isLoading)
+          if (_isLoading &&
+              (_posts.isEmpty ||
+                  _categoriaCarregada != _categorias[_tabController.index]))
             SliverList(
               delegate: SliverChildBuilderDelegate(
                 (context, index) => Padding(
@@ -301,7 +324,7 @@ class _FeedPageState extends State<FeedPage>
                 childCount: 4,
               ),
             )
-          else if (_error != null)
+          else if (_error != null && _posts.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.all(16.w),
@@ -361,6 +384,19 @@ class _FeedPageState extends State<FeedPage>
               ),
             ),
 
+          if (_error != null && _posts.isNotEmpty)
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  Text(_error!),
+                  TextButton(
+                    onPressed: () =>
+                        _carregarPosts(_categorias[_tabController.index]),
+                    child: const Text('Tentar novamente'),
+                  ),
+                ],
+              ),
+            ),
           if (!_isLoading && _error == null && _hasMore)
             SliverToBoxAdapter(
               child: TextButton(
@@ -376,24 +412,65 @@ class _FeedPageState extends State<FeedPage>
 
   // ─── Post Card ────────────────────────────────────────────────────────────
 
+  Future<void> _abrirPost(FeedPostModel post, {bool comentar = false}) async {
+    final removed = await context.push<bool>(
+      '/feed-post?comentar=$comentar',
+      extra: post,
+    );
+    if (!mounted) return;
+    if (removed == true) {
+      setState(() => _posts.removeWhere((p) => p.id == post.id));
+      return;
+    }
+    final requestId = _requestId;
+    try {
+      final updated = await _repository.buscarPost(post.id);
+      if (!mounted || requestId != _requestId) return;
+      final index = _posts.indexWhere((p) => p.id == post.id);
+      if (index >= 0)
+        setState(() {
+          if (widget.salvos && !updated.salvo) {
+            _posts.removeAt(index);
+          } else {
+            _posts[index] = updated;
+          }
+        });
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    }
+  }
+
+  Future<void> _curtir(FeedPostModel post) async {
+    if (!_curtindo.add(post.id)) return;
+    final requestId = _requestId;
+    setState(() {});
+    try {
+      final updated = await _repository.interagir(
+        post.id,
+        ativo: !post.curtido,
+      );
+      if (!mounted || requestId != _requestId) return;
+      final index = _posts.indexWhere((p) => p.id == post.id);
+      if (index >= 0) setState(() => _posts[index] = updated);
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    } finally {
+      _curtindo.remove(post.id);
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _compartilhar(FeedPostModel post) async {
+    try {
+      await FeedShareService.compartilhar(context, post.id);
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    }
+  }
+
   Widget _buildPostCard(FeedPostModel post) {
     return GestureDetector(
-      onTap: () async {
-        await context.push('/feed-post', extra: post);
-        if (!mounted) return;
-        // Preserva a paginação e a geometria da lista ao voltar do detalhe.
-        final requestId = _requestId;
-        try {
-          final atualizado = await _repository.buscarPost(post.id);
-          if (!mounted || requestId != _requestId) return;
-          final index = _posts.indexWhere((item) => item.id == post.id);
-          if (index >= 0) setState(() => _posts[index] = atualizado);
-        } catch (error) {
-          if (mounted && requestId == _requestId) {
-            ErrorUIHelper.handle(context, error);
-          }
-        }
-      },
+      onTap: () => _abrirPost(post),
       child: Hero(
         tag: 'post_hero_${post.id}',
         child: Material(
@@ -467,9 +544,8 @@ class _FeedPageState extends State<FeedPage>
                           vertical: 3.h,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(
-                            0xFFFF6961,
-                          ).withValues(alpha: 0.12),
+                          color: const Color(0xFFFF6961)
+                              .withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(4.r),
                         ),
                         child: Text(
@@ -511,22 +587,32 @@ class _FeedPageState extends State<FeedPage>
                           child: Align(
                             alignment: Alignment.centerRight,
                             child: _buildFooterAction(
-                              icon: Icons.thumb_up_alt_outlined,
+                              icon: post.curtido
+                                  ? Icons.thumb_up_alt
+                                  : Icons.thumb_up_alt_outlined,
+                              onPressed: _curtindo.contains(post.id)
+                                  ? null
+                                  : () => _curtir(post),
+                              tooltip: post.curtido ? 'Descurtir' : 'Curtir',
                               label: _formatCount(post.curtidas),
                             ),
                           ),
                         ),
-                        SizedBox(width: 56.w),
+                        SizedBox(width: 12.w),
                         _buildFooterAction(
                           icon: Icons.chat_bubble_outline,
+                          onPressed: () => _abrirPost(post, comentar: true),
+                          tooltip: 'Comentar',
                           label: _formatCount(post.comentarios),
                         ),
-                        SizedBox(width: 56.w),
+                        SizedBox(width: 12.w),
                         Expanded(
                           child: Align(
                             alignment: Alignment.centerLeft,
                             child: _buildFooterAction(
                               icon: Icons.share_outlined,
+                              onPressed: () => _compartilhar(post),
+                              tooltip: 'Compartilhar',
                               label: '',
                             ),
                           ),
@@ -596,7 +682,7 @@ class _FeedPageState extends State<FeedPage>
                 ),
               ),
               child: Text(
-                '${comment.curtidas} curtidas',
+                'Comentário destacado',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 10.sp,
@@ -639,25 +725,7 @@ class _FeedPageState extends State<FeedPage>
   }
 
   Widget _buildRichText(String conteudo, List<String> hashTags) {
-    final spans = <TextSpan>[];
-    final words = conteudo.split(' ');
-
-    for (final word in words) {
-      final isHash = hashTags.contains(word);
-      spans.add(
-        TextSpan(
-          text: '$word ',
-          style: TextStyle(
-            color: isHash ? const Color(0xFFFF6961) : const Color(0xFF5D201C),
-            fontWeight: isHash ? FontWeight.w600 : FontWeight.normal,
-            fontSize: 14.sp,
-            height: 1.5,
-          ),
-        ),
-      );
-    }
-
-    return RichText(text: TextSpan(children: spans));
+    return FeedContent(conteudo: conteudo, tags: hashTags);
   }
 
   Widget _buildImagesGrid(List<String> imagens) {
@@ -729,19 +797,30 @@ class _FeedPageState extends State<FeedPage>
     );
   }
 
-  Widget _buildFooterAction({required IconData icon, required String label}) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 20.r, color: Colors.grey.shade500),
-        if (label.isNotEmpty) ...[
-          SizedBox(width: 5.w),
-          Text(
-            label,
-            style: TextStyle(fontSize: 13.sp, color: Colors.grey.shade600),
-          ),
-        ],
-      ],
+  Widget _buildFooterAction({
+    required IconData icon,
+    required String label,
+    required String tooltip,
+    VoidCallback? onPressed,
+  }) {
+    return TextButton(
+      onPressed: onPressed,
+      child: Tooltip(
+        message: tooltip,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 20.r, color: Colors.grey.shade500),
+            if (label.isNotEmpty) ...[
+              SizedBox(width: 5.w),
+              Text(
+                label,
+                style: TextStyle(fontSize: 13.sp, color: Colors.grey.shade600),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -810,9 +889,9 @@ class _FeedPageState extends State<FeedPage>
                     ),
                   ),
                 ),
-                SizedBox(width: 56.w),
+                SizedBox(width: 12.w),
                 Container(width: 50.w, height: 14.h, color: Colors.white),
-                SizedBox(width: 56.w),
+                SizedBox(width: 12.w),
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerLeft,

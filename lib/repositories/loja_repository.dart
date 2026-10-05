@@ -14,11 +14,8 @@ class LojaRepository {
 
   Future<List<LojasModel>> buscarLojas({int page = 0, int size = 10}) async {
     try {
-      final response = await SharedGet.forClient(_dio).get(
-        _dio,
-        '/lojas',
-        queryParameters: {'page': page, 'size': size},
-      );
+      final response = await SharedGet.forClient(_dio)
+          .get(_dio, '/lojas', queryParameters: {'page': page, 'size': size});
 
       final List<dynamic> conteudo = extrairLista(response.data);
       return conteudo.map((map) => LojasModel.fromMap(map)).toList();
@@ -27,17 +24,20 @@ class LojaRepository {
     }
   }
 
-  Future<LojasModel?> buscarLoja(String lojaId, {bool atualizar = false}) async {
+  Future<LojasModel?> buscarLoja(
+    String lojaId, {
+    bool atualizar = false,
+  }) async {
     try {
-      final response =
-          atualizar
-              ? await _dio.get('/lojas/$lojaId')
-              : await SharedGet.forClient(_dio).get(_dio, '/lojas/$lojaId');
+      final response = atualizar
+          ? await _dio.get('/lojas/$lojaId')
+          : await SharedGet.forClient(_dio).get(_dio, '/lojas/$lojaId');
       return LojasModel.fromMap(response.data);
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
         debugPrint(
-            "Loja $lojaId não encontrada (404) — tratando como fechada.");
+          "Loja $lojaId não encontrada (404) — tratando como fechada.",
+        );
         return null;
       }
       debugPrint("Erro de rede ao buscar loja $lojaId: $e");
@@ -48,8 +48,11 @@ class LojaRepository {
     }
   }
 
-  Future<List<LojasModel>> buscarLojasPorNome(String termo,
-      {int page = 0, int size = 50}) async {
+  Future<List<LojasModel>> buscarLojasPorNome(
+    String termo, {
+    int page = 0,
+    int size = 50,
+  }) async {
     final termoBusca = termo.trim();
     if (termoBusca.isEmpty) return [];
 
@@ -61,7 +64,7 @@ class LojaRepository {
           'nome': termoBusca,
           'page': page,
           'size': size,
-          'sort': 'id,asc'
+          'sort': 'id,asc',
         },
       );
 
@@ -75,6 +78,7 @@ class LojaRepository {
   Future<void> seguirLoja(String usuarioId, String lojaId) async {
     try {
       await _dio.post('/favoritos', data: {'lojaId': lojaId});
+      SharedGet.forClient(_dio).invalidate();
     } catch (e) {
       throw mapException(e);
     }
@@ -83,6 +87,7 @@ class LojaRepository {
   Future<void> deixarDeSeguir(String usuarioId, String lojaId) async {
     try {
       await _dio.delete('/favoritos/$lojaId');
+      SharedGet.forClient(_dio).invalidate();
     } catch (e) {
       throw mapException(e);
     }
@@ -117,8 +122,10 @@ class LojaRepository {
     }
   }
 
-  Future<List<LojasModel>> listarLojasFavoritas(
-      {int page = 0, int size = 10}) async {
+  Future<List<LojasModel>> listarLojasFavoritas({
+    int page = 0,
+    int size = 10,
+  }) async {
     try {
       final response = await SharedGet.forClient(_dio).get(
         _dio,

@@ -1,3 +1,9 @@
+import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
+import 'package:nhac/services/auth_service.dart';
+import 'package:nhac/services/feed_tentativa_service.dart';
+import 'package:nhac/services/feed_share_service.dart';
+import 'package:nhac/components/feed_content.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -9,11 +15,17 @@ import 'package:nhac/models/feed/feed_comment_model.dart';
 import 'package:nhac/utils/error_ui_helper.dart';
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/pages/loja_page.dart';
+import 'package:nhac/pages/feed_edit_page.dart';
 
 class FeedPostDetailPage extends StatefulWidget {
   final FeedPostModel post;
+  final bool focarComentario;
 
-  const FeedPostDetailPage({super.key, required this.post});
+  const FeedPostDetailPage({
+    super.key,
+    required this.post,
+    this.focarComentario = false,
+  });
 
   @override
   State<FeedPostDetailPage> createState() => _FeedPostDetailPageState();
@@ -38,13 +50,15 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   bool _openingStore = false;
   String? _commentError;
 
-  List<FeedCommentModel> get _visibleComments {
-    if (_tabController.index == 2)
-      return _comments.where((c) => c.isAuthor).toList();
-    if (_tabController.index == 1) return _comments.reversed.toList();
-    return _comments;
-  }
-
+  final _tentativas = const FeedTentativaService();
+  bool? _seguindo;
+  bool _seguindoBusy = false;
+  bool _alterando = false;
+  int _tabAtual = 0;
+  List<FeedCommentModel> get _visibleComments => _comments;
+  String? get _uid => context.read<AuthService>().usuarioId;
+  bool get _podeEditar =>
+      _post.usuarioId != null && (_post.usuarioId == _uid || _post.podeEditar);
   static const List<String> _tabs = ['Padrão', 'Recentes', 'Autor'];
 
   @override
@@ -53,9 +67,27 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     _tabController = TabController(length: _tabs.length, vsync: this);
     _post = widget.post;
     _tabController.addListener(() {
-      if (mounted) setState(() {});
+      if (_tabController.index != _tabAtual) {
+        _tabAtual = _tabController.index;
+        _carregarComentarios();
+      }
     });
     _carregarComentarios();
+    _atualizarPost();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      _consultarSeguindo();
+      final uid = _uid;
+      if (uid != null) {
+        final pending = await _tentativas.carregar(
+          uid,
+          'comentario:${_post.id}',
+        );
+        if (mounted && pending != null)
+          _commentController.text = pending['payload']['conteudo'] as String;
+      }
+      if (mounted && widget.focarComentario) _commentFocus.requestFocus();
+    });
   }
 
   @override
@@ -69,7 +101,6 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   Future<void> _carregarComentarios({bool mais = false}) async {
     if (mais && _loadingComments) return;
     final requestId = ++_commentRequestId;
-    final postRequestId = ++_postRequestId;
     setState(() {
       _loadingComments = true;
       _commentError = null;
@@ -79,14 +110,20 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
       final comments = await _repository.buscarComentarios(
         _post.id,
         page: page,
+        ordem: _tabAtual == 1 ? 'Recentes' : 'Padrao',
+        autor: _tabAtual == 2,
       );
-      final post = await _repository.buscarPost(_post.id);
       if (!mounted || requestId != _commentRequestId) return;
       setState(() {
-        _comments = mais ? [..._comments, ...comments] : comments;
+        _comments = {
+          for (final c in [
+            ...(mais ? _comments : <FeedCommentModel>[]),
+            ...comments,
+          ])
+            c.id: c,
+        }.values.toList();
         _commentPage = page;
         _hasMoreComments = comments.length == 20;
-        if (postRequestId == _postRequestId) _post = post;
       });
     } catch (_) {
       if (mounted && requestId == _commentRequestId)
@@ -104,11 +141,24 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     if (_sending || text.isEmpty) return;
     setState(() => _sending = true);
     try {
-      await _repository.comentar(_post.id, text);
+      final uid = _uid;
+      if (uid == null) throw StateError('Faça login para comentar.');
+      final tentativa = await _tentativas.preparar(
+        uid,
+        'comentario:${_post.id}',
+        {'conteudo': text},
+      );
+      await _repository.comentar(
+        _post.id,
+        text,
+        idempotencyKey: tentativa['key'] as String,
+      );
+      await _tentativas.concluir(uid, 'comentario:${_post.id}');
       if (!mounted) return;
       if (_commentController.text.trim() == text) _commentController.clear();
       _commentFocus.unfocus();
       await _carregarComentarios();
+      await _atualizarPost();
     } catch (e) {
       if (mounted) ErrorUIHelper.handle(context, e);
     } finally {
@@ -135,6 +185,126 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     }
   }
 
+  Future<void> _atualizarPost() async {
+    final request = ++_postRequestId;
+    try {
+      final post = await _repository.buscarPost(_post.id);
+      if (mounted && request == _postRequestId) setState(() => _post = post);
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    }
+  }
+
+  Future<void> _consultarSeguindo() async {
+    final uid = _uid, lojaId = _post.mentionedStore?.id;
+    if (uid == null || lojaId == null) return;
+    try {
+      final seguindo = await LojaRepository().estaSeguindo(uid, lojaId);
+      if (mounted && _uid == uid) setState(() => _seguindo = seguindo);
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    }
+  }
+
+  Future<void> _seguir() async {
+    if (_seguindoBusy) return;
+    if (_seguindo == null) {
+      await _consultarSeguindo();
+      return;
+    }
+    final uid = _uid, lojaId = _post.mentionedStore?.id;
+    if (uid == null || lojaId == null) return;
+    setState(() => _seguindoBusy = true);
+    try {
+      if (_seguindo!) {
+        await LojaRepository().deixarDeSeguir(uid, lojaId);
+      } else {
+        await LojaRepository().seguirLoja(uid, lojaId);
+      }
+      if (mounted && _uid == uid) setState(() => _seguindo = !_seguindo!);
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    } finally {
+      if (mounted) setState(() => _seguindoBusy = false);
+    }
+  }
+
+  Future<bool> _confirmar(String title, String content) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(title),
+          content: Text(content),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Excluir'),
+            ),
+          ],
+        ),
+      ) ==
+      true;
+  Future<void> _excluirComentario(FeedCommentModel comment) async {
+    if (_alterando ||
+        !await _confirmar(
+          'Excluir comentário?',
+          'O comentário será removido desta publicação.',
+        ))
+      return;
+    if (!mounted) return;
+    setState(() => _alterando = true);
+    try {
+      await _repository.excluirComentario(_post.id, comment.id);
+      await _carregarComentarios();
+      await _atualizarPost();
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    } finally {
+      if (mounted) setState(() => _alterando = false);
+    }
+  }
+
+  Future<void> _excluirPost() async {
+    if (_alterando ||
+        !await _confirmar(
+          'Excluir publicação?',
+          'A publicação e seus comentários serão removidos.',
+        ))
+      return;
+    if (!mounted) return;
+    setState(() => _alterando = true);
+    try {
+      await _repository.excluir(_post.id);
+      if (mounted) context.pop(true);
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    } finally {
+      if (mounted) setState(() => _alterando = false);
+    }
+  }
+
+  Future<void> _editarPost() async {
+    final updated = await Navigator.of(context).push<FeedPostModel>(
+      MaterialPageRoute(builder: (_) => FeedEditPage(post: _post)),
+    );
+    if (mounted && updated != null) {
+      ++_postRequestId;
+      setState(() => _post = updated);
+    }
+  }
+
+  Future<void> _compartilhar() async {
+    try {
+      await FeedShareService.compartilhar(context, _post.id);
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    }
+  }
+
   Future<void> _abrirLoja(MentionedStoreModel store) async {
     if (_openingStore || store.id == null) return;
     setState(() => _openingStore = true);
@@ -144,9 +314,8 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
       if (loja == null) {
         throw StateError('Loja não encontrada');
       }
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => LojaPage(loja: loja)));
+      await Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => LojaPage(loja: loja)));
     } catch (e) {
       if (mounted) ErrorUIHelper.handle(context, e);
     } finally {
@@ -213,34 +382,62 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                           ],
                         ),
                         actions: [
-                          Container(
-                            margin: EdgeInsets.only(right: 16.w),
-                            child: OutlinedButton(
-                              onPressed: () {},
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFFFF6961),
-                                side: const BorderSide(
-                                  color: Color(0xFFFF6961),
+                          if (_podeEditar)
+                            PopupMenuButton<String>(
+                              tooltip: 'Gerenciar publicação',
+                              enabled: !_alterando,
+                              onSelected: (value) {
+                                if (value == 'editar') {
+                                  _editarPost();
+                                } else {
+                                  _excluirPost();
+                                }
+                              },
+                              itemBuilder: (_) => const [
+                                PopupMenuItem(
+                                  value: 'editar',
+                                  child: Text('Editar publicação'),
                                 ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20.r),
+                                PopupMenuItem(
+                                  value: 'excluir',
+                                  child: Text('Excluir publicação'),
                                 ),
-                                padding: EdgeInsets.symmetric(
-                                  horizontal: 16.w,
-                                  vertical: 4.h,
+                              ],
+                            ),
+                          if (post.mentionedStore?.id != null)
+                            Container(
+                              margin: EdgeInsets.only(right: 16.w),
+                              child: OutlinedButton(
+                                onPressed: _seguindoBusy ? null : _seguir,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: const Color(0xFFFF6961),
+                                  side: const BorderSide(
+                                    color: Color(0xFFFF6961),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(20.r),
+                                  ),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 16.w,
+                                    vertical: 4.h,
+                                  ),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
                                 ),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              child: Text(
-                                'Seguir',
-                                style: TextStyle(
-                                  fontSize: 13.sp,
-                                  fontWeight: FontWeight.w600,
+                                child: Text(
+                                  _seguindo == null
+                                      ? 'Consultar loja'
+                                      : _seguindo!
+                                      ? 'Seguindo loja'
+                                      : 'Seguir loja',
+                                  style: TextStyle(
+                                    fontSize: 13.sp,
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
                         ],
                       ),
 
@@ -269,7 +466,13 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                                     child: Align(
                                       alignment: Alignment.centerRight,
                                       child: _buildActionChip(
-                                        icon: Icons.thumb_up_alt_outlined,
+                                        icon: post.curtido
+                                            ? Icons.thumb_up_alt
+                                            : Icons.thumb_up_alt_outlined,
+                                        onPressed: _interacting
+                                            ? null
+                                            : () => _interagir(),
+                                        tooltip: 'Curtir ou descurtir',
                                         label: _formatCount(post.curtidas),
                                       ),
                                     ),
@@ -277,6 +480,9 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                                   SizedBox(width: 40.w),
                                   _buildActionChip(
                                     icon: Icons.chat_bubble_outline,
+                                    onPressed: () =>
+                                        _commentFocus.requestFocus(),
+                                    tooltip: 'Comentar',
                                     label: _formatCount(post.comentarios),
                                   ),
                                   SizedBox(width: 40.w),
@@ -285,6 +491,8 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                                       alignment: Alignment.centerLeft,
                                       child: _buildActionChip(
                                         icon: Icons.share_outlined,
+                                        onPressed: _compartilhar,
+                                        tooltip: 'Compartilhar',
                                         label: '',
                                       ),
                                     ),
@@ -462,13 +670,12 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                                       border: InputBorder.none,
                                     ),
                                     maxLength: 2000,
-                                    buildCounter:
-                                        (
-                                          _, {
-                                          required currentLength,
-                                          required isFocused,
-                                          maxLength,
-                                        }) => null,
+                                    buildCounter: (
+                                      _, {
+                                      required currentLength,
+                                      required isFocused,
+                                      maxLength,
+                                    }) => null,
                                     onSubmitted: (_) => _enviarComentario(),
                                   ),
                                 ),
@@ -653,6 +860,12 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
               ],
             ),
           ),
+          if (comment.usuarioId == _uid || comment.podeExcluir || _podeEditar)
+            IconButton(
+              tooltip: 'Excluir comentário',
+              onPressed: _alterando ? null : () => _excluirComentario(comment),
+              icon: const Icon(Icons.delete_outline),
+            ),
         ],
       ),
     );
@@ -693,25 +906,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   }
 
   Widget _buildRichText(String conteudo, List<String> hashTags) {
-    final spans = <TextSpan>[];
-    final words = conteudo.split(' ');
-
-    for (final word in words) {
-      final isHash = hashTags.contains(word);
-      spans.add(
-        TextSpan(
-          text: '$word ',
-          style: TextStyle(
-            color: isHash ? const Color(0xFFFF6961) : const Color(0xFF5D201C),
-            fontWeight: isHash ? FontWeight.w600 : FontWeight.normal,
-            fontSize: 15.sp,
-            height: 1.6,
-          ),
-        ),
-      );
-    }
-
-    return RichText(text: TextSpan(children: spans));
+    return FeedContent(conteudo: conteudo, tags: hashTags);
   }
 
   Widget _buildMentionedStore(MentionedStoreModel store) {
@@ -847,19 +1042,30 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     );
   }
 
-  Widget _buildActionChip({required IconData icon, required String label}) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 22.r, color: Colors.grey.shade500),
-        if (label.isNotEmpty) ...[
-          SizedBox(width: 6.w),
-          Text(
-            label,
-            style: TextStyle(fontSize: 14.sp, color: Colors.grey.shade600),
-          ),
-        ],
-      ],
+  Widget _buildActionChip({
+    required IconData icon,
+    required String label,
+    required String tooltip,
+    VoidCallback? onPressed,
+  }) {
+    return TextButton(
+      onPressed: onPressed,
+      child: Tooltip(
+        message: tooltip,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 22.r, color: Colors.grey.shade500),
+            if (label.isNotEmpty) ...[
+              SizedBox(width: 6.w),
+              Text(
+                label,
+                style: TextStyle(fontSize: 14.sp, color: Colors.grey.shade600),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 

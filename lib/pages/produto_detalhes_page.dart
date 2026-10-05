@@ -38,6 +38,18 @@ class ProdutoDetalhesPage extends StatefulWidget {
 
 class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   int _quantidade = 1;
+  int _filtroAvaliacao = 0, _paginaAvaliacao = 0, _consultaAvaliacao = 0;
+  bool _maisAvaliacoes = false;
+  List<AvaliacoesModel> _comentariosProduto = [];
+  void _filtrarAvaliacoes(int filtro) {
+    if (filtro == _filtroAvaliacao) return;
+    setState(() {
+      _filtroAvaliacao = filtro;
+      _comentariosProduto = [];
+      _paginaAvaliacao = 0;
+      _avaliacoesFuture = _carregarAvaliacoes();
+    });
+  }
 
   late Future<_RelatedProducts> _produtosRelacionadosFuture;
   Future<LojasModel?>? _lojaFuture;
@@ -48,8 +60,9 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   final _avaliacaoRepository = AvaliacaoRepository();
 
   late Future<
-          ({Map<String, dynamic>? resumo, List<AvaliacoesModel>? comentarios})>
-      _avaliacoesFuture;
+    ({Map<String, dynamic>? resumo, List<AvaliacoesModel>? comentarios})
+  >
+  _avaliacoesFuture;
 
   @override
   void initState() {
@@ -66,20 +79,38 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   }
 
   Future<({Map<String, dynamic>? resumo, List<AvaliacoesModel>? comentarios})>
-      _carregarAvaliacoes() async {
+  _carregarAvaliacoes({bool mais = false}) async {
+    final consulta = ++_consultaAvaliacao;
+    final pagina = mais ? _paginaAvaliacao + 1 : 0;
     Map<String, dynamic>? resumo;
     List<AvaliacoesModel>? comentarios;
     await Future.wait([
       () async {
         try {
-          resumo = await _avaliacaoRepository
-              .buscarResumoAvaliacoes(widget.produto.id);
+          resumo = await _avaliacaoRepository.buscarResumoAvaliacoes(
+            widget.produto.id,
+          );
         } catch (_) {}
       }(),
       () async {
         try {
-          comentarios = await _avaliacaoRepository
-              .buscarAvaliacoes(widget.produto.lojaId);
+          final novos = await _avaliacaoRepository.buscarAvaliacoesProduto(
+            widget.produto.id,
+            page: pagina,
+            fotos: _filtroAvaliacao == 1,
+            positivas: _filtroAvaliacao == 2,
+          );
+          if (consulta != _consultaAvaliacao) return;
+          _maisAvaliacoes = novos.length == 10;
+          _paginaAvaliacao = pagina;
+          _comentariosProduto = {
+            for (final c in [
+              ...(mais ? _comentariosProduto : <AvaliacoesModel>[]),
+              ...novos,
+            ])
+              c.id: c,
+          }.values.toList();
+          comentarios = _comentariosProduto;
         } catch (_) {}
       }(),
     ]);
@@ -90,15 +121,9 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
     final products = await _produtoRepository.buscarPorCategoria(
       widget.produto.categoriaMenu,
     );
-    final stores = [
-      for (final p in products) MapEntry(p.lojaId, p.lojaAberta),
-    ];
+    final stores = [for (final p in products) MapEntry(p.lojaId, p.lojaAberta)];
     return _RelatedProducts(
-      products
-          .where(
-            (p) => p.id != widget.produto.id && p.lojaAberta,
-          )
-          .toList(),
+      products.where((p) => p.id != widget.produto.id && p.lojaAberta).toList(),
       Map.fromEntries(stores),
     );
   }
@@ -574,8 +599,13 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                               return BannerErroInline(
                                 mensagem: 'Não foi possível carregar os produtos relacionados.',
                                 aoTentarNovamente: () async {
-                                  setState(() => _produtosRelacionadosFuture = _buscarRelacionados());
-                                  try { await _produtosRelacionadosFuture; } catch (_) {}
+                                  setState(
+                                    () => _produtosRelacionadosFuture =
+                                        _buscarRelacionados(),
+                                  );
+                                  try {
+                                    await _produtosRelacionadosFuture;
+                                  } catch (_) {}
                                 },
                               );
                             }
@@ -584,8 +614,9 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                               return const SizedBox.shrink();
                             }
 
-                            final produtosRelacionados =
-                                snapshot.data!.products.take(5).toList();
+                            final produtosRelacionados = snapshot.data!.products
+                                .take(5)
+                                .toList();
 
                             if (produtosRelacionados.isEmpty) {
                               return const SizedBox.shrink();
@@ -643,9 +674,11 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                       future: _lojaFuture,
                       builder: (context, lojaSnapshot) {
                         final loja = lojaSnapshot.data;
-                        final aindaCarregando = lojaSnapshot.connectionState !=
+                        final aindaCarregando =
+                            lojaSnapshot.connectionState !=
                             ConnectionState.done;
-                        final erroLoja = !aindaCarregando &&
+                        final erroLoja =
+                            !aindaCarregando &&
                             (lojaSnapshot.hasError || loja == null);
                         final lojaFechada = loja != null && !loja.isAberto;
                         return ElevatedButton(
@@ -653,54 +686,53 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                           onPressed: aindaCarregando
                               ? null
                               : erroLoja
-                                  ? () => setState(() {
-                                        _lojaFuture = _lojaRepository
-                                            .buscarLoja(widget.produto.lojaId);
-                                      })
-                                  : lojaFechada
-                                      ? () {
-                                          context.showError(
-                                            'Esta loja está fechada no momento.',
-                                          );
-                                        }
-                                      : () async {
-                                          try {
-                                            final cartProvider =
-                                                Provider.of<CartProvider>(
-                                              context,
-                                              listen: false,
-                                            );
-                                            await cartProvider
-                                                .adicionarItemComQuantidade(
-                                              idProduto: widget.produto.id,
-                                              nome: widget.produto.nome,
-                                              preco: widget.produto.preco,
-                                              imagemUrl:
-                                                  widget.produto.imagemUrl,
-                                              lojaId: widget.produto.lojaId,
-                                              quantidade: _quantidade,
-                                            );
-                                            if (context.mounted) {
-                                              showAppNotification(
-                                                context,
-                                                type: NotificationType.success,
-                                                imageUrl:
-                                                    widget.produto.imagemUrl,
-                                                message:
-                                                    '$_quantidade x ${widget.produto.nome}',
-                                              );
-                                            }
-                                          } catch (e) {
-                                            if (context.mounted) {
-                                              context.showError(
-                                                e.toString().replaceAll(
-                                                      'Exception: ',
-                                                      '',
-                                                    ),
-                                              );
-                                            }
-                                          }
-                                        },
+                              ? () => setState(() {
+                                  _lojaFuture = _lojaRepository.buscarLoja(
+                                    widget.produto.lojaId,
+                                  );
+                                })
+                              : lojaFechada
+                              ? () {
+                                  context.showError(
+                                    'Esta loja está fechada no momento.',
+                                  );
+                                }
+                              : () async {
+                                  try {
+                                    final cartProvider =
+                                        Provider.of<CartProvider>(
+                                          context,
+                                          listen: false,
+                                        );
+                                    await cartProvider
+                                        .adicionarItemComQuantidade(
+                                          idProduto: widget.produto.id,
+                                          nome: widget.produto.nome,
+                                          preco: widget.produto.preco,
+                                          imagemUrl: widget.produto.imagemUrl,
+                                          lojaId: widget.produto.lojaId,
+                                          quantidade: _quantidade,
+                                        );
+                                    if (context.mounted) {
+                                      showAppNotification(
+                                        context,
+                                        type: NotificationType.success,
+                                        imageUrl: widget.produto.imagemUrl,
+                                        message:
+                                            '$_quantidade x ${widget.produto.nome}',
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      context.showError(
+                                        e.toString().replaceAll(
+                                          'Exception: ',
+                                          '',
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: lojaFechada
                                 ? Colors.grey.shade400
@@ -716,10 +748,10 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                             aindaCarregando
                                 ? 'Carregando...'
                                 : erroLoja
-                                    ? 'Loja indisponível. Tentar novamente'
-                                    : lojaFechada
-                                        ? 'Loja fechada'
-                                        : 'Adicionar  ${currencyFormat.format(widget.produto.preco * _quantidade)}',
+                                ? 'Loja indisponível. Tentar novamente'
+                                : lojaFechada
+                                ? 'Loja fechada'
+                                : 'Adicionar  ${currencyFormat.format(widget.produto.preco * _quantidade)}',
                             style: TextStyle(
                               fontSize: 16.sp,
                               fontWeight: FontWeight.bold,
@@ -821,104 +853,121 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   }
 
   Widget _buildReviewCaption(String text) => Padding(
-        padding: EdgeInsets.only(top: 8.h, bottom: 12.h),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 12.sp,
-            height: 1.5,
-            color: const Color(0xFF80635F),
-          ),
-        ),
-      );
+    padding: EdgeInsets.only(top: 8.h, bottom: 12.h),
+    child: Text(
+      text,
+      style: TextStyle(
+        fontSize: 12.sp,
+        height: 1.5,
+        color: const Color(0xFF80635F),
+      ),
+    ),
+  );
 
   Widget _buildReviewsSection() {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: 20.w),
-      child: FutureBuilder<
-          ({Map<String, dynamic>? resumo, List<AvaliacoesModel>? comentarios})>(
-        future: _avaliacoesFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const LoadingNhac(telaCheia: false, tamanho: 40);
-          }
-          final resumo = snapshot.data?.resumo;
-          final comentarios = snapshot.data?.comentarios;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildReviewHeading(
-                'Avaliações do produto',
-                Icons.star_outline_rounded,
-              ),
-              SizedBox(height: 12.h),
-              if (resumo == null)
-                BannerErroInline(
-                  mensagem: 'Não foi possível consultar a nota deste produto.',
-                  aoTentarNovamente: () => setState(
-                    () => _avaliacoesFuture = _carregarAvaliacoes(),
-                  ),
-                )
-              else if ((resumo['total'] as num) == 0)
-                _buildReviewCaption(
-                  'Este produto ainda não recebeu avaliações.',
-                )
-              else
-                _buildRatingSummary(
-                  (resumo['media'] as num).toDouble(),
-                  (resumo['total'] as num).toInt(),
-                ),
-              Wrap(
-                spacing: 8.w,
-                runSpacing: 4.h,
+      child:
+          FutureBuilder<
+            ({Map<String, dynamic>? resumo, List<AvaliacoesModel>? comentarios})
+          >(
+            future: _avaliacoesFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const LoadingNhac(telaCheia: false, tamanho: 40);
+              }
+              final resumo = snapshot.data?.resumo;
+              final comentarios = snapshot.data?.comentarios;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  NhacFilterChip(
-                    label: 'Tudo',
-                    selected: true,
-                    onSelected: () {},
+                  _buildReviewHeading(
+                    'Avaliações do produto',
+                    Icons.star_outline_rounded,
                   ),
-                  const NhacFilterChip(
-                    label: 'Com fotos',
-                    unavailableReason:
-                        'Fotos das avaliações ainda não estão disponíveis.',
+                  SizedBox(height: 12.h),
+                  if (resumo == null)
+                    BannerErroInline(
+                      mensagem:
+                          'Não foi possível consultar a nota deste produto.',
+                      aoTentarNovamente: () => setState(
+                        () => _avaliacoesFuture = _carregarAvaliacoes(),
+                      ),
+                    )
+                  else if ((resumo['total'] as num) == 0)
+                    _buildReviewCaption(
+                      'Este produto ainda não recebeu avaliações.',
+                    )
+                  else
+                    _buildRatingSummary(
+                      (resumo['media'] as num).toDouble(),
+                      (resumo['total'] as num).toInt(),
+                    ),
+                  Wrap(
+                    spacing: 8.w,
+                    runSpacing: 4.h,
+                    children: [
+                      NhacFilterChip(
+                        label: 'Tudo',
+                        selected: _filtroAvaliacao == 0,
+                        onSelected: () => _filtrarAvaliacoes(0),
+                      ),
+                      NhacFilterChip(
+                        label: 'Com fotos',
+                        selected: _filtroAvaliacao == 1,
+                        onSelected: () => _filtrarAvaliacoes(1),
+                      ),
+                      NhacFilterChip(
+                        label: 'Positivas',
+                        selected: _filtroAvaliacao == 2,
+                        onSelected: () => _filtrarAvaliacoes(2),
+                      ),
+                    ],
                   ),
-                  const NhacFilterChip(
-                    label: 'Positivas',
-                    unavailableReason:
-                        'O filtro por avaliações do produto ainda não está disponível.',
+                  SizedBox(height: 24.h),
+                  _buildReviewHeading(
+                    'Comentários do produto',
+                    Icons.chat_bubble_outline_rounded,
                   ),
-                ],
-              ),
-              SizedBox(height: 24.h),
-              _buildReviewHeading(
-                'Comentários recentes da loja',
-                Icons.chat_bubble_outline_rounded,
-              ),
-              _buildReviewCaption('Experiências em pedidos desta loja.'),
-              if (comentarios == null)
-                BannerErroInline(
-                  mensagem: 'Não foi possível carregar os comentários da loja.',
-                  aoTentarNovamente: () => setState(
-                    () => _avaliacoesFuture = _carregarAvaliacoes(),
+                  _buildReviewCaption(
+                    'Avaliações individuais de compras entregues. Positivas: notas 4 e 5.',
                   ),
-                )
-              else if (comentarios.isEmpty)
-                _buildReviewCaption('A loja ainda não recebeu comentários.')
-              else
-                ...comentarios.take(3).map(
+                  if (comentarios == null)
+                    BannerErroInline(
+                      mensagem:
+                          'Não foi possível carregar as avaliações do produto.',
+                      aoTentarNovamente: () => setState(
+                        () => _avaliacoesFuture = _carregarAvaliacoes(),
+                      ),
+                    )
+                  else if (comentarios.isEmpty)
+                    _buildReviewCaption(
+                      'Nenhuma avaliação encontrada para este filtro.',
+                    )
+                  else
+                    ...comentarios.map(
                       (avaliacao) => _buildReviewItem(
                         name: avaliacao.nomeUsuario.trim().isNotEmpty
                             ? avaliacao.nomeUsuario
                             : 'Anônimo',
                         review: avaliacao.comentario,
                         date: avaliacao.criadoEm ?? '',
+                        imagens: avaliacao.imagens,
                         positive: avaliacao.nota >= 4,
                       ),
                     ),
-            ],
-          );
-        },
-      ),
+                  if (_maisAvaliacoes && comentarios != null)
+                    TextButton(
+                      onPressed: () => setState(
+                        () =>
+                            _avaliacoesFuture = _carregarAvaliacoes(mais: true),
+                      ),
+                      child: const Text('Carregar mais avaliações'),
+                    ),
+                ],
+              );
+            },
+          ),
     );
   }
 
@@ -927,6 +976,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
     required String review,
     required String date,
     required bool positive,
+    List<String> imagens = const [],
   }) {
     final parsedDate = DateTime.tryParse(date);
     final formattedDate = parsedDate == null
@@ -1003,6 +1053,26 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               style: TextStyle(fontSize: 11.sp, color: const Color(0xFF80635F)),
             ),
           ],
+          if (imagens.isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: imagens
+                  .map(
+                    (url) => CachedNetworkImage(
+                      imageUrl: url,
+                      width: 80,
+                      height: 80,
+                      fit: BoxFit.cover,
+                      errorWidget: (_, __, ___) => const SizedBox(
+                        width: 80,
+                        height: 80,
+                        child: Icon(Icons.broken_image_outlined),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
         ],
       ),
     );
@@ -1268,8 +1338,8 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                       avaliacao >= index + 1
                           ? Icons.star_rounded
                           : avaliacao >= index + 0.5
-                              ? Icons.star_half_rounded
-                              : Icons.star_outline_rounded,
+                          ? Icons.star_half_rounded
+                          : Icons.star_outline_rounded,
                       size: 20.r,
                       color: const Color(0xFFFF6961),
                     ),

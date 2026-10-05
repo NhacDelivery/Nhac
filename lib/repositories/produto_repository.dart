@@ -18,7 +18,9 @@ class ProdutoRepository {
 
   Future<ProdutosModel> buscarPorId(String id) async {
     final response = await _dio.get('/produtos/${Uri.encodeComponent(id)}');
-    return ProdutosModel.fromMap(Map<String, dynamic>.from(response.data as Map));
+    return ProdutosModel.fromMap(
+      Map<String, dynamic>.from(response.data as Map),
+    );
   }
 
   Future<List<ProdutosModel>> buscarPromocoes() async {
@@ -32,7 +34,8 @@ class ProdutoRepository {
       return extrairLista(response.data)
           .map((map) => ProdutosModel.fromMap(map))
           .where(
-              (p) => p.percentualDesconto > 0 && p.preco < 20 && p.lojaAberta)
+            (p) => p.percentualDesconto > 0 && p.preco < 20 && p.lojaAberta,
+          )
           .toList();
     } catch (e) {
       throw Exception("Erro ao buscar promoções: $e");
@@ -41,11 +44,8 @@ class ProdutoRepository {
 
   Future<List<ProdutosModel>> buscarNecessidades() async {
     try {
-      final response = await SharedGet.forClient(_dio).get(
-        _dio,
-        '/produtos/cards',
-        queryParameters: {'size': 50},
-      );
+      final response = await SharedGet.forClient(_dio)
+          .get(_dio, '/produtos/cards', queryParameters: {'size': 50});
       final List<dynamic> conteudo = extrairLista(response.data);
       return conteudo.map((map) => ProdutosModel.fromMap(map)).toList();
     } catch (e) {
@@ -53,8 +53,11 @@ class ProdutoRepository {
     }
   }
 
-  Future<List<ProdutosModel>> buscarPorCategoria(String categoria,
-      {int page = 0, int size = 50}) async {
+  Future<List<ProdutosModel>> buscarPorCategoria(
+    String categoria, {
+    int page = 0,
+    int size = 50,
+  }) async {
     try {
       final response = await SharedGet.forClient(_dio).get(
         _dio,
@@ -63,7 +66,7 @@ class ProdutoRepository {
           'categoriaMenu': categoria,
           'page': page,
           'size': size,
-          'sort': 'id,asc'
+          'sort': 'id,asc',
         },
       );
       final List<dynamic> conteudo = extrairLista(response.data);
@@ -74,16 +77,23 @@ class ProdutoRepository {
     }
   }
 
-  Future<PaginaProdutos> buscarPaginaPorLoja(String lojaId,
-      {int page = 0, int size = 50}) async {
+  Future<PaginaProdutos> buscarPaginaPorLoja(
+    String lojaId, {
+    int page = 0,
+    int size = 50,
+    String filtro = 'Todos',
+  }) async {
     final response = await SharedGet.forClient(_dio).get(
       _dio,
-      '/produtos/cards',
+      filtro == 'Todos'
+          ? '/produtos/cards'
+          : '/lojas/${Uri.encodeComponent(lojaId)}/catalogo',
       queryParameters: {
+        if (filtro != 'Todos') 'filtro': filtro,
         'lojaId': lojaId,
         'page': page,
         'size': size,
-        'sort': 'id,asc',
+        if (filtro == 'Todos') 'sort': 'id,asc',
       },
     );
     final lista = extrairLista(response.data);
@@ -123,8 +133,11 @@ class ProdutoRepository {
     }
   }
 
-  Future<List<ProdutosModel>> buscarProdutosPorNome(String termo,
-      {int page = 0, int size = 20}) async {
+  Future<List<ProdutosModel>> buscarProdutosPorNome(
+    String termo, {
+    int page = 0,
+    int size = 20,
+  }) async {
     try {
       final response = await SharedGet.forClient(_dio).get(
         _dio,
@@ -133,7 +146,7 @@ class ProdutoRepository {
           'nome': termo,
           'page': page,
           'size': size,
-          'sort': 'id,asc'
+          'sort': 'id,asc',
         },
       );
       final List<dynamic> conteudo = extrairLista(response.data);
