@@ -1,3 +1,4 @@
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:nhac/services/auth_service.dart';
@@ -17,6 +18,10 @@ class MockPublisher extends Mock implements FeedRepository {}
 class PublishAuth extends Fake implements AuthService {
   @override
   String? get usuarioId => 'feed-test-user';
+  @override
+  void addListener(VoidCallback listener) {}
+  @override
+  void removeListener(VoidCallback listener) {}
 }
 
 void main() {
@@ -24,6 +29,7 @@ void main() {
   setUp(() {
     repository = MockPublisher();
     FlutterSecureStorage.setMockInitialValues({});
+    dotenv.testLoad(fileInput: 'API_BASE_URL=http://localhost:8080/api/v1');
   });
 
   Future<void> abrir(WidgetTester tester) async {
@@ -52,7 +58,7 @@ void main() {
     );
     addTearDown(router.dispose);
     await tester.pumpWidget(
-      Provider<AuthService>.value(
+      ChangeNotifierProvider<AuthService>.value(
         value: PublishAuth(),
         child: MaterialApp.router(routerConfig: router),
       ),
