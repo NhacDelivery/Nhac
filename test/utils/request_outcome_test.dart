@@ -15,10 +15,16 @@ void main() {
         rejeicaoDefinitiva(AppException('Sem permissão', statusCode: 403)),
         isTrue,
       );
-      for (final status in [408, 409, 429, 500, 503]) {
+      for (final status in [408, 500, 503]) {
         expect(
           rejeicaoDefinitiva(AppException('Falha', statusCode: status)),
           isFalse,
+        );
+      }
+      for (final status in [409, 429]) {
+        expect(
+          rejeicaoDefinitiva(AppException('Rejeitado', statusCode: status)),
+          isTrue,
         );
       }
       expect(

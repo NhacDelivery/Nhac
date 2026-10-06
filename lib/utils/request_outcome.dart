@@ -7,10 +7,7 @@ bool rejeicaoDefinitiva(Object error) {
       : error is AppException
       ? error.statusCode
       : null;
-  return status != null &&
-      status >= 400 &&
-      status < 500 &&
-      !{408, 409, 429}.contains(status);
+  return status != null && status >= 400 && status < 500 && status != 408;
 }
 
 bool recursoExcluido(Object error) => error is DioException
