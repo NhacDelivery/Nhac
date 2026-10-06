@@ -352,9 +352,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      body: Hero(
-        tag: 'post_hero_${post.id}',
-        child: Material(
+      body: Material(
           type: MaterialType.transparency,
           child: Container(
             color: Colors.white,
@@ -493,20 +491,20 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                                         onPressed: _interacting
                                             ? null
                                             : () => _interagir(),
+                                        active: post.curtido,
                                         tooltip: 'Curtir ou descurtir',
                                         label: _formatCount(post.curtidas),
                                       ),
                                     ),
                                   ),
-                                  SizedBox(width: 40.w),
-                                  _buildActionChip(
+                                  SizedBox(width: 8.w),
+                                  Expanded(child: _buildActionChip(
                                     icon: Icons.chat_bubble_outline,
-                                    onPressed: () =>
-                                        _commentFocus.requestFocus(),
+                                    onPressed: () => _commentFocus.requestFocus(),
                                     tooltip: 'Comentar',
                                     label: _formatCount(post.comentarios),
-                                  ),
-                                  SizedBox(width: 40.w),
+                                  )),
+                                  SizedBox(width: 8.w),
                                   Expanded(
                                     child: Align(
                                       alignment: Alignment.centerLeft,
@@ -779,7 +777,6 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
               ],
             ),
           ),
-        ),
       ),
     );
   }
@@ -1073,6 +1070,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     required IconData icon,
     required String label,
     required String tooltip,
+    bool active = false,
     VoidCallback? onPressed,
   }) {
     return TextButton(
@@ -1082,13 +1080,15 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 22.r, color: Colors.grey.shade500),
+            Icon(icon, size: 22.r, color: active ? const Color(0xFFFF6961) : Colors.grey.shade500),
             if (label.isNotEmpty) ...[
               SizedBox(width: 6.w),
-              Text(
+              Flexible(child: Text(
                 label,
-                style: TextStyle(fontSize: 14.sp, color: Colors.grey.shade600),
-              ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 14.sp, color: active ? const Color(0xFFFF6961) : Colors.grey.shade600),
+              )),
             ],
           ],
         ),

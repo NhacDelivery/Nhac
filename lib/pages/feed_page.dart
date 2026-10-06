@@ -296,7 +296,7 @@ class _FeedPageState extends State<FeedPage>
                   SizedBox(height: 24.h),
 
                   // Carrossel de banners — o mesmo componente da Home
-                  const HomeBannerCarousel(),
+                  if (!widget.salvos) const HomeBannerCarousel(),
 
                   SizedBox(height: 24.h),
                 ],
@@ -506,9 +506,7 @@ class _FeedPageState extends State<FeedPage>
   Widget _buildPostCard(FeedPostModel post) {
     return GestureDetector(
       onTap: () => _abrirPost(post),
-      child: Hero(
-        tag: 'post_hero_${post.id}',
-        child: Material(
+      child: Material(
           type: MaterialType.transparency,
           child: Container(
             margin: EdgeInsets.only(bottom: 12.h),
@@ -628,18 +626,19 @@ class _FeedPageState extends State<FeedPage>
                               onPressed: _curtindo.contains(post.id)
                                   ? null
                                   : () => _curtir(post),
+                              active: post.curtido,
                               tooltip: post.curtido ? 'Descurtir' : 'Curtir',
                               label: _formatCount(post.curtidas),
                             ),
                           ),
                         ),
                         SizedBox(width: 12.w),
-                        _buildFooterAction(
+                        Expanded(child: _buildFooterAction(
                           icon: Icons.chat_bubble_outline,
                           onPressed: () => _abrirPost(post, comentar: true),
                           tooltip: 'Comentar',
                           label: _formatCount(post.comentarios),
-                        ),
+                        )),
                         SizedBox(width: 12.w),
                         Expanded(
                           child: Align(
@@ -659,7 +658,6 @@ class _FeedPageState extends State<FeedPage>
               ),
             ),
           ),
-        ),
       ),
     );
   }
@@ -836,6 +834,7 @@ class _FeedPageState extends State<FeedPage>
     required IconData icon,
     required String label,
     required String tooltip,
+    bool active = false,
     VoidCallback? onPressed,
   }) {
     return TextButton(
@@ -845,13 +844,15 @@ class _FeedPageState extends State<FeedPage>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 20.r, color: Colors.grey.shade500),
+            Icon(icon, size: 20.r, color: active ? const Color(0xFFFF6961) : Colors.grey.shade500),
             if (label.isNotEmpty) ...[
               SizedBox(width: 5.w),
-              Text(
+              Flexible(child: Text(
                 label,
-                style: TextStyle(fontSize: 13.sp, color: Colors.grey.shade600),
-              ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 13.sp, color: active ? const Color(0xFFFF6961) : Colors.grey.shade600),
+              )),
             ],
           ],
         ),
