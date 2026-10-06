@@ -27,15 +27,23 @@ class _Adapter implements HttpClientAdapter {
   String? chave;
   _Adapter({this.withComments = false});
   final comentario = <String, dynamic>{
-    'id': 'c1', 'usuarioId': 'u2', 'nomeUsuario': 'Outra pessoa com um nome muito longo',
-    'conteudo': 'Pergunta da publicação', 'isAuthor': false,
-    'criadoEm': '2026-10-06T12:34:00Z', 'curtidas': 0, 'curtido': false,
+    'id': 'c1',
+    'usuarioId': 'u2',
+    'nomeUsuario': 'Outra pessoa com um nome muito longo',
+    'conteudo': 'Pergunta da publicação',
+    'isAuthor': false,
+    'criadoEm': '2026-10-06T12:34:00Z',
+    'curtidas': 0,
+    'curtido': false,
   };
   final post = <String, dynamic>{
     'id': 'p1',
     'usuarioId': 'u1',
     'nomeUsuario': 'Autora da publicação',
-    'conteudo': List.filled(100, 'Uma publicação longa com várias linhas de texto.').join('\n'),
+    'conteudo': List.filled(
+      100,
+      'Uma publicação longa com várias linhas de texto.',
+    ).join('\n'),
     'hashTags': ['#Nhac'],
     'curtidas': 1234,
     'comentarios': 0,
@@ -45,28 +53,48 @@ class _Adapter implements HttpClientAdapter {
   };
 
   @override
-  Future<ResponseBody> fetch(RequestOptions options,
-      Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
     final Object body;
-    if (options.path.endsWith('/comentarios/c1/curtida')) {
+    if (options.path == '/produtos/categorias') {
+      body = ['Lanches'];
+    } else if (options.path.endsWith('/comentarios/c1/curtida')) {
       comentario['curtido'] = options.method == 'PUT';
       comentario['curtidas'] = options.method == 'PUT' ? 1 : 0;
       body = comentario;
-    } else if (options.path.endsWith('/comentarios') && options.method == 'POST') {
+    } else if (options.path.endsWith('/comentarios') &&
+        options.method == 'POST') {
       enviado = Map<String, dynamic>.from(options.data as Map);
       chave = options.headers['Idempotency-Key'] as String?;
-      body = {...comentario, 'id': 'c2', 'conteudo': enviado!['conteudo'],
-        'respostaAId': enviado!['respostaAId'], 'respostaANome': comentario['nomeUsuario']};
+      body = {
+        ...comentario,
+        'id': 'c2',
+        'conteudo': enviado!['conteudo'],
+        'respostaAId': enviado!['respostaAId'],
+        'respostaANome': comentario['nomeUsuario'],
+      };
     } else if (options.path.endsWith('/comentarios')) {
-      body = {'content': withComments ? [comentario] : []};
+      body = {
+        'content': withComments ? [comentario] : [],
+      };
     } else if (options.path == '/feed/posts/p1') {
       body = post;
     } else {
       expect(options.path, anyOf('/feed/posts', '/feed/posts/salvos'));
-      body = {'content': [post]};
+      body = {
+        'content': [post],
+      };
     }
-    return ResponseBody.fromString(jsonEncode(body), 200,
-        headers: {Headers.contentTypeHeader: ['application/json']});
+    return ResponseBody.fromString(
+      jsonEncode(body),
+      200,
+      headers: {
+        Headers.contentTypeHeader: ['application/json'],
+      },
+    );
   }
 
   @override
@@ -108,56 +136,78 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(ChangeNotifierProvider<AuthService>.value(
-      value: auth,
-      child: ScreenUtilInit(
-        designSize: const Size(390, 844),
-        builder: (_, __) => MaterialApp.router(routerConfig: router),
+    await tester.pumpWidget(
+      ChangeNotifierProvider<AuthService>.value(
+        value: auth,
+        child: ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, __) => MaterialApp.router(routerConfig: router),
+        ),
       ),
-    ));
+    );
     await frames(tester);
   }
 
-  testWidgets('publicação longa abre, volta e reabre sem overflow na transição', (tester) async {
-    final router = GoRouter(routes: [
-      GoRoute(path: '/', builder: (_, __) => const Scaffold(body: FeedPage())),
-      GoRoute(path: '/feed-post', pageBuilder: (_, state) => CustomTransitionPage(
-        transitionDuration: const Duration(milliseconds: 400),
-        child: FeedPostDetailPage(post: state.extra! as FeedPostModel),
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
-      )),
-    ]);
-    addTearDown(router.dispose);
-    await mockNetworkImagesFor(() async {
-      await mount(tester, router);
-      final like = tester.widget<Icon>(find.byIcon(Icons.thumb_up_alt));
-      expect(like.color, const Color(0xFFFF6961));
-      for (var i = 0; i < 3; i++) {
-        await tester.ensureVisible(find.text('Autora da publicação'));
-        await tester.tap(find.text('Autora da publicação'));
+  testWidgets(
+    'publicação longa abre, volta e reabre sem overflow na transição',
+    (tester) async {
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, __) => const Scaffold(body: FeedPage()),
+          ),
+          GoRoute(
+            path: '/feed-post',
+            pageBuilder: (_, state) => CustomTransitionPage(
+              transitionDuration: const Duration(milliseconds: 400),
+              child: FeedPostDetailPage(post: state.extra! as FeedPostModel),
+              transitionsBuilder: (_, animation, __, child) =>
+                  FadeTransition(opacity: animation, child: child),
+            ),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+      await mockNetworkImagesFor(() async {
+        await mount(tester, router);
+        final like = tester.widget<Icon>(find.byIcon(Icons.thumb_up_alt));
+        expect(like.color, const Color(0xFFFF6961));
+        for (var i = 0; i < 3; i++) {
+          await tester.ensureVisible(find.text('Autora da publicação'));
+          await tester.tap(find.text('Autora da publicação'));
+          await frames(tester);
+          expect(find.byType(FeedPostDetailPage), findsOneWidget);
+          router.pop();
+          await frames(tester);
+          expect(find.byType(FeedPage), findsOneWidget);
+        }
+        await tester.pumpWidget(const SizedBox.shrink());
         await frames(tester);
-        expect(find.byType(FeedPostDetailPage), findsOneWidget);
-        router.pop();
-        await frames(tester);
-        expect(find.byType(FeedPage), findsOneWidget);
-      }
-      await tester.pumpWidget(const SizedBox.shrink());
-      await frames(tester);
-    });
-  });
+      });
+    },
+  );
 
-  testWidgets('datas, curtir e responder comentários usam o servidor', (tester) async {
+  testWidgets('datas, curtir e responder comentários usam o servidor', (
+    tester,
+  ) async {
     final adapter = _Adapter(withComments: true);
     adapter.post['conteudo'] = 'Publicação curta';
     ApiClient().dio.httpClientAdapter = adapter;
-    final router = GoRouter(routes: [
-      GoRoute(path: '/', builder: (_, __) => FeedPostDetailPage(post: FeedPostModel.fromMap(adapter.post))),
-    ]);
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, __) =>
+              FeedPostDetailPage(post: FeedPostModel.fromMap(adapter.post)),
+        ),
+      ],
+    );
     addTearDown(router.dispose);
     await mockNetworkImagesFor(() async {
       await mount(tester, router);
       expect(find.byType(FeedTimestamp), findsNWidgets(2));
-      expect(find.textContaining('06/10/2026'), findsNWidgets(2));
+      expect(find.textContaining('12:3'), findsNWidgets(2));
       await tester.ensureVisible(find.byIcon(Icons.favorite_border));
       await tester.tap(find.byIcon(Icons.favorite_border));
       await frames(tester);
@@ -172,19 +222,32 @@ void main() {
       await tester.enterText(find.byType(TextField), 'Minha resposta');
       await tester.tap(find.byTooltip('Enviar comentário'));
       await frames(tester);
-      expect(adapter.enviado, {'conteudo': 'Minha resposta', 'respostaAId': 'c1'});
+      expect(adapter.enviado, {
+        'conteudo': 'Minha resposta',
+        'respostaAId': 'c1',
+      });
       expect(adapter.chave, isNotEmpty);
       expect(find.textContaining('Respondendo a'), findsNothing);
-      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, isEmpty);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        isEmpty,
+      );
       await tester.pumpWidget(const SizedBox.shrink());
       await frames(tester);
     });
   });
 
-  testWidgets('publicações salvas não exibem o carrossel de banners', (tester) async {
-    final router = GoRouter(routes: [
-      GoRoute(path: '/', builder: (_, __) => const Scaffold(body: FeedPage(salvos: true))),
-    ]);
+  testWidgets('publicações salvas não exibem o carrossel de banners', (
+    tester,
+  ) async {
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, __) => const Scaffold(body: FeedPage(salvos: true)),
+        ),
+      ],
+    );
     addTearDown(router.dispose);
     await mockNetworkImagesFor(() async {
       await mount(tester, router);

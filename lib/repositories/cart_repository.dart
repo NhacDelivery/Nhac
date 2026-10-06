@@ -78,8 +78,9 @@ class CartRepository {
       _gravar(() async {
         final prefs = await SharedPreferences.getInstance();
         final raw = prefs.getString(_cartKey);
-        if (raw == null) return;
-        final decoded = jsonDecode(raw);
+        final decoded = raw == null
+            ? <String, dynamic>{'itens': []}
+            : jsonDecode(raw);
         final payload = decoded is List
             ? <String, dynamic>{'itens': decoded}
             : Map<String, dynamic>.from(decoded as Map);
@@ -87,12 +88,9 @@ class CartRepository {
           payload['pedidosConsumidos'] as List? ?? [],
         );
         if (consumed.contains(pedidoId)) return;
-        final quantities = <String, int>{};
-        for (final item in pedido['itens'] as List? ?? []) {
-          final id = item['produtoId'] as String;
-          quantities[id] =
-              (quantities[id] ?? 0) + (item['quantidade'] as num).toInt();
-        }
+        final origem = Set<String>.from(
+          pedido['_origemCarrinho'] as List? ?? [],
+        );
         final items = (payload['itens'] as List)
             .map(
               (item) =>
@@ -100,8 +98,9 @@ class CartRepository {
             )
             .toList();
         for (final item in items) {
-          if (item.lojaId == pedido['lojaId'])
-            item.quantidade -= quantities[item.produtoId] ?? 0;
+          if (item.lojaId != pedido['lojaId']) continue;
+          item.unidades.removeWhere(origem.contains);
+          item.quantidade = item.unidades.length;
         }
         items.removeWhere((item) => item.quantidade <= 0);
         payload['itens'] = items.map((item) => item.toMap()).toList();
@@ -113,6 +112,18 @@ class CartRepository {
 
   Future<void> limparCarrinho() => _gravar(() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_cartKey);
+    final raw = prefs.getString(_cartKey);
+    final previous = raw == null ? null : jsonDecode(raw);
+    if (!await prefs.setString(
+      _cartKey,
+      jsonEncode({
+        'itens': [],
+        'observacao': '',
+        'pedidosConsumidos': previous is Map
+            ? previous['pedidosConsumidos'] ?? []
+            : [],
+      }),
+    ))
+      throw StateError('Não foi possível limpar o carrinho.');
   });
 }

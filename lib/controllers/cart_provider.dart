@@ -1,3 +1,4 @@
+import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/models/usuario/carrinho_model.dart';
@@ -56,7 +57,7 @@ class CartProvider extends ChangeNotifier {
     final listaSalva = await repository.carregarCarrinhoLocal();
     final observacaoSalva = await repository.carregarObservacaoLocal();
     if (_disposed || sessionVersion != _sessionVersion) return;
-    _itens = {for (var item in listaSalva) item.produtoId: item};
+    _itens = {for (var item in listaSalva) item.chave: item};
     _observacao = _itens.isEmpty ? '' : observacaoSalva;
     _lojaIdAtual = '';
     if (_itens.isNotEmpty) {
@@ -64,6 +65,11 @@ class CartProvider extends ChangeNotifier {
     }
     _recalcularTotais();
   }
+
+  Future<void> persistirSnapshot() => _cartRepository.salvarCarrinhoLocal(
+    _itens.values.toList(),
+    observacao: _observacao,
+  );
 
   Future<void> setObservacao(String texto) async {
     if (_observacao != texto) {
@@ -83,6 +89,8 @@ class CartProvider extends ChangeNotifier {
     required String imagemUrl,
     required String lojaId,
     required int quantidade,
+    List<String> adicionais = const [],
+    List<String> adicionaisNomes = const [],
   }) async {
     if (quantidade <= 0) throw Exception('Quantidade inválida');
 
@@ -94,11 +102,19 @@ class CartProvider extends ChangeNotifier {
       );
     }
 
-    if (_itens.containsKey(idProduto)) {
-      _itens[idProduto]!.quantidade += quantidade;
+    final chave = adicionais.isEmpty
+        ? idProduto
+        : '$idProduto:${(List.of(adicionais)..sort()).join(',')}';
+    if (_itens.containsKey(chave)) {
+      _itens[chave]!.quantidade += quantidade;
+      _itens[chave]!.unidades.addAll(
+        List.generate(quantidade, (_) => const Uuid().v4()),
+      );
     } else {
-      _itens[idProduto] = CartItemModel(
+      _itens[chave] = CartItemModel(
         produtoId: idProduto,
+        adicionais: adicionais,
+        adicionaisNomes: adicionaisNomes,
         nome: nome,
         imagemUrl: imagemUrl,
         preco: preco,
@@ -121,6 +137,8 @@ class CartProvider extends ChangeNotifier {
 
     if (_itens[idProduto]!.quantidade > 1) {
       _itens[idProduto]!.quantidade -= 1;
+      if (_itens[idProduto]!.unidades.isNotEmpty)
+        _itens[idProduto]!.unidades.removeLast();
     } else {
       _itens.remove(idProduto);
     }
@@ -151,8 +169,8 @@ class CartProvider extends ChangeNotifier {
   }
 
   void marcarItemComoEsgotado(String idProduto) {
-    if (_itens.containsKey(idProduto)) {
-      _itens[idProduto]!.esgotado = true;
+    for (final item in _itens.values.where((i) => i.produtoId == idProduto)) {
+      item.esgotado = true;
       notifyListeners();
       _cartRepository.salvarCarrinhoLocal(
         _itens.values.toList(),

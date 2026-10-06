@@ -8,7 +8,16 @@ class FeedTimestamp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (date == null) return const SizedBox.shrink();
-    final label = DateFormat('dd/MM/yyyy • HH:mm').format(date!.toLocal());
+    final local = date!.toLocal();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(local.year, local.month, local.day);
+    final prefix = day == today
+        ? 'Hoje'
+        : day == DateTime(today.year, today.month, today.day - 1)
+        ? 'Ontem'
+        : DateFormat('dd/MM/yyyy').format(local);
+    final label = '$prefix • ${DateFormat('HH:mm').format(local)}';
     return Text(
       label,
       maxLines: 1,

@@ -90,7 +90,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (!mounted || auth.usuarioId != uid) return;
       await context.read<CartProvider>().consumirPedidoRecuperado(
         resposta.pedidoId,
-        Map<String, dynamic>.from(_tentativaPendente!['payload'] as Map),
+        {
+          ...Map<String, dynamic>.from(_tentativaPendente!['payload'] as Map),
+          '_origemCarrinho': _tentativaPendente!['carrinho'],
+        },
       );
       await _tentativasCheckout.concluir(uid);
       if (!mounted || auth.usuarioId != uid) return;
@@ -1249,6 +1252,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ),
       );
 
+      // Persist the exact unit identifiers before creating an uncertain attempt.
+      await cartProvider.persistirSnapshot();
       final respostaPedido = await _tentativasCheckout.enviar(uid, pedido);
       if (authService.usuarioId != uid) {
         fecharLoading();
@@ -1263,8 +1268,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
       fecharLoading();
 
       if (!context.mounted) return;
+      await cartProvider.consumirPedidoRecuperado(idGerado, {
+        ...pedido.toMap(),
+        '_origemCarrinho': pedido.origemCarrinho,
+      });
       if (_formaPagamento == 'Cartão de crédito' || _formaPagamento == 'PIX') {
-        await cartProvider.esvaziarCarrinho();
         await _tentativasCheckout.concluir(uid);
         if (!context.mounted || authService.usuarioId != uid) return;
         context.go('/pagamento?pedidoId=$idGerado');
@@ -1358,7 +1366,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       context,
       pedidoId: idGerado,
       dadosLocais: dadosLocais,
-      aoConcluir: cartProvider.esvaziarCarrinho,
+      aoConcluir: () async {},
     );
   }
 }

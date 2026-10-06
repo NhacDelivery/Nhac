@@ -38,8 +38,105 @@ class ProdutoDetalhesPage extends StatefulWidget {
 
 class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   int _quantidade = 1;
+  ProdutosModel? _produtoCompleto;
+  bool _carregandoAdicionais = true;
+  String? _erroAdicionais;
+  final Set<String> _adicionaisSelecionados = {};
+  Future<void> _carregarAdicionais() async {
+    try {
+      final p = await _produtoRepository.buscarPorId(widget.produto.id);
+      if (mounted)
+        setState(
+          () => {
+            _produtoCompleto = p,
+            _carregandoAdicionais = false,
+            _erroAdicionais = null,
+          },
+        );
+    } catch (_) {
+      if (mounted)
+        setState(
+          () => {
+            _carregandoAdicionais = false,
+            _erroAdicionais =
+                'Não foi possível conferir os adicionais. Tente novamente.',
+          },
+        );
+    }
+  }
+
+  List<GrupoAdicionalModel> get _grupos => _produtoCompleto?.adicionais ?? [];
+  double get _precoComAdicionais =>
+      (_produtoCompleto?.preco ?? widget.produto.preco) +
+      _grupos
+          .expand((g) => g.itens)
+          .where((i) => _adicionaisSelecionados.contains(i.id))
+          .fold<double>(0, (s, i) => s + i.preco);
+  bool get _adicionaisValidos =>
+      !_carregandoAdicionais &&
+      _erroAdicionais == null &&
+      _grupos.every((g) {
+        final n = g.itens
+            .where((i) => _adicionaisSelecionados.contains(i.id))
+            .length;
+        return n >= g.minimo && n <= g.maximo;
+      });
+  Widget _opcoesAdicionais() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      if (_carregandoAdicionais) const LinearProgressIndicator(),
+      if (_erroAdicionais != null)
+        TextButton.icon(
+          onPressed: _carregarAdicionais,
+          icon: const Icon(Icons.refresh),
+          label: Text(_erroAdicionais!),
+        ),
+      for (final g in _grupos) ...[
+        Padding(
+          padding: const EdgeInsets.only(top: 16, bottom: 4),
+          child: Text(
+            '${g.nome} • ${g.obrigatorio ? "Obrigatório" : "Opcional"}',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF5D201C),
+            ),
+          ),
+        ),
+        Text('Escolha de ${g.minimo} a ${g.maximo} opções'),
+        for (final i in g.itens)
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            activeColor: const Color(0xFFFF6961),
+            title: Text(i.nome),
+            subtitle: Text('+ R\$ ${i.preco.toStringAsFixed(2)}'),
+            value: _adicionaisSelecionados.contains(i.id),
+            onChanged: i.id.isEmpty
+                ? null
+                : (v) {
+                    final n = g.itens
+                        .where((x) => _adicionaisSelecionados.contains(x.id))
+                        .length;
+                    if (v == true && n >= g.maximo) {
+                      context.showError(
+                        'Escolha até ${g.maximo} opções em ${g.nome}.',
+                      );
+                      return;
+                    }
+                    setState(
+                      () => v == true
+                          ? _adicionaisSelecionados.add(i.id)
+                          : _adicionaisSelecionados.remove(i.id),
+                    );
+                  },
+          ),
+      ],
+    ],
+  );
+
   int _filtroAvaliacao = 0, _paginaAvaliacao = 0, _consultaAvaliacao = 0;
   bool _maisAvaliacoes = false;
+  bool _erroMaisAvaliacoes = false;
+  Map<String, dynamic>? _ultimoResumo;
   List<AvaliacoesModel> _comentariosProduto = [];
   void _filtrarAvaliacoes(int filtro) {
     if (filtro == _filtroAvaliacao) return;
@@ -76,13 +173,14 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
     _produtosDaLojaFuture = null;
 
     _avaliacoesFuture = _carregarAvaliacoes();
+    _carregarAdicionais();
   }
 
   Future<({Map<String, dynamic>? resumo, List<AvaliacoesModel>? comentarios})>
   _carregarAvaliacoes({bool mais = false}) async {
     final consulta = ++_consultaAvaliacao;
     final pagina = mais ? _paginaAvaliacao + 1 : 0;
-    Map<String, dynamic>? resumo;
+    Map<String, dynamic>? resumo = _ultimoResumo;
     List<AvaliacoesModel>? comentarios;
     await Future.wait([
       () async {
@@ -101,6 +199,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
             positivas: _filtroAvaliacao == 2,
           );
           if (consulta != _consultaAvaliacao) return;
+          _erroMaisAvaliacoes = false;
           _maisAvaliacoes = novos.length == 10;
           _paginaAvaliacao = pagina;
           _comentariosProduto = {
@@ -111,9 +210,16 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
               c.id: c,
           }.values.toList();
           comentarios = _comentariosProduto;
-        } catch (_) {}
+        } catch (_) {
+          if (consulta == _consultaAvaliacao && mais) {
+            _erroMaisAvaliacoes = true;
+            comentarios = List.of(_comentariosProduto);
+          }
+        }
       }(),
     ]);
+    if (consulta == _consultaAvaliacao && resumo != null)
+      _ultimoResumo = resumo;
     return (resumo: resumo, comentarios: comentarios);
   }
 
@@ -488,15 +594,22 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                       nomeLoja = 'indisponível no momento';
                                     }
                                   }
-                                  return _buildServiceRow(
-                                    Icons.storefront_outlined,
-                                    'Vendido por: $nomeLoja',
+                                  return InkWell(
+                                    onTap: _abrirLojaProfile,
+                                    child: _buildServiceRow(
+                                      Icons.storefront_outlined,
+                                      'Vendido por: $nomeLoja',
+                                    ),
                                   );
                                 },
                               ),
                             ],
                           ),
                         ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 20.w),
+                        child: _opcoesAdicionais(),
                       ),
                       SizedBox(height: 24.h),
                       Padding(
@@ -704,11 +817,28 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                           context,
                                           listen: false,
                                         );
+                                    if (!_adicionaisValidos) {
+                                      context.showError(
+                                        'Confira os adicionais obrigatórios antes de adicionar.',
+                                      );
+                                      return;
+                                    }
                                     await cartProvider
                                         .adicionarItemComQuantidade(
                                           idProduto: widget.produto.id,
                                           nome: widget.produto.nome,
-                                          preco: widget.produto.preco,
+                                          preco: _precoComAdicionais,
+                                          adicionais:
+                                              _adicionaisSelecionados.toList()
+                                                ..sort(),
+                                          adicionaisNomes: _grupos
+                                              .expand((g) => g.itens)
+                                              .where(
+                                                (i) => _adicionaisSelecionados
+                                                    .contains(i.id),
+                                              )
+                                              .map((i) => i.nome)
+                                              .toList(),
                                           imagemUrl: widget.produto.imagemUrl,
                                           lojaId: widget.produto.lojaId,
                                           quantidade: _quantidade,
@@ -751,7 +881,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                 ? 'Loja indisponível. Tentar novamente'
                                 : lojaFechada
                                 ? 'Loja fechada'
-                                : 'Adicionar  ${currencyFormat.format(widget.produto.preco * _quantidade)}',
+                                : 'Adicionar  ${currencyFormat.format(_precoComAdicionais * _quantidade)}',
                             style: TextStyle(
                               fontSize: 16.sp,
                               fontWeight: FontWeight.bold,
@@ -873,11 +1003,16 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
           >(
             future: _avaliacoesFuture,
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
+              if (snapshot.connectionState == ConnectionState.waiting &&
+                  _comentariosProduto.isEmpty) {
                 return const LoadingNhac(telaCheia: false, tamanho: 40);
               }
               final resumo = snapshot.data?.resumo;
-              final comentarios = snapshot.data?.comentarios;
+              final comentarios =
+                  snapshot.connectionState == ConnectionState.waiting &&
+                      _comentariosProduto.isNotEmpty
+                  ? _comentariosProduto
+                  : snapshot.data?.comentarios;
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -962,7 +1097,11 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                         () =>
                             _avaliacoesFuture = _carregarAvaliacoes(mais: true),
                       ),
-                      child: const Text('Carregar mais avaliações'),
+                      child: Text(
+                        _erroMaisAvaliacoes
+                            ? 'Falha ao carregar mais. Tentar novamente'
+                            : 'Carregar mais avaliações',
+                      ),
                     ),
                 ],
               );

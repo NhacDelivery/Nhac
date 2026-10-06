@@ -114,6 +114,24 @@ class AvaliacaoRepository {
     );
   }
 
+  Future<List<AvaliacoesModel>> minhasDoPedido(String pedidoId) async {
+    final response = await _dio.get(
+      '/pedidos/${Uri.encodeComponent(pedidoId)}/avaliacoes-produtos',
+    );
+    return extrairLista(response.data)
+        .map((map) => AvaliacoesModel.fromMap(map, map['id'] as String))
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> minhasDados(String pedidoId) async {
+    final response = await _dio.get(
+      '/pedidos/${Uri.encodeComponent(pedidoId)}/avaliacoes-produtos',
+    );
+    return extrairLista(response.data)
+        .map((map) => Map<String, dynamic>.from(map))
+        .toList();
+  }
+
   Future<Map<String, dynamic>> resumoLoja(String id) async {
     final response = await _dio.get(
       '/lojas/${Uri.encodeComponent(id)}/avaliacoes/resumo',

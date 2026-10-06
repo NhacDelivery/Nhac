@@ -1,6 +1,9 @@
 import 'dart:io';
+
 import 'package:nhac/services/home_order_route_observer.dart';
+
 import 'dart:ui';
+
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
@@ -23,11 +26,12 @@ class ProfileContent extends StatefulWidget {
   final bool isActive;
   final PedidoRepository? pedidoRepository;
   final Future<bool> Function()? autenticarBiometria;
-  const ProfileContent(
-      {super.key,
-      this.pedidoRepository,
-      this.autenticarBiometria,
-      this.isActive = true});
+  const ProfileContent({
+    super.key,
+    this.pedidoRepository,
+    this.autenticarBiometria,
+    this.isActive = true,
+  });
 
   @override
   State<ProfileContent> createState() => _ProfileContentState();
@@ -88,6 +92,8 @@ class _ProfileContentState extends State<ProfileContent>
   bool _erroEstatisticas = false;
   bool _confirmandoIdentidade = false;
   Set<String> _preferencias = {};
+  bool _preferenciasCarregadas = false, _salvandoPreferencias = false;
+  String? _contaPreferencias;
 
   static const _opcoesPreferencia = <(String, IconData)>[
     ('Pizza', Icons.local_pizza),
@@ -101,18 +107,42 @@ class _ProfileContentState extends State<ProfileContent>
   Future<void> _carregarPreferencias() async {
     final usuarioId = context.read<AuthService>().usuarioId;
     if (usuarioId == null) return;
-    final salvas =
-        await LocalCacheService.carregarPreferenciasComida(usuarioId);
-    if (mounted) setState(() => _preferencias = salvas);
+    final salvas = await LocalCacheService.carregarPreferenciasComida(
+      usuarioId,
+    );
+    if (mounted && context.read<AuthService>().usuarioId == usuarioId)
+      setState(() {
+        _preferencias = salvas;
+        _contaPreferencias = usuarioId;
+        _preferenciasCarregadas = true;
+      });
   }
 
   Future<void> _alternarPreferencia(String nome) async {
     final usuarioId = context.read<AuthService>().usuarioId;
+    if (!_preferenciasCarregadas ||
+        _salvandoPreferencias ||
+        usuarioId == null ||
+        usuarioId != _contaPreferencias)
+      return;
     final novas = {..._preferencias};
     if (!novas.remove(nome)) novas.add(nome);
-    setState(() => _preferencias = novas);
-    if (usuarioId != null) {
+    setState(() => _salvandoPreferencias = true);
+    try {
       await LocalCacheService.salvarPreferenciasComida(usuarioId, novas);
+      if (mounted && context.read<AuthService>().usuarioId == usuarioId)
+        setState(() => _preferencias = novas);
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Não foi possível salvar suas preferências. Tente novamente.',
+            ),
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _salvandoPreferencias = false);
     }
   }
 
@@ -440,19 +470,26 @@ class _ProfileContentState extends State<ProfileContent>
     final userProvider = context.watch<UserProvider>();
     final usuario = userProvider.usuario;
     final enderecoProvider = context.watch<EnderecoProvider>();
-    final enderecoisPadrao =
-        enderecoProvider.enderecos.where((e) => e.isPadrao).firstOrNull;
+    final enderecoisPadrao = enderecoProvider.enderecos
+        .where((e) => e.isPadrao)
+        .firstOrNull;
     final String textoEndereco = enderecoisPadrao != null
         ? '${enderecoisPadrao.rua}, ${enderecoisPadrao.numero}${(enderecoisPadrao.complemento?.isNotEmpty ?? false) ? ' - ${enderecoisPadrao.complemento}' : ''}'
         : 'Nenhum endereço selecionado';
 
     if (usuario == null && !userProvider.isLoading) {
       return Center(
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(userProvider.erro ?? 'Perfil indisponível. Tente novamente.'),
-        TextButton(
-            onPressed: _atualizarPerfil, child: const Text('Tentar novamente')),
-      ]));
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(userProvider.erro ?? 'Perfil indisponível. Tente novamente.'),
+            TextButton(
+              onPressed: _atualizarPerfil,
+              child: const Text('Tentar novamente'),
+            ),
+          ],
+        ),
+      );
     }
     if (usuario == null) {
       return Container(
@@ -480,29 +517,31 @@ class _ProfileContentState extends State<ProfileContent>
               refreshIndicatorExtent: 140.h,
               refreshTriggerPullDistance: 180.h,
               onRefresh: _atualizarPerfil,
-              builder: (
-                context,
-                refreshState,
-                pulledExtent,
-                refreshTriggerPullDistance,
-                refreshIndicatorExtent,
-              ) {
-                return Center(
-                  child: Opacity(
-                    opacity: (pulledExtent / refreshIndicatorExtent).clamp(
-                      0.0,
-                      1.0,
-                    ),
-                    child: Lottie.asset(
-                      'assets/animations/loading_nhac.json',
-                      width: 240.w,
-                      height: 240.h,
-                      animate: refreshState == RefreshIndicatorMode.refresh ||
-                          refreshState == RefreshIndicatorMode.armed,
-                    ),
-                  ),
-                );
-              },
+              builder:
+                  (
+                    context,
+                    refreshState,
+                    pulledExtent,
+                    refreshTriggerPullDistance,
+                    refreshIndicatorExtent,
+                  ) {
+                    return Center(
+                      child: Opacity(
+                        opacity: (pulledExtent / refreshIndicatorExtent).clamp(
+                          0.0,
+                          1.0,
+                        ),
+                        child: Lottie.asset(
+                          'assets/animations/loading_nhac.json',
+                          width: 240.w,
+                          height: 240.h,
+                          animate:
+                              refreshState == RefreshIndicatorMode.refresh ||
+                              refreshState == RefreshIndicatorMode.armed,
+                        ),
+                      ),
+                    );
+                  },
             ),
             SliverPadding(
               padding: EdgeInsets.symmetric(horizontal: 24.w),
@@ -570,9 +609,8 @@ class _ProfileContentState extends State<ProfileContent>
                                 color: Colors.white,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(
-                                      0xFF5D201C,
-                                    ).withValues(alpha: 0.1),
+                                    color: const Color(0xFF5D201C)
+                                        .withValues(alpha: 0.1),
                                     blurRadius: 10.r,
                                     offset: Offset(0, 4.h),
                                   ),
@@ -592,15 +630,15 @@ class _ProfileContentState extends State<ProfileContent>
                                         fit: BoxFit.cover,
                                         placeholder: (context, url) =>
                                             const LoadingNhac(
-                                          telaCheia: false,
-                                          tamanho: 40,
-                                        ),
+                                              telaCheia: false,
+                                              tamanho: 40,
+                                            ),
                                         errorWidget: (context, url, error) =>
                                             Icon(
-                                          Icons.person,
-                                          size: 48.r,
-                                          color: Colors.grey.shade400,
-                                        ),
+                                              Icons.person,
+                                              size: 48.r,
+                                              color: Colors.grey.shade400,
+                                            ),
                                       ),
                                     ),
                             ),
@@ -757,13 +795,16 @@ class _ProfileContentState extends State<ProfileContent>
                   ),
                   if (_erroEstatisticas)
                     TextButton(
-                        onPressed: _carregarEstatisticas,
-                        child: const Text(
-                            'Estatísticas indisponíveis. Tentar novamente')),
+                      onPressed: _carregarEstatisticas,
+                      child: const Text(
+                        'Estatísticas indisponíveis. Tentar novamente',
+                      ),
+                    ),
                   if (userProvider.erro != null)
                     TextButton(
-                        onPressed: _atualizarPerfil,
-                        child: Text(userProvider.erro!)),
+                      onPressed: _atualizarPerfil,
+                      child: Text(userProvider.erro!),
+                    ),
                   SizedBox(height: 40.h),
                   Text(
                     'Sua Conta',
@@ -780,9 +821,8 @@ class _ProfileContentState extends State<ProfileContent>
                       borderRadius: BorderRadius.circular(24.r),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(
-                            0xFF5D201C,
-                          ).withValues(alpha: 0.03),
+                          color: const Color(0xFF5D201C)
+                              .withValues(alpha: 0.03),
                           blurRadius: 15.r,
                           offset: Offset(0, 5.h),
                         ),
@@ -849,8 +889,10 @@ class _ProfileContentState extends State<ProfileContent>
                   SizedBox(height: 4.h),
                   Text(
                     'Salvas neste aparelho. Ainda não mudam as recomendações.',
-                    style:
-                        TextStyle(fontSize: 12.sp, color: Colors.grey.shade600),
+                    style: TextStyle(
+                      fontSize: 12.sp,
+                      color: Colors.grey.shade600,
+                    ),
                   ),
                   SizedBox(height: 12.h),
                   Container(
@@ -861,9 +903,8 @@ class _ProfileContentState extends State<ProfileContent>
                       border: Border.all(color: Colors.white, width: 2),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(
-                            0xFF5D201C,
-                          ).withValues(alpha: 0.03),
+                          color: const Color(0xFF5D201C)
+                              .withValues(alpha: 0.03),
                           blurRadius: 15.r,
                           offset: Offset(0, 5.h),
                         ),
@@ -907,29 +948,30 @@ class _ProfileContentState extends State<ProfileContent>
         _ => null,
       },
       child: Container(
-          color: Colors.transparent,
-          constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
-          child: Column(
-            children: [
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 24.sp,
-                  color: const Color(0xFF5D201C),
-                  fontWeight: FontWeight.w300,
-                ),
+        color: Colors.transparent,
+        constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 24.sp,
+                color: const Color(0xFF5D201C),
+                fontWeight: FontWeight.w300,
               ),
-              SizedBox(height: 4.h),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12.sp,
-                  color: const Color(0xFF5D201C),
-                  fontWeight: FontWeight.w600,
-                ),
+            ),
+            SizedBox(height: 4.h),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.sp,
+                color: const Color(0xFF5D201C),
+                fontWeight: FontWeight.w600,
               ),
-            ],
-          )),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

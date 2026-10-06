@@ -5,8 +5,9 @@ import 'package:nhac/utils/app_exceptions.dart' as app_exc;
 class AppException implements Exception {
   final String message;
   final String? code;
+  final int? statusCode;
 
-  AppException(this.message, {this.code});
+  AppException(this.message, {this.code, this.statusCode});
 
   @override
   String toString() => message;
@@ -40,8 +41,11 @@ Exception mapException(Object error) {
   if (error is DioException) {
     if (error.error is app_exc.AppException) {
       final mapped = error.error as app_exc.AppException;
-      if (mapped.code != null) return AppException(mapped.message, code: mapped.code);
-      return mapped;
+      return AppException(
+        mapped.message,
+        code: mapped.code,
+        statusCode: error.response?.statusCode,
+      );
     }
 
     if (error.response?.data != null && error.response!.data is Map) {
@@ -49,6 +53,7 @@ Exception mapException(Object error) {
       if (data.containsKey('message')) {
         return AppException(
           data['message'].toString(),
+          statusCode: error.response?.statusCode,
           code: (data['errorCode'] ?? data['error'])?.toString(),
         );
       }
@@ -70,6 +75,7 @@ Exception mapException(Object error) {
 
     return AppException(
       'Ocorreu um erro no servidor: ${error.response?.statusCode ?? error.message}',
+      statusCode: error.response?.statusCode,
       code: error.response?.statusCode?.toString(),
     );
   }

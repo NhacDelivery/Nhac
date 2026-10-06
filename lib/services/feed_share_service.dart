@@ -1,9 +1,14 @@
+import 'package:nhac/globals/app_constants.dart';
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
 class FeedShareService {
-  static Uri link(String id) =>
-      Uri(scheme: 'nhac', host: 'app', pathSegments: ['publicacao', id]);
+  static Uri link(String id) => Uri.parse(AppConstants.apiBaseUrl).replace(
+    pathSegments: ['publicacao', id],
+    query: null,
+    fragment: null,
+    scheme: 'https',
+  );
   static Future<void> compartilhar(BuildContext context, String id) async {
     final box = context.findRenderObject();
     await Share.share(

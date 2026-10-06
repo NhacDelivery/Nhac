@@ -1,3 +1,4 @@
+import 'package:nhac/repositories/avaliacao_repository.dart';
 import 'package:nhac/pages/avaliar_produto_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -38,12 +39,36 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
   bool _loading = true;
   String? _erro;
   bool _entregadorAvaliado = false;
+  Map<String, Map<String, dynamic>> _avaliacoesProdutos = {};
+  bool _avaliacoesConferidas = false;
+  String? _erroAvaliacoes;
+  Future<void> _conferirAvaliacoes() async {
+    try {
+      final data = await AvaliacaoRepository().minhasDados(widget.pedidoId);
+      if (mounted)
+        setState(
+          () => {
+            _avaliacoesProdutos = {
+              for (final a in data) a['produtoId'] as String: a,
+            },
+            _avaliacoesConferidas = true,
+            _erroAvaliacoes = null,
+          },
+        );
+    } catch (_) {
+      if (mounted)
+        setState(
+          () => _erroAvaliacoes = 'Não foi possível conferir as avaliações.',
+        );
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _repository = widget.pedidoRepository ?? PedidoRepository();
     _inicializarTela();
+    _conferirAvaliacoes();
   }
 
   Future<void> _inicializarTela() async {
@@ -425,16 +450,30 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                 }.values)
                   TextButton.icon(
                     icon: const Icon(Icons.rate_review_outlined),
-                    label: Text('Avaliar ${item.nome}'),
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => AvaliarProdutoPage(
-                          produtoId: item.produtoId,
-                          pedidoId: pedido.id,
-                          nome: item.nome,
-                        ),
-                      ),
+                    label: Text(
+                      _avaliacoesProdutos.containsKey(item.produtoId)
+                          ? 'Ver avaliação de ${item.nome}'
+                          : 'Avaliar ${item.nome}',
                     ),
+                    onPressed: !_avaliacoesConferidas
+                        ? null
+                        : () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => AvaliarProdutoPage(
+                                  produtoId: item.produtoId,
+                                  pedidoId: pedido.id,
+                                  nome: item.nome,
+                                ),
+                              ),
+                            );
+                            await _conferirAvaliacoes();
+                          },
+                  ),
+                if (_erroAvaliacoes != null)
+                  TextButton(
+                    onPressed: _conferirAvaliacoes,
+                    child: Text('$_erroAvaliacoes Tentar novamente'),
                   ),
               ],
               // Card do Entregador (se houver)

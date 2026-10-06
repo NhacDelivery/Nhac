@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nhac/models/pedido_model.dart';
@@ -31,17 +32,24 @@ class LocalCacheService {
       'preferencias_comida_$usuarioId';
 
   static Future<Set<String>> carregarPreferenciasComida(
-      String usuarioId) async {
+    String usuarioId,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
+    await prefs.reload();
     return (prefs.getStringList(_keyPreferenciasComida(usuarioId)) ?? const [])
         .toSet();
   }
 
   static Future<void> salvarPreferenciasComida(
-      String usuarioId, Set<String> preferencias) async {
+    String usuarioId,
+    Set<String> preferencias,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-        _keyPreferenciasComida(usuarioId), preferencias.toList()..sort());
+    if (!await prefs.setStringList(
+      _keyPreferenciasComida(usuarioId),
+      preferencias.toList()..sort(),
+    ))
+      throw StateError('Falha ao salvar preferências.');
   }
 
   static String _keyPedidoAtivo(String usuarioId) => 'pedido_ativo_$usuarioId';
@@ -53,25 +61,27 @@ class LocalCacheService {
   static Future<void> salvarCatalogoHome() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
-        _keyCatalogoHome,
-        jsonEncode({
-          'salvoEm': DateTime.now().toUtc().toIso8601String(),
-          'necessidades': produtosNecessidadesCache
-                  ?.cast<ProdutosModel>()
-                  .map((p) => p.toMap())
-                  .toList() ??
-              [],
-          'promocoes': produtosPromocaoCache
-                  ?.cast<ProdutosModel>()
-                  .map((p) => p.toMap())
-                  .toList() ??
-              [],
-          'lojas':
-              lojasCache?.cast<LojasModel>().map((l) => l.toMap()).toList() ??
-                  [],
-          'paginaLojas': currentPageLojasCache,
-          'maisLojas': hasMoreLojasCache,
-        }));
+      _keyCatalogoHome,
+      jsonEncode({
+        'salvoEm': DateTime.now().toUtc().toIso8601String(),
+        'necessidades':
+            produtosNecessidadesCache
+                ?.cast<ProdutosModel>()
+                .map((p) => p.toMap())
+                .toList() ??
+            [],
+        'promocoes':
+            produtosPromocaoCache
+                ?.cast<ProdutosModel>()
+                .map((p) => p.toMap())
+                .toList() ??
+            [],
+        'lojas':
+            lojasCache?.cast<LojasModel>().map((l) => l.toMap()).toList() ?? [],
+        'paginaLojas': currentPageLojasCache,
+        'maisLojas': hasMoreLojasCache,
+      }),
+    );
   }
 
   static Future<void> restaurarCatalogoHome() async {
@@ -88,11 +98,13 @@ class LocalCacheService {
       }
       produtosNecessidadesCache = (data['necessidades'] as List)
           .map(
-              (p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map)))
+            (p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map)),
+          )
           .toList();
       produtosPromocaoCache = (data['promocoes'] as List)
           .map(
-              (p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map)))
+            (p) => ProdutosModel.fromMap(Map<String, dynamic>.from(p as Map)),
+          )
           .toList();
       lojasCache = (data['lojas'] as List)
           .map((l) => LojasModel.fromMap(Map<String, dynamic>.from(l as Map)))
@@ -106,15 +118,18 @@ class LocalCacheService {
   }
 
   static Future<void> salvarSnapshotPedido(
-      String usuarioId, PedidoModel pedido) async {
+    String usuarioId,
+    PedidoModel pedido,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     final map = pedido.toMap()..remove('codigoEntrega');
     await prefs.setString(
-        _keySnapshotPedido(usuarioId),
-        jsonEncode({
-          'salvoEm': DateTime.now().toUtc().toIso8601String(),
-          'pedido': map,
-        }));
+      _keySnapshotPedido(usuarioId),
+      jsonEncode({
+        'salvoEm': DateTime.now().toUtc().toIso8601String(),
+        'pedido': map,
+      }),
+    );
   }
 
   static Future<PedidoModel?> carregarSnapshotPedido(String usuarioId) async {
@@ -128,8 +143,9 @@ class LocalCacheService {
         await prefs.remove(_keySnapshotPedido(usuarioId));
         return null;
       }
-      final pedido =
-          PedidoModel.fromMap(Map<String, dynamic>.from(data['pedido'] as Map));
+      final pedido = PedidoModel.fromMap(
+        Map<String, dynamic>.from(data['pedido'] as Map),
+      );
       return pedido.usuarioId == usuarioId && !pedido.status.terminal
           ? pedido
           : null;
@@ -150,7 +166,9 @@ class LocalCacheService {
   }
 
   static Future<void> salvarPedidoAtivo(
-      String usuarioId, String pedidoId) async {
+    String usuarioId,
+    String pedidoId,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyPedidoAtivo(usuarioId), pedidoId);
   }
@@ -339,21 +357,23 @@ class LocalCacheService {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(
-          _keySearchResults,
-          jsonEncode({
-            'termo': termo.toLowerCase().trim(),
-            'salvoEm': DateTime.now().toUtc().toIso8601String(),
-            'produtos': produtos.map((p) => p.toMap()).toList(),
-            'lojas': lojas.map((l) => l.toMap()).toList(),
-            'lojaAberta': lojaAberta,
-          }));
+        _keySearchResults,
+        jsonEncode({
+          'termo': termo.toLowerCase().trim(),
+          'salvoEm': DateTime.now().toUtc().toIso8601String(),
+          'produtos': produtos.map((p) => p.toMap()).toList(),
+          'lojas': lojas.map((l) => l.toMap()).toList(),
+          'lojaAberta': lojaAberta,
+        }),
+      );
     } catch (e) {
       debugPrint('LocalCacheService: erro ao salvar resultados de busca — $e');
     }
   }
 
   static Future<Map<String, dynamic>?> carregarResultadosBusca(
-      String termo) async {
+    String termo,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(_keySearchResults);
@@ -370,7 +390,8 @@ class LocalCacheService {
       return data;
     } catch (e) {
       debugPrint(
-          'LocalCacheService: erro ao carregar resultados de busca — $e');
+        'LocalCacheService: erro ao carregar resultados de busca — $e',
+      );
       return null;
     }
   }

@@ -96,7 +96,10 @@ class FeedRepository {
     try {
       final response = await _dio.post(
         '/feed/posts/${Uri.encodeComponent(id)}/comentarios',
-        data: {'conteudo': conteudo.trim(), if (respostaAId != null) 'respostaAId': respostaAId},
+        data: {
+          'conteudo': conteudo.trim(),
+          if (respostaAId != null) 'respostaAId': respostaAId,
+        },
         options: idempotencyKey == null
             ? null
             : Options(headers: {'Idempotency-Key': idempotencyKey}),
@@ -113,7 +116,8 @@ class FeedRepository {
     required bool ativo,
   }) async {
     try {
-      final path = '/feed/posts/${Uri.encodeComponent(postId)}/comentarios/${Uri.encodeComponent(comentarioId)}/curtida';
+      final path =
+          '/feed/posts/${Uri.encodeComponent(postId)}/comentarios/${Uri.encodeComponent(comentarioId)}/curtida';
       final response = ativo ? await _dio.put(path) : await _dio.delete(path);
       return FeedCommentModel.fromMap(Map<String, dynamic>.from(response.data));
     } catch (e) {
@@ -153,21 +157,42 @@ class FeedRepository {
   Future<FeedPostModel> editar(
     FeedPostModel post,
     String conteudo,
-    List<String> tags,
-  ) async {
+    List<String> tags, {
+    List<String>? imagens,
+    String? lojaId,
+    bool alterarLoja = false,
+  }) async {
     try {
       final response = await _dio.put(
         '/feed/posts/${Uri.encodeComponent(post.id)}',
         data: {
           'conteudo': conteudo.trim(),
           'hashTags': tags,
-          'imagens': post.imagens,
-          'lojaId': post.mentionedStore?.id,
+          'imagens': imagens ?? post.imagens,
+          'lojaId': alterarLoja ? lojaId : post.mentionedStore?.id,
           'isPatrocinado': post.isPatrocinado,
           'sponsorLabel': post.sponsorLabel,
         },
       );
       return FeedPostModel.fromMap(Map<String, dynamic>.from(response.data));
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<void> denunciar(
+    String postId,
+    String motivo, {
+    String? comentarioId,
+  }) async {
+    try {
+      await _dio.post(
+        '/feed/posts/${Uri.encodeComponent(postId)}/denuncias',
+        data: {
+          'motivo': motivo,
+          if (comentarioId != null) 'comentarioId': comentarioId,
+        },
+      );
     } catch (e) {
       throw mapException(e);
     }

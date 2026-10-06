@@ -1,17 +1,16 @@
-import 'package:flutter_screenutil/flutter_screenutil.dart';  
+import 'package:nhac/repositories/produto_repository.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shimmer/shimmer.dart';
+
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/globals/app_constants.dart';
 
 class BannerItem {
-  const BannerItem({
-    required this.imageUrl,
-    this.tipoFiltro,
-    this.valorFiltro,
-  });
+  const BannerItem({required this.imageUrl, this.tipoFiltro, this.valorFiltro});
 
   final String imageUrl;
   final String? tipoFiltro;
@@ -30,35 +29,44 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
   int _currentPage = 0;
   Timer? _timer;
 
-  static const List<BannerItem> _banners = [
-    // Valores de valorFiltro devem bater exatamente com a coluna
-    // `categoria_menu` do banco (Combos, Sobremesas, Acompanhamento,
-    // Prato Principal, Bebidas), senão a busca não retorna nada.
-    BannerItem(
-      imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800', // TODO: substituir por URL permanente (Firebase Storage ou asset local)
-      tipoFiltro: 'categoria',
-      valorFiltro: 'Pratos Executivos',
-    ),
-    BannerItem(
-      imageUrl: 'https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=800',
-      tipoFiltro: 'categoria',
-      valorFiltro: 'Combos',
-    ),
-    BannerItem(
-      imageUrl: 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=800',
-      tipoFiltro: 'categoria',
-      valorFiltro: 'Bebidas',
-    ),
-  ];
+  List<BannerItem> _banners = [];
+  bool _loading = true;
+  String? _erro;
+  Future<void> _carregar() async {
+    try {
+      final categorias = await ProdutoRepository().buscarCategorias();
+      if (!mounted) return;
+      setState(() {
+        _banners = [
+          for (final categoria in categorias.take(6))
+            BannerItem(
+              imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800',
+              tipoFiltro: 'categoria',
+              valorFiltro: categoria,
+            ),
+        ];
+        _erro = null;
+        _loading = false;
+      });
+      _startAutoPlay();
+    } catch (_) {
+      if (mounted)
+        setState(() {
+          _loading = false;
+          _erro = 'Não foi possível carregar as sugestões.';
+        });
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    _startAutoPlay();
+    _carregar();
   }
 
   void _startAutoPlay() {
     _timer?.cancel();
+    if (_banners.length < 2) return;
     _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
       if (_pageController.hasClients) {
         int nextPage = _currentPage + 1;
@@ -83,6 +91,18 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loading)
+      return const SizedBox(
+        height: 32,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    if (_erro != null)
+      return TextButton.icon(
+        onPressed: _carregar,
+        icon: const Icon(Icons.refresh),
+        label: Text(_erro!),
+      );
+    if (_banners.isEmpty) return const SizedBox.shrink();
     return Column(
       children: [
         SizedBox(
@@ -101,21 +121,48 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
                 final banner = _banners[index];
                 return GestureDetector(
                   onTap: () {
-                    if (banner.tipoFiltro == 'categoria' && banner.valorFiltro != null) {
-                      context.push('/search?categoria=${banner.valorFiltro}');
+                    if (banner.tipoFiltro == 'categoria' &&
+                        banner.valorFiltro != null) {
+                      context.push(
+                        '/search?categoria=${Uri.encodeQueryComponent(banner.valorFiltro!)}',
+                      );
                     }
                   },
-                  child: _BannerCard(banner: banner),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _BannerCard(banner: banner),
+                      Positioned(
+                        left: 20,
+                        right: 20,
+                        bottom: 16,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            banner.valorFiltro!,
+                            style: const TextStyle(
+                              color: Color(0xFF5D201C),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               },
             ),
           ),
         ),
         SizedBox(height: 12.h),
-        _DotsIndicator(
-          count: _banners.length,
-          currentIndex: _currentPage,
-        ),
+        _DotsIndicator(count: _banners.length, currentIndex: _currentPage),
       ],
     );
   }
@@ -134,23 +181,23 @@ class _BannerCard extends StatelessWidget {
         child: AppConstants.e2eMode
             ? Container(color: Colors.grey.shade200)
             : CachedNetworkImage(
-          imageUrl: banner.imageUrl,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          placeholder: (context, url) => Shimmer.fromColors(
-            baseColor: Colors.grey.shade300,
-            highlightColor: Colors.grey.shade100,
-            child: Container(
-              color: Colors.white,
-              width: double.infinity,
-              height: double.infinity,
-            ),
-          ),
-          errorWidget: (context, url, error) => Container(
-            color: Colors.grey.shade200,
-            child: const Icon(Icons.error),
-          ),
-        ),
+                imageUrl: banner.imageUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+                placeholder: (context, url) => Shimmer.fromColors(
+                  baseColor: Colors.grey.shade300,
+                  highlightColor: Colors.grey.shade100,
+                  child: Container(
+                    color: Colors.white,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
+                ),
+                errorWidget: (context, url, error) => Container(
+                  color: Colors.grey.shade200,
+                  child: const Icon(Icons.error),
+                ),
+              ),
       ),
     );
   }

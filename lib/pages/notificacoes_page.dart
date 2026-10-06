@@ -119,7 +119,7 @@ class _NotificacoesPageState extends State<NotificacoesPage>
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Material(
-                    color: aviso.lida ? Colors.white : const Color(0xFFFFF0EE),
+                    color: aviso.lida ? const Color(0xFFF2F2F2) : Colors.white,
                     borderRadius: BorderRadius.circular(18),
                     child: ListTile(
                       contentPadding: const EdgeInsets.all(16),
@@ -145,9 +145,8 @@ class _NotificacoesPageState extends State<NotificacoesPage>
                           Text(aviso.corpo),
                           const SizedBox(height: 8),
                           Text(
-                            DateFormat(
-                              'dd/MM/yyyy • HH:mm',
-                            ).format(aviso.recebidaEm.toLocal()),
+                            DateFormat('dd/MM/yyyy • HH:mm')
+                                .format(aviso.recebidaEm.toLocal()),
                             style: const TextStyle(fontSize: 11),
                           ),
                         ],

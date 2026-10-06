@@ -408,18 +408,22 @@ class AuthService with ChangeNotifier {
       throw AuthException('Utilizador não autenticado.');
     }
 
+    final uid = _usuarioId!;
+    final generation = _sessionGeneration;
     try {
       final response = await _dio.put(
-        '/usuarios/$_usuarioId',
+        '/usuarios/$uid',
         data: {'fcmToken': fcmToken.trim()},
       );
+      if (_usuarioId != uid || _sessionGeneration != generation) return;
       final tokenFresquinho = response.data['token'] as String?;
       if (tokenFresquinho != null && tokenFresquinho.isNotEmpty) {
         await _sessionStorage.salvarSessao(
           token: tokenFresquinho,
-          usuarioId: _usuarioId!,
+          usuarioId: uid,
           nome: _nome ?? 'Usuário',
         );
+        if (_usuarioId != uid || _sessionGeneration != generation) return;
         ApiClient().atualizarTokenCache(tokenFresquinho);
         notifyListeners();
       }

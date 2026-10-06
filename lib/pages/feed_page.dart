@@ -1,3 +1,5 @@
+import 'package:nhac/utils/request_outcome.dart';
+import 'package:nhac/pages/feed_images_page.dart';
 import 'package:nhac/components/feed_timestamp.dart';
 import 'package:nhac/components/feed_content.dart';
 import 'package:nhac/services/feed_share_service.dart';
@@ -39,6 +41,16 @@ class _FeedPageState extends State<FeedPage>
   final Set<String> _curtindo = {};
   final Map<String, FeedPostModel> _confirmados = {};
   final Map<String, int> _revisoes = {};
+  final Set<String> _excluidos = {};
+  void _invalidar(String id) {
+    _excluidos.add(id);
+    _posts.removeWhere((p) => p.id == id);
+    for (final lista in _cacheCategorias.values) {
+      lista.removeWhere((p) => p.id == id);
+    }
+    _confirmados.remove(id);
+    _revisoes.remove(id);
+  }
 
   static const List<String> _categorias = [
     'Destaques',
@@ -87,6 +99,7 @@ class _FeedPageState extends State<FeedPage>
       if (!mounted || requestId != _requestId) return;
       setState(() {
         _posts = posts
+            .where((p) => !_excluidos.contains(p.id))
             .map(
               (post) => _revisoes[post.id] != revisoes[post.id]
                   ? (_confirmados[post.id] ?? post)
@@ -123,7 +136,9 @@ class _FeedPageState extends State<FeedPage>
         final ids = _posts.map((post) => post.id).toSet();
         _posts.addAll(
           posts
-              .where((post) => ids.add(post.id))
+              .where(
+                (post) => !_excluidos.contains(post.id) && ids.add(post.id),
+              )
               .map(
                 (post) => _revisoes[post.id] != revisoes[post.id]
                     ? (_confirmados[post.id] ?? post)
@@ -213,7 +228,7 @@ class _FeedPageState extends State<FeedPage>
                           tooltip: 'Publicações salvas',
                           icon: const Icon(
                             Icons.bookmarks_outlined,
-                            color: Color(0xFF5D201C)
+                            color: Color(0xFF5D201C),
                           ),
                           onPressed: () => context.push('/feed-salvos'),
                         ),
@@ -455,7 +470,7 @@ class _FeedPageState extends State<FeedPage>
     );
     if (!mounted) return;
     if (removed == true) {
-      setState(() => _posts.removeWhere((p) => p.id == post.id));
+      setState(() => _invalidar(post.id));
       return;
     }
     final requestId = _requestId;
@@ -474,6 +489,10 @@ class _FeedPageState extends State<FeedPage>
           }
         });
     } catch (e) {
+      if (mounted && recursoExcluido(e)) {
+        setState(() => _invalidar(post.id));
+        return;
+      }
       if (mounted) ErrorUIHelper.handle(context, e);
     }
   }
@@ -511,158 +530,165 @@ class _FeedPageState extends State<FeedPage>
     return GestureDetector(
       onTap: () => _abrirPost(post),
       child: Material(
-          type: MaterialType.transparency,
-          child: Container(
-            margin: EdgeInsets.only(bottom: 12.h),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20.r),
-              boxShadow: [
-                BoxShadow(
-                  color: const Color(0xFF5D201C).withValues(alpha: 0.05),
-                  blurRadius: 10.r,
-                  offset: Offset(0, 4.h),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20.r),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(14.w, 14.h, 14.w, 8.h),
-                    child: Row(
-                      children: [
-                        _buildAvatar(post.avatarUrl),
-                        SizedBox(width: 10.w),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
+        type: MaterialType.transparency,
+        child: Container(
+          margin: EdgeInsets.only(bottom: 12.h),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20.r),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF5D201C).withValues(alpha: 0.05),
+                blurRadius: 10.r,
+                offset: Offset(0, 4.h),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20.r),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Padding(
+                  padding: EdgeInsets.fromLTRB(14.w, 14.h, 14.w, 8.h),
+                  child: Row(
+                    children: [
+                      _buildAvatar(post.avatarUrl),
+                      SizedBox(width: 10.w),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              post.nomeUsuario,
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14.sp,
+                                color: const Color(0xFF5D201C),
+                              ),
+                            ),
+                            FeedTimestamp(post.criadoEm),
+                            if (post.badge != null) ...[
+                              SizedBox(height: 2.h),
                               Text(
-                                post.nomeUsuario,
+                                post.badge!,
                                 style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14.sp,
-                                  color: const Color(0xFF5D201C),
+                                  fontSize: 11.sp,
+                                  color: Colors.grey.shade500,
                                 ),
                               ),
-                              FeedTimestamp(post.criadoEm),
-                              if (post.badge != null) ...[
-                                SizedBox(height: 2.h),
-                                Text(
-                                  post.badge!,
-                                  style: TextStyle(
-                                    fontSize: 11.sp,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                ),
-                              ],
                             ],
-                          ),
+                          ],
                         ),
-                        Icon(
-                          Icons.keyboard_arrow_down,
-                          color: Colors.grey.shade400,
-                          size: 20.r,
-                        ),
-                      ],
-                    ),
+                      ),
+                      Icon(
+                        Icons.keyboard_arrow_down,
+                        color: Colors.grey.shade400,
+                        size: 20.r,
+                      ),
+                    ],
                   ),
+                ),
 
-                  // Sponsor badge
-                  if (post.isPatrocinado && post.sponsorLabel != null)
-                    Padding(
-                      padding: EdgeInsets.only(left: 14.w, bottom: 8.h),
-                      child: Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 8.w,
-                          vertical: 3.h,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFF6961)
-                              .withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(4.r),
-                        ),
-                        child: Text(
-                          post.sponsorLabel!,
-                          style: TextStyle(
-                            fontSize: 11.sp,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFFFF6961),
-                          ),
+                // Sponsor badge
+                if (post.isPatrocinado && post.sponsorLabel != null)
+                  Padding(
+                    padding: EdgeInsets.only(left: 14.w, bottom: 8.h),
+                    child: Container(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 8.w,
+                        vertical: 3.h,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6961).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(4.r),
+                      ),
+                      child: Text(
+                        post.sponsorLabel!,
+                        style: TextStyle(
+                          fontSize: 11.sp,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFFFF6961),
                         ),
                       ),
                     ),
-
-                  // Content text
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 14.w),
-                    child: _buildRichText(post.conteudo, post.hashTags),
                   ),
 
-                  // Images
-                  if (post.imagens.isNotEmpty) ...[
-                    SizedBox(height: 10.h),
-                    _buildImagesGrid(post.imagens),
-                  ],
+                // Content text
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14.w),
+                  child: _buildRichText(post.conteudo, post.hashTags),
+                ),
 
-                  // Top Comment
-                  if (post.topComment != null)
-                    _buildTopComment(post.topComment!),
-
-                  // Footer (likes, comments, share)
-                  Padding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: 12.w,
-                      vertical: 12.h,
+                // Images
+                if (post.imagens.isNotEmpty) ...[
+                  SizedBox(height: 10.h),
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => FeedImagesPage(imagens: post.imagens),
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerRight,
-                            child: _buildFooterAction(
-                              icon: post.curtido
-                                  ? Icons.thumb_up_alt
-                                  : Icons.thumb_up_alt_outlined,
-                              onPressed: _curtindo.contains(post.id)
-                                  ? null
-                                  : () => _curtir(post),
-                              active: post.curtido,
-                              tooltip: post.curtido ? 'Descurtir' : 'Curtir',
-                              label: _formatCount(post.curtidas),
-                            ),
+                    child: _buildImagesGrid(post.imagens),
+                  ),
+                ],
+
+                // Top Comment
+                if (post.topComment != null) _buildTopComment(post.topComment!),
+
+                // Footer (likes, comments, share)
+                Padding(
+                  padding: EdgeInsets.symmetric(
+                    horizontal: 12.w,
+                    vertical: 12.h,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: _buildFooterAction(
+                            icon: post.curtido
+                                ? Icons.thumb_up_alt
+                                : Icons.thumb_up_alt_outlined,
+                            onPressed: _curtindo.contains(post.id)
+                                ? null
+                                : () => _curtir(post),
+                            active: post.curtido,
+                            tooltip: post.curtido ? 'Descurtir' : 'Curtir',
+                            label: _formatCount(post.curtidas),
                           ),
                         ),
-                        SizedBox(width: 12.w),
-                        Expanded(child: _buildFooterAction(
+                      ),
+                      SizedBox(width: 12.w),
+                      Expanded(
+                        child: _buildFooterAction(
                           icon: Icons.chat_bubble_outline,
                           onPressed: () => _abrirPost(post, comentar: true),
                           tooltip: 'Comentar',
                           label: _formatCount(post.comentarios),
-                        )),
-                        SizedBox(width: 12.w),
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: _buildFooterAction(
-                              icon: Icons.share_outlined,
-                              onPressed: () => _compartilhar(post),
-                              tooltip: 'Compartilhar',
-                              label: '',
-                            ),
+                        ),
+                      ),
+                      SizedBox(width: 12.w),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _buildFooterAction(
+                            icon: Icons.share_outlined,
+                            onPressed: () => _compartilhar(post),
+                            tooltip: 'Compartilhar',
+                            label: '',
                           ),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
+        ),
       ),
     );
   }
@@ -858,15 +884,26 @@ class _FeedPageState extends State<FeedPage>
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 20.r, color: active ? const Color(0xFFFF6961) : Colors.grey.shade500),
+            Icon(
+              icon,
+              size: 20.r,
+              color: active ? const Color(0xFFFF6961) : Colors.grey.shade500,
+            ),
             if (label.isNotEmpty) ...[
               SizedBox(width: 5.w),
-              Flexible(child: Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 13.sp, color: active ? const Color(0xFFFF6961) : Colors.grey.shade600),
-              )),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: active
+                        ? const Color(0xFFFF6961)
+                        : Colors.grey.shade600,
+                  ),
+                ),
+              ),
             ],
           ],
         ),

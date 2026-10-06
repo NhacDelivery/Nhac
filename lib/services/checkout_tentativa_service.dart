@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:nhac/globals/app_constants.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
@@ -16,12 +17,15 @@ class CheckoutTentativaService {
   final PedidoRepository _repository;
   static final Set<String> _emAndamento = {};
 
-  CheckoutTentativaService(
-      {FlutterSecureStorage? storage, PedidoRepository? repository})
-      : _storage = storage ??
-            const FlutterSecureStorage(
-                aOptions: AndroidOptions(encryptedSharedPreferences: true)),
-        _repository = repository ?? PedidoRepository();
+  CheckoutTentativaService({
+    FlutterSecureStorage? storage,
+    PedidoRepository? repository,
+  }) : _storage =
+           storage ??
+           const FlutterSecureStorage(
+             aOptions: AndroidOptions(encryptedSharedPreferences: true),
+           ),
+       _repository = repository ?? PedidoRepository();
 
   String _chave(String usuarioId) =>
       'nhac_checkout_pendente:${AppConstants.apiBaseUrl}:$usuarioId';
@@ -32,28 +36,35 @@ class CheckoutTentativaService {
     final dados = Map<String, dynamic>.from(jsonDecode(raw) as Map);
     if (dados['key'] is! String || dados['payload'] is! Map) {
       throw StateError(
-          'Não foi possível recuperar a tentativa anterior. Consulte seus pedidos.');
+        'Não foi possível recuperar a tentativa anterior. Consulte seus pedidos.',
+      );
     }
     return dados;
   }
 
   Future<PedidoCriadoResponse> enviar(
-      String usuarioId, CriarPedidoRequest pedido) async {
+    String usuarioId,
+    CriarPedidoRequest pedido,
+  ) async {
     if (!_emAndamento.add(usuarioId)) {
       throw StateError('Aguarde a confirmação do pedido.');
     }
     try {
       if (await carregar(usuarioId) != null) {
         throw StateError(
-            'Verifique a tentativa anterior antes de enviar outro pedido.');
+          'Verifique a tentativa anterior antes de enviar outro pedido.',
+        );
       }
       final tentativa = <String, dynamic>{
         'key': const Uuid().v4(),
-        'payload': pedido.toMap()
+        'payload': pedido.toMap(),
+        'carrinho': pedido.origemCarrinho,
       };
       // Se a persistência falhar, o POST não é enviado.
       await _storage.write(
-          key: _chave(usuarioId), value: jsonEncode(tentativa));
+        key: _chave(usuarioId),
+        value: jsonEncode(tentativa),
+      );
       return await _executar(usuarioId, tentativa);
     } finally {
       _emAndamento.remove(usuarioId);
@@ -74,7 +85,9 @@ class CheckoutTentativaService {
   }
 
   Future<PedidoCriadoResponse> _executar(
-      String usuarioId, Map<String, dynamic> tentativa) async {
+    String usuarioId,
+    Map<String, dynamic> tentativa,
+  ) async {
     if (tentativa['pedidoId'] case final String pedidoId
         when pedidoId.isNotEmpty) {
       return PedidoCriadoResponse(pedidoId: pedidoId, replay: true);
@@ -86,11 +99,14 @@ class CheckoutTentativaService {
       );
       if (resposta.pedidoId.isEmpty) {
         throw StateError(
-            'Resposta sem identificação do pedido. Verifique novamente.');
+          'Resposta sem identificação do pedido. Verifique novamente.',
+        );
       }
       tentativa['pedidoId'] = resposta.pedidoId;
       await _storage.write(
-          key: _chave(usuarioId), value: jsonEncode(tentativa));
+        key: _chave(usuarioId),
+        value: jsonEncode(tentativa),
+      );
       return resposta;
     } on CustomCheckoutException catch (e) {
       // Conflito de payload não prova que o pedido anterior deixou de existir.
