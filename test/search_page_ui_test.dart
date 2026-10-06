@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:mocktail/mocktail.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nhac/repositories/produto_repository.dart';
@@ -22,7 +23,9 @@ void main() {
     MockProdutos produtos,
     MockLojas lojas, {
     String? categoria,
+    List<String> categorias = const ['Bebidas'],
   }) async {
+    when(() => produtos.buscarCategorias()).thenAnswer((_) async => categorias);
     await tester.pumpWidget(
       ScreenUtilInit(
         designSize: const Size(390, 844),
@@ -53,9 +56,8 @@ void main() {
     (tester) async {
       final produtos = MockProdutos();
       final lojas = MockLojas();
-      when(
-        () => produtos.buscarProdutosPorNome('suco'),
-      ).thenAnswer((_) async => [produto]);
+      when(() => produtos.buscarProdutosPorNome('suco'))
+          .thenAnswer((_) async => [produto]);
       when(() => lojas.buscarLojasPorNome('suco')).thenAnswer((_) async => []);
       await montar(tester, produtos, lojas);
       await tester.enterText(find.byType(TextField), 'suco');
@@ -74,9 +76,8 @@ void main() {
   ) async {
     final produtos = MockProdutos();
     final lojas = MockLojas();
-    when(
-      () => produtos.buscarPorCategoria('Bebidas'),
-    ).thenAnswer((_) async => [produto]);
+    when(() => produtos.buscarPorCategoria('Bebidas'))
+        .thenAnswer((_) async => [produto]);
     await montar(tester, produtos, lojas, categoria: 'Bebidas');
     expect(find.text('Suco natural'), findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -88,13 +89,11 @@ void main() {
       final produtos = MockProdutos();
       final lojas = MockLojas();
       final antiga = Completer<List<ProdutosModel>>();
-      when(
-        () => produtos.buscarProdutosPorNome('antiga'),
-      ).thenAnswer((_) => antiga.future);
+      when(() => produtos.buscarProdutosPorNome('antiga'))
+          .thenAnswer((_) => antiga.future);
       when(() => lojas.buscarLojasPorNome(any())).thenAnswer((_) async => []);
-      when(
-        () => produtos.buscarProdutosPorNome('nova'),
-      ).thenAnswer((_) async => [produto]);
+      when(() => produtos.buscarProdutosPorNome('nova'))
+          .thenAnswer((_) async => [produto]);
       await montar(tester, produtos, lojas);
       await tester.enterText(find.byType(TextField), 'antiga');
       await tester.pump(const Duration(milliseconds: 450));
@@ -109,9 +108,8 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       await tester.pump();
       expect(find.text('Suco natural'), findsOneWidget);
-      when(
-        () => produtos.buscarProdutosPorNome('falha'),
-      ).thenAnswer((_) async => throw Exception('Sem rede'));
+      when(() => produtos.buscarProdutosPorNome('falha'))
+          .thenAnswer((_) async => throw Exception('Sem rede'));
       await tester.enterText(find.byType(TextField), 'falha');
       await tester.pump(const Duration(milliseconds: 450));
       await tester.pump();
@@ -158,72 +156,101 @@ void main() {
   });
 
   testWidgets(
-      'falha de lojas preserva produtos e tenta recuperar somente fonte pendente',
-      (tester) async {
-    final produtos = MockProdutos();
-    final lojas = MockLojas();
-    when(() => produtos.buscarProdutosPorNome('suco'))
-        .thenAnswer((_) async => [produto]);
-    when(() => lojas.buscarLojasPorNome('suco'))
-        .thenThrow(Exception('offline'));
-    await montar(tester, produtos, lojas);
-    await tester.enterText(find.byType(TextField), 'suco');
-    await tester.pump(const Duration(milliseconds: 450));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 1));
-    expect(find.text('Suco natural'), findsOneWidget);
-    expect(find.text('Não foi possível carregar as lojas.'), findsOneWidget);
-    when(() => lojas.buscarLojasPorNome('suco')).thenAnswer((_) async => []);
-    await tester.tap(find.text('Tentar novamente'));
-    await tester.pump();
-    expect(find.text('Não foi possível carregar as lojas.'), findsNothing);
-    verify(() => produtos.buscarProdutosPorNome('suco')).called(1);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+    'falha de lojas preserva produtos e tenta recuperar somente fonte pendente',
+    (tester) async {
+      final produtos = MockProdutos();
+      final lojas = MockLojas();
+      when(() => produtos.buscarProdutosPorNome('suco'))
+          .thenAnswer((_) async => [produto]);
+      when(() => lojas.buscarLojasPorNome('suco'))
+          .thenThrow(Exception('offline'));
+      await montar(tester, produtos, lojas);
+      await tester.enterText(find.byType(TextField), 'suco');
+      await tester.pump(const Duration(milliseconds: 450));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.text('Suco natural'), findsOneWidget);
+      expect(find.text('Não foi possível carregar as lojas.'), findsOneWidget);
+      when(() => lojas.buscarLojasPorNome('suco')).thenAnswer((_) async => []);
+      await tester.tap(find.text('Tentar novamente'));
+      await tester.pump();
+      expect(find.text('Não foi possível carregar as lojas.'), findsNothing);
+      verify(() => produtos.buscarProdutosPorNome('suco')).called(1);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
-  testWidgets('carregar mais busca página seguinte e não duplica produtos',
-      (tester) async {
+  testWidgets('carregar mais busca página seguinte e não duplica produtos', (
+    tester,
+  ) async {
     final produtos = MockProdutos();
     final lojas = MockLojas();
     final primeira = List.generate(
-        20,
-        (i) => ProdutosModel(
-            id: 'p$i', nome: 'Suco $i', preco: 12, categoriaMenu: 'Bebidas'));
+      20,
+      (i) => ProdutosModel(
+        id: 'p$i',
+        nome: 'Suco $i',
+        preco: 12,
+        categoriaMenu: 'Bebidas',
+      ),
+    );
     when(() => produtos.buscarProdutosPorNome('suco'))
         .thenAnswer((_) async => primeira);
-    when(() => produtos.buscarProdutosPorNome('suco', page: 1))
-        .thenAnswer((_) async => [
-              primeira.last,
-              ProdutosModel(
-                  id: 'p20',
-                  nome: 'Suco extra',
-                  preco: 12,
-                  categoriaMenu: 'Bebidas')
-            ]);
+    when(() => produtos.buscarProdutosPorNome('suco', page: 1)).thenAnswer(
+      (_) async => [
+        primeira.last,
+        ProdutosModel(
+          id: 'p20',
+          nome: 'Suco extra',
+          preco: 12,
+          categoriaMenu: 'Bebidas',
+        ),
+      ],
+    );
     when(() => lojas.buscarLojasPorNome('suco')).thenAnswer((_) async => []);
     await montar(tester, produtos, lojas);
     await tester.enterText(find.byType(TextField), 'suco');
     await tester.pump(const Duration(milliseconds: 450));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    await tester.scrollUntilVisible(find.text('Carregar mais resultados'), 600,
-        scrollable: find
-            .descendant(
-                of: find.byType(ListView).last,
-                matching: find.byType(Scrollable))
-            .first);
+    await tester.scrollUntilVisible(
+      find.text('Carregar mais resultados'),
+      600,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.tap(find.text('Carregar mais resultados'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
-    await tester.scrollUntilVisible(find.text('Suco extra'), 600,
-        scrollable: find
-            .descendant(
-                of: find.byType(ListView).last,
-                matching: find.byType(Scrollable))
-            .first);
+    await tester.scrollUntilVisible(
+      find.text('Suco extra'),
+      600,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView).last,
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     expect(find.text('Suco extra'), findsOneWidget);
     expect(find.text('Carregar mais resultados'), findsNothing);
     verify(() => produtos.buscarProdutosPorNome('suco', page: 1)).called(1);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  testWidgets('sugestões exibem somente categorias retornadas pelo catálogo', (
+    tester,
+  ) async {
+    final produtos = MockProdutos();
+    final lojas = MockLojas();
+    await montar(tester, produtos, lojas, categorias: ['Peixes']);
+    expect(find.text('Peixes'), findsOneWidget);
+    expect(find.text('Combos'), findsNothing);
+    expect(find.text('Pratos Executivos'), findsNothing);
+    expect(find.text('Bebidas'), findsNothing);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 }

@@ -1,8 +1,10 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
+
 import '../models/produto/produtos.dart';
 import '../models/loja/lojas.dart';
 import '../components/product_card.dart';
@@ -57,15 +59,8 @@ class _SearchPageState extends State<SearchPage>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
 
-  // Valores devem bater exatamente com a coluna `categoria_menu` do banco,
-  // já que o backend filtra produtos/lojas por valor exato.
-  static const _categoriasSugeridas = [
-    {'nome': 'Combos', 'icon': Icons.fastfood_rounded},
-    {'nome': 'Pratos Executivos', 'icon': Icons.restaurant_rounded},
-    {'nome': 'Acompanhamentos', 'icon': Icons.rice_bowl_rounded},
-    {'nome': 'Sobremesas', 'icon': Icons.icecream_rounded},
-    {'nome': 'Bebidas', 'icon': Icons.local_drink_rounded},
-  ];
+  List<String> _categoriasSugeridas = [];
+  bool _categoriasCarregando = true, _erroCategorias = false;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
@@ -100,6 +95,7 @@ class _SearchPageState extends State<SearchPage>
 
     _carregarHistorico();
     _carregarSugestoes();
+    _carregarCategorias();
     _searchController.addListener(() {
       final temTexto = _searchController.text.isNotEmpty;
       if (temTexto != _temTexto) setState(() => _temTexto = temTexto);
@@ -154,14 +150,32 @@ class _SearchPageState extends State<SearchPage>
     );
   }
 
+  Future<void> _carregarCategorias() async {
+    if (mounted)
+      setState(() {
+        _categoriasCarregando = true;
+        _erroCategorias = false;
+      });
+    try {
+      final categorias = await _produtoRepository.buscarCategorias();
+      if (mounted) setState(() => _categoriasSugeridas = categorias);
+    } catch (_) {
+      if (mounted) setState(() => _erroCategorias = true);
+    } finally {
+      if (mounted) setState(() => _categoriasCarregando = false);
+    }
+  }
+
   Future<void> _carregarSugestoes() async {
     try {
       final produtos = await _produtoRepository.buscarNecessidades();
       if (mounted) {
-        setState(() => _sugestoesReais = produtos
-            .where((p) => p.lojaAberta && p.nome.trim().isNotEmpty)
-            .take(4)
-            .toList());
+        setState(
+          () => _sugestoesReais = produtos
+              .where((p) => p.lojaAberta && p.nome.trim().isNotEmpty)
+              .take(4)
+              .toList(),
+        );
       }
     } catch (_) {
       // Sugestões são opcionais; pesquisa e categorias continuam disponíveis.
@@ -228,7 +242,8 @@ class _SearchPageState extends State<SearchPage>
     try {
       final resultado = await _buscarTudo(categoria, somenteCategoria: true);
       if (!mounted || versao != _versaoBusca) return;
-      if (resultado.erros.isNotEmpty && _ultimoResultado != null &&
+      if (resultado.erros.isNotEmpty &&
+          _ultimoResultado != null &&
           !_ultimoResultado!.vazio) {
         _ultimoErro = resultado.erros.values.join(' ');
         _estadoBusca = EstadoConteudo.erro;
@@ -249,7 +264,8 @@ class _SearchPageState extends State<SearchPage>
           lojas: const [],
           lojaAberta: _statusDasLojas(produtos),
         ).catchError(
-            (Object e) => debugPrint('Falha ao salvar categoria local: $e'));
+          (Object e) => debugPrint('Falha ao salvar categoria local: $e'),
+        );
       }
     } catch (e) {
       if (!mounted || versao != _versaoBusca) return;
@@ -335,7 +351,8 @@ class _SearchPageState extends State<SearchPage>
       final resultado = await _buscarTudo(termo);
       if (!mounted || versao != _versaoBusca) return;
 
-      if (resultado.erros.isNotEmpty && _ultimoResultado != null &&
+      if (resultado.erros.isNotEmpty &&
+          _ultimoResultado != null &&
           !_ultimoResultado!.vazio) {
         _ultimoErro = resultado.erros.values.join(' ');
         _estadoBusca = EstadoConteudo.erro;
@@ -379,62 +396,70 @@ class _SearchPageState extends State<SearchPage>
     _ResultadoBusca? anterior,
   }) async {
     final categoria = somenteCategoria ? termo : _resolverCategoria(termo);
-    final paginas = anterior?.proximasPaginas ??
+    final paginas =
+        anterior?.proximasPaginas ??
         {
           if (!somenteCategoria) 'nome': 0,
           if (categoria != null) 'categoria': 0,
           if (!somenteCategoria) 'lojas': 0,
         };
     final produtos = {
-      for (final p in anterior?.produtos ?? <ProdutosModel>[]) p.id: p
+      for (final p in anterior?.produtos ?? <ProdutosModel>[]) p.id: p,
     };
     final lojas = {for (final l in anterior?.lojas ?? <LojasModel>[]) l.id: l};
     final erros = <String, String>{};
     final proximas = <String, int>{};
-    await Future.wait(paginas.entries.map((entry) async {
-      final fonte = entry.key;
-      final pagina = entry.value;
-      try {
-        if (fonte == 'lojas') {
-          final novos = pagina == 0
-              ? await _lojaRepository.buscarLojasPorNome(termo)
-              : await _lojaRepository.buscarLojasPorNome(termo, page: pagina);
-          for (final loja in novos) {
-            lojas[loja.id] = loja;
+    await Future.wait(
+      paginas.entries.map((entry) async {
+        final fonte = entry.key;
+        final pagina = entry.value;
+        try {
+          if (fonte == 'lojas') {
+            final novos = pagina == 0
+                ? await _lojaRepository.buscarLojasPorNome(termo)
+                : await _lojaRepository.buscarLojasPorNome(termo, page: pagina);
+            for (final loja in novos) {
+              lojas[loja.id] = loja;
+            }
+            if (novos.length == 50) proximas[fonte] = pagina + 1;
+          } else {
+            final novos = fonte == 'nome'
+                ? (pagina == 0
+                      ? await _produtoRepository.buscarProdutosPorNome(termo)
+                      : await _produtoRepository.buscarProdutosPorNome(
+                          termo,
+                          page: pagina,
+                        ))
+                : (pagina == 0
+                      ? await _produtoRepository.buscarPorCategoria(categoria!)
+                      : await _produtoRepository.buscarPorCategoria(
+                          categoria!,
+                          page: pagina,
+                        ));
+            for (final produto in novos) {
+              produtos[produto.id] = produto;
+            }
+            if (novos.length == (fonte == 'nome' ? 20 : 50)) {
+              proximas[fonte] = pagina + 1;
+            }
           }
-          if (novos.length == 50) proximas[fonte] = pagina + 1;
-        } else {
-          final novos = fonte == 'nome'
-              ? (pagina == 0
-                  ? await _produtoRepository.buscarProdutosPorNome(termo)
-                  : await _produtoRepository.buscarProdutosPorNome(termo,
-                      page: pagina))
-              : (pagina == 0
-                  ? await _produtoRepository.buscarPorCategoria(categoria!)
-                  : await _produtoRepository.buscarPorCategoria(categoria!,
-                      page: pagina));
-          for (final produto in novos) {
-            produtos[produto.id] = produto;
-          }
-          if (novos.length == (fonte == 'nome' ? 20 : 50)) {
-            proximas[fonte] = pagina + 1;
-          }
+        } catch (_) {
+          erros[fonte] = fonte == 'lojas'
+              ? 'Não foi possível carregar as lojas.'
+              : fonte == 'nome'
+              ? 'Não foi possível carregar os produtos por nome.'
+              : 'Não foi possível carregar os produtos da categoria.';
+          proximas[fonte] = pagina;
         }
-      } catch (_) {
-        erros[fonte] = fonte == 'lojas'
-            ? 'Não foi possível carregar as lojas.'
-            : fonte == 'nome'
-                ? 'Não foi possível carregar os produtos por nome.'
-                : 'Não foi possível carregar os produtos da categoria.';
-        proximas[fonte] = pagina;
-      }
-    }));
+      }),
+    );
     return _ResultadoBusca(
-        produtos: produtos.values.toList(),
-        lojas: lojas.values.toList(),
-        lojaAberta: _statusDasLojas(produtos.values.toList()),
-        erros: erros,
-        proximasPaginas: proximas);
+      produtos: produtos.values.toList(),
+      lojas: lojas.values.toList(),
+      lojaAberta: _statusDasLojas(produtos.values.toList()),
+      erros: erros,
+      proximasPaginas: proximas,
+    );
   }
 
   Future<void> _carregarMais() async {
@@ -443,8 +468,11 @@ class _SearchPageState extends State<SearchPage>
     }
     final versao = _versaoBusca;
     setState(() => _carregandoMais = true);
-    final resultado = await _buscarTudo(_termoAtual!,
-        somenteCategoria: _buscaCategoria, anterior: _ultimoResultado);
+    final resultado = await _buscarTudo(
+      _termoAtual!,
+      somenteCategoria: _buscaCategoria,
+      anterior: _ultimoResultado,
+    );
     if (!mounted || versao != _versaoBusca) return;
     setState(() {
       _ultimoResultado = resultado;
@@ -452,9 +480,8 @@ class _SearchPageState extends State<SearchPage>
     });
   }
 
-  static final Map<String, String> _categoriasConhecidas = {
-    for (final cat in _categoriasSugeridas)
-      _normalizarTexto(cat['nome'] as String): cat['nome'] as String,
+  Map<String, String> get _categoriasConhecidas => {
+    for (final cat in _categoriasSugeridas) _normalizarTexto(cat): cat,
   };
 
   static String _normalizarTexto(String texto) {
@@ -601,8 +628,8 @@ class _SearchPageState extends State<SearchPage>
       mensagemErro: _ultimoErro,
       aoTentarNovamente: _termoAtual != null
           ? () => _buscaCategoria
-              ? _buscarCategoriaComCache(_termoAtual!)
-              : _buscarComCache(_termoAtual!)
+                ? _buscarCategoriaComCache(_termoAtual!)
+                : _buscarComCache(_termoAtual!)
           : null,
       builderErro: (mensagem, tentarNovamente) => SingleChildScrollView(
         child: Padding(
@@ -702,7 +729,9 @@ class _SearchPageState extends State<SearchPage>
                             _versaoBusca++;
                             _carregandoMais = false;
                             if (!_searchController
-                                .value.composing.isCollapsed) {
+                                .value
+                                .composing
+                                .isCollapsed) {
                               return;
                             }
                             if (texto.trim().isEmpty) {
@@ -873,9 +902,9 @@ class _SearchPageState extends State<SearchPage>
   }
 
   Widget _buildSuggestionPlaceholder() => Container(
-        color: _corAccentClaro,
-        child: Icon(Icons.restaurant_menu_rounded, color: _corPrimaria),
-      );
+    color: _corAccentClaro,
+    child: Icon(Icons.restaurant_menu_rounded, color: _corPrimaria),
+  );
 
   Widget _buildSuggestionItem(
     IconData icon,
@@ -959,11 +988,11 @@ class _SearchPageState extends State<SearchPage>
           ),
           SizedBox(height: 16.h),
           ..._historico.asMap().entries.map(
-                (entry) => _buildAnimatedItem(
-                  _buildSuggestionItem(Icons.history, entry.value),
-                  entry.key + 1,
-                ),
-              ),
+            (entry) => _buildAnimatedItem(
+              _buildSuggestionItem(Icons.history, entry.value),
+              entry.key + 1,
+            ),
+          ),
           SizedBox(height: 24.h),
         ],
         if (_sugestoesReais.isNotEmpty) ...[
@@ -991,6 +1020,17 @@ class _SearchPageState extends State<SearchPage>
           6,
         ),
         SizedBox(height: 16.h),
+        if (_categoriasCarregando) const LinearProgressIndicator(),
+        if (_erroCategorias)
+          TextButton.icon(
+            onPressed: _carregarCategorias,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Recarregar categorias'),
+          ),
+        if (!_categoriasCarregando &&
+            !_erroCategorias &&
+            _categoriasSugeridas.isEmpty)
+          const Text('Nenhuma categoria disponível no momento.'),
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -1005,7 +1045,7 @@ class _SearchPageState extends State<SearchPage>
             final cat = _categoriasSugeridas[i];
             return _buildAnimatedItem(
               GestureDetector(
-                onTap: () => _buscarPorCategoriaInicial(cat['nome'] as String),
+                onTap: () => _buscarPorCategoriaInicial(cat),
                 child: Container(
                   padding: EdgeInsets.symmetric(horizontal: 14.w),
                   decoration: BoxDecoration(
@@ -1029,7 +1069,7 @@ class _SearchPageState extends State<SearchPage>
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          cat['icon'] as IconData,
+                          Icons.restaurant_menu_rounded,
                           color: _corPrimaria,
                           size: 18.r,
                         ),
@@ -1037,7 +1077,7 @@ class _SearchPageState extends State<SearchPage>
                       SizedBox(width: 10.w),
                       Expanded(
                         child: Text(
-                          cat['nome'] as String,
+                          cat,
                           style: TextStyle(
                             fontSize: 13.sp,
                             fontWeight: FontWeight.w600,
@@ -1127,8 +1167,9 @@ class _SearchPageState extends State<SearchPage>
       children: [
         for (final erro in resultado.erros.values)
           BannerErroInline(
-              mensagem: erro,
-              aoTentarNovamente: _carregandoMais ? null : _carregarMais),
+            mensagem: erro,
+            aoTentarNovamente: _carregandoMais ? null : _carregarMais,
+          ),
         if (mostrarLojas) ...[
           Text(
             'Lojas',
@@ -1181,13 +1222,14 @@ class _SearchPageState extends State<SearchPage>
         ],
         if (resultado.proximasPaginas.isNotEmpty)
           Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: TextButton(
-                onPressed: _carregandoMais ? null : _carregarMais,
-                child: Text(_carregandoMais
-                    ? 'Carregando...'
-                    : 'Carregar mais resultados'),
-              )),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: TextButton(
+              onPressed: _carregandoMais ? null : _carregarMais,
+              child: Text(
+                _carregandoMais ? 'Carregando...' : 'Carregar mais resultados',
+              ),
+            ),
+          ),
       ],
     );
   }
