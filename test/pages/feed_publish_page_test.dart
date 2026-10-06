@@ -5,6 +5,9 @@ import 'package:nhac/services/auth_service.dart';
 
 import 'dart:async';
 
+import 'package:nhac/globals/exceptions.dart';
+import 'package:nhac/services/feed_tentativa_service.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -220,5 +223,58 @@ void main() {
     await tester.tap(find.text('Continuar editando'));
     await tester.pumpAndSettle();
     expect(find.text('Rascunho'), findsOneWidget);
+  });
+  testWidgets('rejeição definitiva libera edição e cria uma tentativa nova', (
+    tester,
+  ) async {
+    when(
+      () => repository.criarPost(
+        conteudo: any(named: 'conteudo'),
+        imagens: any(named: 'imagens'),
+        hashTags: any(named: 'hashTags'),
+        lojaId: any(named: 'lojaId'),
+        idempotencyKey: any(named: 'idempotencyKey'),
+      ),
+    ).thenThrow(AppException('Texto inválido', statusCode: 422));
+    await abrir(tester);
+    await tester.enterText(
+      find.byKey(const Key('feed.publish.conteudo')),
+      'Texto rejeitado',
+    );
+    await publicar(tester);
+    await tester.pumpAndSettle();
+    expect(
+      await const FeedTentativaService().carregar('feed-test-user', 'post'),
+      isNull,
+    );
+    tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position
+        .jumpTo(0);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(const Key('feed.publish.conteudo')))
+          .enabled,
+      isTrue,
+    );
+    await tester.enterText(
+      find.byKey(const Key('feed.publish.conteudo')),
+      'Texto corrigido',
+    );
+    await publicar(tester);
+    await tester.pumpAndSettle();
+    final calls = verify(
+      () => repository.criarPost(
+        conteudo: captureAny(named: 'conteudo'),
+        imagens: any(named: 'imagens'),
+        hashTags: any(named: 'hashTags'),
+        lojaId: any(named: 'lojaId'),
+        idempotencyKey: captureAny(named: 'idempotencyKey'),
+      ),
+    ).captured;
+    expect(calls[0], 'Texto rejeitado');
+    expect(calls[2], 'Texto corrigido');
+    expect(calls[1], isNot(calls[3]));
   });
 }

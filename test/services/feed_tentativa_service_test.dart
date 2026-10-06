@@ -43,4 +43,25 @@ void main() {
       expect(a['key'], isNot(b['key']));
     },
   );
+  test(
+    'avaliação incerta restaura nota, comentário e URLs sem mudar o envio',
+    () async {
+      const service = FeedTentativaService();
+      final payload = {
+        'nota': 4,
+        'comentario': 'Chegou quente',
+        'imagens': ['https://example.com/foto.jpg'],
+      };
+      await service.preparar('u1', 'avaliacao:pedido:produto', payload);
+      expect(
+        (await const FeedTentativaService().carregar(
+          'u1',
+          'avaliacao:pedido:produto',
+        ))!['payload'],
+        payload,
+      );
+      expect(await service.carregar('u2', 'avaliacao:pedido:produto'), isNull);
+      expect(await service.carregar('u1', 'avaliacao:outro:produto'), isNull);
+    },
+  );
 }
