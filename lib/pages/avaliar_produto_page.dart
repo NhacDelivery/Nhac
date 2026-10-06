@@ -1,4 +1,6 @@
 import 'package:provider/provider.dart';
+import 'package:dio/dio.dart';
+import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/feed_tentativa_service.dart';
 import 'package:nhac/utils/request_outcome.dart';
@@ -142,6 +144,19 @@ class _AvaliarProdutoPageState extends State<AvaliarProdutoPage> {
       await _tentativas.concluir(uid, _escopo);
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
+      final status = e is DioException
+          ? e.response?.statusCode
+          : e is AppException
+          ? e.statusCode
+          : null;
+      if (status == 409) {
+        // Pode haver uma avaliação confirmada em outro dispositivo.
+        await _restaurar();
+        if (_existente != null) {
+          if (mounted) setState(() => _error = null);
+          return;
+        }
+      }
       if (rejeicaoDefinitiva(e)) {
         final uid = _uid;
         if (uid != null) await _tentativas.concluir(uid, _escopo);

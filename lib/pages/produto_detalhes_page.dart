@@ -318,7 +318,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
       return;
     }
 
-    if (loja == null) return;
+    if (!mounted || loja == null) return;
 
     setState(() {
       _isNavigatingToLoja = true;
