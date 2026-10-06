@@ -211,7 +211,10 @@ class _FeedPageState extends State<FeedPage>
                       if (!widget.salvos)
                         IconButton(
                           tooltip: 'Publicações salvas',
-                          icon: const Icon(Icons.bookmarks_outlined),
+                          icon: const Icon(
+                            Icons.bookmarks_outlined,
+                            color: Color(0xFF5D201C)
+                          ),
                           onPressed: () => context.push('/feed-salvos'),
                         ),
                       if (!widget.salvos)
