@@ -511,7 +511,10 @@ class _FeedPageState extends State<FeedPage>
       final index = _posts.indexWhere((p) => p.id == post.id);
       if (index >= 0) setState(() => _posts[index] = updated);
     } catch (e) {
-      if (mounted) ErrorUIHelper.handle(context, e);
+      if (mounted) {
+        if (recursoExcluido(e)) setState(() => _invalidar(post.id));
+        ErrorUIHelper.handle(context, e);
+      }
     } finally {
       _curtindo.remove(post.id);
       if (mounted) setState(() {});

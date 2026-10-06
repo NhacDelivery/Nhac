@@ -107,15 +107,26 @@ class _ProfileContentState extends State<ProfileContent>
   Future<void> _carregarPreferencias() async {
     final usuarioId = context.read<AuthService>().usuarioId;
     if (usuarioId == null) return;
-    final salvas = await LocalCacheService.carregarPreferenciasComida(
-      usuarioId,
-    );
-    if (mounted && context.read<AuthService>().usuarioId == usuarioId)
-      setState(() {
-        _preferencias = salvas;
-        _contaPreferencias = usuarioId;
-        _preferenciasCarregadas = true;
-      });
+    try {
+      final salvas = await LocalCacheService.carregarPreferenciasComida(
+        usuarioId,
+      );
+      if (mounted && context.read<AuthService>().usuarioId == usuarioId)
+        setState(() {
+          _preferencias = salvas;
+          _contaPreferencias = usuarioId;
+          _preferenciasCarregadas = true;
+        });
+    } catch (_) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Não foi possível carregar suas preferências. Atualize o perfil para tentar novamente.',
+            ),
+          ),
+        );
+    }
   }
 
   Future<void> _alternarPreferencia(String nome) async {
@@ -158,6 +169,7 @@ class _ProfileContentState extends State<ProfileContent>
     await Future.wait([
       context.read<UserProvider>().carregarDadosUsuario(),
       _carregarEstatisticas(),
+      _carregarPreferencias(),
     ]);
   }
 

@@ -46,15 +46,13 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
     try {
       final data = await AvaliacaoRepository().minhasDados(widget.pedidoId);
       if (mounted)
-        setState(
-          () => {
-            _avaliacoesProdutos = {
-              for (final a in data) a['produtoId'] as String: a,
-            },
-            _avaliacoesConferidas = true,
-            _erroAvaliacoes = null,
-          },
-        );
+        setState(() {
+          _avaliacoesProdutos = {
+            for (final a in data) a['produtoId'] as String: a,
+          };
+          _avaliacoesConferidas = true;
+          _erroAvaliacoes = null;
+        });
     } catch (_) {
       if (mounted)
         setState(
@@ -426,7 +424,11 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                               SizedBox(width: 8.w),
                               Expanded(
                                 child: Text(
-                                  item.nome,
+                                  item.adicionais.isEmpty
+                                      ? item.nome
+                                      : item.nome +
+                                            '\n' +
+                                            item.adicionais.join(' • '),
                                   style: TextStyle(
                                     fontSize: 13.sp,
                                     color: Colors.grey.shade800,

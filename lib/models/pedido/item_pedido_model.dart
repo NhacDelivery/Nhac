@@ -5,6 +5,7 @@ class ItemPedidoModel {
   final String imagemUrl;
   final double preco;
   final int quantidade;
+  final List<String> adicionais;
 
   const ItemPedidoModel({
     required this.id,
@@ -13,6 +14,7 @@ class ItemPedidoModel {
     required this.imagemUrl,
     required this.preco,
     required this.quantidade,
+    this.adicionais = const [],
   });
 
   factory ItemPedidoModel.fromMap(Map<String, dynamic> map) {
@@ -23,11 +25,17 @@ class ItemPedidoModel {
       imagemUrl: map['imagemUrl']?.toString() ?? '',
       preco: num.tryParse(map['preco']?.toString() ?? '0')?.toDouble() ?? 0,
       quantidade: int.tryParse(map['quantidade']?.toString() ?? '1') ?? 1,
+      adicionais: List<String>.from(map['adicionais'] as List? ?? []),
     );
   }
 
   Map<String, dynamic> toMap() => {
-    'id': id, 'produtoId': produtoId, 'nome': nome,
-    'imagemUrl': imagemUrl, 'preco': preco, 'quantidade': quantidade,
+    'adicionais': adicionais,
+    'id': id,
+    'produtoId': produtoId,
+    'nome': nome,
+    'imagemUrl': imagemUrl,
+    'preco': preco,
+    'quantidade': quantidade,
   };
 }

@@ -46,22 +46,18 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
     try {
       final p = await _produtoRepository.buscarPorId(widget.produto.id);
       if (mounted)
-        setState(
-          () => {
-            _produtoCompleto = p,
-            _carregandoAdicionais = false,
-            _erroAdicionais = null,
-          },
-        );
+        setState(() {
+          _produtoCompleto = p;
+          _carregandoAdicionais = false;
+          _erroAdicionais = null;
+        });
     } catch (_) {
       if (mounted)
-        setState(
-          () => {
-            _carregandoAdicionais = false,
-            _erroAdicionais =
-                'Não foi possível conferir os adicionais. Tente novamente.',
-          },
-        );
+        setState(() {
+          _carregandoAdicionais = false;
+          _erroAdicionais =
+              'Não foi possível conferir os adicionais. Tente novamente.';
+        });
     }
   }
 

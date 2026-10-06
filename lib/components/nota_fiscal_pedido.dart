@@ -51,7 +51,9 @@ class NotaFiscalDados {
     final itens = pedido.itens
         .map(
           (i) => NotaFiscalItem(
-            nome: i.nome,
+            nome: i.adicionais.isEmpty
+                ? i.nome
+                : i.nome + '\n' + i.adicionais.join(' • '),
             preco: i.preco,
             quantidade: i.quantidade,
           ),
@@ -250,10 +252,7 @@ class _LinhaValor extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: Text(
-              rotulo,
-              style: _estilo(13.sp, peso: FontWeight.w600),
-            ),
+            child: Text(rotulo, style: _estilo(13.sp, peso: FontWeight.w600)),
           ),
           SizedBox(width: 12.w),
           Flexible(

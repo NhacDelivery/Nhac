@@ -120,7 +120,7 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                       final index = entry.key;
                       final item = entry.value;
                       return TweenAnimationBuilder<double>(
-                        key: ValueKey('anim_${item.produtoId}'),
+                        key: ValueKey('anim_${item.chave}'),
                         duration: const Duration(milliseconds: 800),
                         tween: Tween(begin: 0.0, end: 1.0),
                         curve: Interval(
@@ -376,7 +376,7 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
     bool isProgrammaticDeleting = false;
 
     return StatefulBuilder(
-      key: E2EKeys.cartItem(item.produtoId),
+      key: E2EKeys.cartItem(item.chave),
       builder: (context, setState) {
         return TweenAnimationBuilder<double>(
           duration: Duration(milliseconds: isProgrammaticDeleting ? 500 : 0),
@@ -578,6 +578,25 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                     overflow:
                                                         TextOverflow.ellipsis,
                                                   ),
+                                                  if (item
+                                                      .adicionaisNomes
+                                                      .isNotEmpty)
+                                                    Padding(
+                                                      padding:
+                                                          const EdgeInsets.only(
+                                                            top: 4,
+                                                          ),
+                                                      child: Text(
+                                                        item.adicionaisNomes
+                                                            .join(' • '),
+                                                        style: const TextStyle(
+                                                          fontSize: 12,
+                                                          color: Color(
+                                                            0xFF666666,
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    ),
                                                   if (item.esgotado)
                                                     Text(
                                                       'Esgotado',
@@ -643,9 +662,10 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                               ),
                                                             ),
                                                             Semantics(
-                                                              key: E2EKeys.cartItemQuantity(
-                                                                item.produtoId,
-                                                              ),
+                                                              key:
+                                                                  E2EKeys.cartItemQuantity(
+                                                                    item.chave,
+                                                                  ),
                                                               value: item
                                                                   .quantidade
                                                                   .toString(),
@@ -686,9 +706,7 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                                                                             idProduto:
                                                                                 item.produtoId,
                                                                             nome:
-                                                                                item.adicionaisNomes.isEmpty
-                                                                                ? item.nome
-                                                                                : '${item.nome} • ${item.adicionaisNomes.join(", ")}',
+                                                                                item.nome,
                                                                             preco:
                                                                                 item.preco,
                                                                             imagemUrl:
