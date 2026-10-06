@@ -90,16 +90,31 @@ class FeedRepository {
   Future<FeedCommentModel> comentar(
     String id,
     String conteudo, {
+    String? respostaAId,
     String? idempotencyKey,
   }) async {
     try {
       final response = await _dio.post(
         '/feed/posts/${Uri.encodeComponent(id)}/comentarios',
-        data: {'conteudo': conteudo.trim()},
+        data: {'conteudo': conteudo.trim(), if (respostaAId != null) 'respostaAId': respostaAId},
         options: idempotencyKey == null
             ? null
             : Options(headers: {'Idempotency-Key': idempotencyKey}),
       );
+      return FeedCommentModel.fromMap(Map<String, dynamic>.from(response.data));
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<FeedCommentModel> curtirComentario(
+    String postId,
+    String comentarioId, {
+    required bool ativo,
+  }) async {
+    try {
+      final path = '/feed/posts/${Uri.encodeComponent(postId)}/comentarios/${Uri.encodeComponent(comentarioId)}/curtida';
+      final response = ativo ? await _dio.put(path) : await _dio.delete(path);
       return FeedCommentModel.fromMap(Map<String, dynamic>.from(response.data));
     } catch (e) {
       throw mapException(e);

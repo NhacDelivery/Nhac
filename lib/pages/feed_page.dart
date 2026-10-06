@@ -1,3 +1,4 @@
+import 'package:nhac/components/feed_timestamp.dart';
 import 'package:nhac/components/feed_content.dart';
 import 'package:nhac/services/feed_share_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -545,6 +546,7 @@ class _FeedPageState extends State<FeedPage>
                                   color: const Color(0xFF5D201C),
                                 ),
                               ),
+                              FeedTimestamp(post.criadoEm),
                               if (post.badge != null) ...[
                                 SizedBox(height: 2.h),
                                 Text(

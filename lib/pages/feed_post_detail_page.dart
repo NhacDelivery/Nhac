@@ -1,3 +1,4 @@
+import 'package:nhac/components/feed_timestamp.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/services/auth_service.dart';
@@ -42,6 +43,10 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   late FeedPostModel _post;
   bool _loadingComments = true;
   bool _sending = false;
+  String? _respostaAId;
+  String? _respostaANome;
+  final Set<String> _curtindoComentarios = {};
+  final Map<String, FeedCommentModel> _comentariosConfirmados = {};
   bool _commentPending = false;
   bool _restoringComment = true;
   bool _interacting = false;
@@ -89,6 +94,8 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
           );
           if (mounted && pending != null) {
             _commentController.text = pending['payload']['conteudo'] as String;
+            _respostaAId = pending['payload']['respostaAId'] as String?;
+            _respostaANome = _respostaAId == null ? null : 'comentário anterior';
             _commentPending = true;
           }
         }
@@ -111,6 +118,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
 
   Future<void> _carregarComentarios({bool mais = false}) async {
     if (mais && _loadingComments) return;
+    _comentariosConfirmados.clear();
     final requestId = ++_commentRequestId;
     setState(() {
       _loadingComments = true;
@@ -131,7 +139,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
             ...(mais ? _comments : <FeedCommentModel>[]),
             ...comments,
           ])
-            c.id: c,
+            c.id: _comentariosConfirmados[c.id] ?? c,
         }.values.toList();
         _commentPage = page;
         _hasMoreComments = comments.length == 20;
@@ -157,16 +165,21 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
       final tentativa = await _tentativas.preparar(
         uid,
         'comentario:${_post.id}',
-        {'conteudo': text},
+        {'conteudo': text, if (_respostaAId != null) 'respostaAId': _respostaAId},
       );
       if (mounted) setState(() => _commentPending = true);
       await _repository.comentar(
         _post.id,
         text,
         idempotencyKey: tentativa['key'] as String,
+        respostaAId: _respostaAId,
       );
       await _tentativas.concluir(uid, 'comentario:${_post.id}');
-      if (mounted) setState(() => _commentPending = false);
+      if (mounted) setState(() {
+        _commentPending = false;
+        _respostaAId = null;
+        _respostaANome = null;
+      });
       if (!mounted) return;
       if (_commentController.text.trim() == text) _commentController.clear();
       _commentFocus.unfocus();
@@ -176,6 +189,34 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
       if (mounted) ErrorUIHelper.handle(context, e);
     } finally {
       if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  void _responder(FeedCommentModel comment) {
+    if (_sending || _commentPending || _restoringComment) return;
+    setState(() {
+      _respostaAId = comment.id;
+      _respostaANome = comment.nome;
+    });
+    _commentFocus.requestFocus();
+  }
+
+  Future<void> _curtirComentario(FeedCommentModel comment) async {
+    if (!_curtindoComentarios.add(comment.id)) return;
+    setState(() {});
+    try {
+      final atualizado = await _repository.curtirComentario(
+        _post.id, comment.id, ativo: !comment.curtido,
+      );
+      if (!mounted) return;
+      setState(() {
+        _comentariosConfirmados[comment.id] = atualizado;
+        _comments = _comments.map((c) => c.id == atualizado.id ? atualizado : c).toList();
+      });
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    } finally {
+      if (mounted) setState(() => _curtindoComentarios.remove(comment.id));
     }
   }
 
@@ -387,6 +428,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                                       color: const Color(0xFF5D201C),
                                     ),
                                   ),
+                                  FeedTimestamp(post.criadoEm),
                                   if (post.badge != null)
                                     Text(
                                       post.badge!,
@@ -630,11 +672,33 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                         ),
 
                       SliverToBoxAdapter(
-                        child: SizedBox(height: 100.h + bottomPadding),
+                        child: SizedBox(height: (_respostaAId == null ? 100.h : 160.h) + bottomPadding),
                       ),
                     ],
                   ),
                 ),
+
+                if (_respostaAId != null)
+                  Positioned(
+                    left: 16.w, right: 16.w, bottom: 80.h + bottomPadding,
+                    child: Material(
+                      color: const Color(0xFFFFF0EE),
+                      borderRadius: BorderRadius.circular(12.r),
+                      child: Row(children: [
+                        const SizedBox(width: 12),
+                        Expanded(child: Text('Respondendo a ${_respostaANome ?? "comentário"}',
+                          maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        IconButton(
+                          tooltip: 'Cancelar resposta',
+                          onPressed: _sending || _commentPending ? null : () => setState(() {
+                            _respostaAId = null;
+                            _respostaANome = null;
+                          }),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ]),
+                    ),
+                  ),
 
                 // ── Bottom Floating Bar ───────────────────────
                 Positioned(
@@ -685,7 +749,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                                     focusNode: _commentFocus,
                                     style: TextStyle(fontSize: 14.sp),
                                     decoration: InputDecoration(
-                                      hintText: 'Escreva...',
+                                      hintText: _respostaAId == null ? 'Escreva...' : 'Sua resposta...',
                                       hintStyle: TextStyle(
                                         color: Colors.grey.shade500,
                                         fontSize: 14.sp,
@@ -841,14 +905,16 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
               children: [
                 Row(
                   children: [
-                    Text(
+                    Flexible(child: Text(
                       comment.nome,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 13.sp,
                         color: const Color(0xFF5D201C),
                       ),
-                    ),
+                    )),
                     if (comment.isAuthor) ...[
                       SizedBox(width: 6.w),
                       Container(
@@ -872,6 +938,10 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                     ],
                   ],
                 ),
+                FeedTimestamp(comment.criadoEm),
+                if (comment.respostaAId != null)
+                  Text('Em resposta a ${comment.respostaANome ?? "comentário excluído"}',
+                    style: const TextStyle(fontSize: 12, color: Color(0xFF666666))),
                 SizedBox(height: 4.h),
                 Text(
                   comment.conteudo,
@@ -880,6 +950,21 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                     color: const Color(0xFF333333),
                     height: 1.4,
                   ),
+                ),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton.icon(
+                      onPressed: _curtindoComentarios.contains(comment.id) ? null : () => _curtirComentario(comment),
+                      icon: Icon(comment.curtido ? Icons.favorite : Icons.favorite_border, size: 18),
+                      label: Text('${comment.curtidas}'),
+                      style: TextButton.styleFrom(foregroundColor: comment.curtido ? const Color(0xFFFF6961) : const Color(0xFF666666)),
+                    ),
+                    TextButton(
+                      onPressed: _sending || _commentPending || _restoringComment ? null : () => _responder(comment),
+                      child: const Text('Responder'),
+                    ),
+                  ],
                 ),
               ],
             ),

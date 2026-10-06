@@ -28,6 +28,7 @@ class MentionedStoreModel {
 
 class FeedPostModel {
   final String id;
+  final DateTime? criadoEm;
   final String nomeUsuario;
   final String? usuarioId;
   final String? avatarUrl;
@@ -49,6 +50,7 @@ class FeedPostModel {
 
   const FeedPostModel({
     required this.id,
+    this.criadoEm,
     required this.nomeUsuario,
     this.avatarUrl,
     this.usuarioId,
@@ -73,6 +75,7 @@ class FeedPostModel {
     final store = map['mentionedStore'] as Map?;
     return FeedPostModel(
       id: map['id'] as String,
+      criadoEm: DateTime.tryParse(map['criadoEm'] as String? ?? ''),
       nomeUsuario: map['nomeUsuario'] as String,
       usuarioId: map['usuarioId'] as String?,
       topComment: map['topComment'] is Map

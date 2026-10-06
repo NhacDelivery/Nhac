@@ -1,5 +1,9 @@
 class FeedCommentModel {
   final String id;
+  final int curtidas;
+  final bool curtido;
+  final String? respostaAId;
+  final String? respostaANome;
   final String nome;
   final String? usuarioId;
   final String? avatarUrl;
@@ -10,6 +14,10 @@ class FeedCommentModel {
 
   const FeedCommentModel({
     required this.id,
+    this.curtidas = 0,
+    this.curtido = false,
+    this.respostaAId,
+    this.respostaANome,
     required this.nome,
     this.usuarioId,
     this.avatarUrl,
@@ -22,6 +30,10 @@ class FeedCommentModel {
   factory FeedCommentModel.fromMap(Map<String, dynamic> map) =>
       FeedCommentModel(
         id: map['id'] as String,
+        curtidas: (map['curtidas'] as num? ?? 0).toInt(),
+        curtido: map['curtido'] == true,
+        respostaAId: map['respostaAId'] as String?,
+        respostaANome: map['respostaANome'] as String?,
         nome: map['nomeUsuario'] as String,
         usuarioId: map['usuarioId'] as String?,
         avatarUrl: map['avatarUrl'] as String?,

@@ -11,6 +11,7 @@ import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:network_image_mock/network_image_mock.dart';
 import 'package:nhac/components/home/home_banner_carousel.dart';
+import 'package:nhac/components/feed_timestamp.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/pages/feed_page.dart';
 import 'package:nhac/pages/feed_post_detail_page.dart';
@@ -21,6 +22,15 @@ import 'package:provider/provider.dart';
 class _Auth extends Mock implements AuthService {}
 
 class _Adapter implements HttpClientAdapter {
+  final bool withComments;
+  Map<String, dynamic>? enviado;
+  String? chave;
+  _Adapter({this.withComments = false});
+  final comentario = <String, dynamic>{
+    'id': 'c1', 'usuarioId': 'u2', 'nomeUsuario': 'Outra pessoa com um nome muito longo',
+    'conteudo': 'Pergunta da publicação', 'isAuthor': false,
+    'criadoEm': '2026-10-06T12:34:00Z', 'curtidas': 0, 'curtido': false,
+  };
   final post = <String, dynamic>{
     'id': 'p1',
     'usuarioId': 'u1',
@@ -31,14 +41,24 @@ class _Adapter implements HttpClientAdapter {
     'comentarios': 0,
     'curtido': true,
     'salvo': true,
+    'criadoEm': '2026-10-06T12:30:00Z',
   };
 
   @override
   Future<ResponseBody> fetch(RequestOptions options,
       Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
     final Object body;
-    if (options.path.endsWith('/comentarios')) {
-      body = {'content': []};
+    if (options.path.endsWith('/comentarios/c1/curtida')) {
+      comentario['curtido'] = options.method == 'PUT';
+      comentario['curtidas'] = options.method == 'PUT' ? 1 : 0;
+      body = comentario;
+    } else if (options.path.endsWith('/comentarios') && options.method == 'POST') {
+      enviado = Map<String, dynamic>.from(options.data as Map);
+      chave = options.headers['Idempotency-Key'] as String?;
+      body = {...comentario, 'id': 'c2', 'conteudo': enviado!['conteudo'],
+        'respostaAId': enviado!['respostaAId'], 'respostaANome': comentario['nomeUsuario']};
+    } else if (options.path.endsWith('/comentarios')) {
+      body = {'content': withComments ? [comentario] : []};
     } else if (options.path == '/feed/posts/p1') {
       body = post;
     } else {
@@ -121,6 +141,41 @@ void main() {
         await frames(tester);
         expect(find.byType(FeedPage), findsOneWidget);
       }
+      await tester.pumpWidget(const SizedBox.shrink());
+      await frames(tester);
+    });
+  });
+
+  testWidgets('datas, curtir e responder comentários usam o servidor', (tester) async {
+    final adapter = _Adapter(withComments: true);
+    adapter.post['conteudo'] = 'Publicação curta';
+    ApiClient().dio.httpClientAdapter = adapter;
+    final router = GoRouter(routes: [
+      GoRoute(path: '/', builder: (_, __) => FeedPostDetailPage(post: FeedPostModel.fromMap(adapter.post))),
+    ]);
+    addTearDown(router.dispose);
+    await mockNetworkImagesFor(() async {
+      await mount(tester, router);
+      expect(find.byType(FeedTimestamp), findsNWidgets(2));
+      expect(find.textContaining('06/10/2026'), findsNWidgets(2));
+      await tester.ensureVisible(find.byIcon(Icons.favorite_border));
+      await tester.tap(find.byIcon(Icons.favorite_border));
+      await frames(tester);
+      expect(adapter.comentario['curtido'], isTrue);
+      expect(find.byIcon(Icons.favorite), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.favorite));
+      await frames(tester);
+      expect(adapter.comentario['curtidas'], 0);
+      await tester.tap(find.text('Responder'));
+      await frames(tester);
+      expect(find.textContaining('Respondendo a'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'Minha resposta');
+      await tester.tap(find.byTooltip('Enviar comentário'));
+      await frames(tester);
+      expect(adapter.enviado, {'conteudo': 'Minha resposta', 'respostaAId': 'c1'});
+      expect(adapter.chave, isNotEmpty);
+      expect(find.textContaining('Respondendo a'), findsNothing);
+      expect(tester.widget<TextField>(find.byType(TextField)).controller!.text, isEmpty);
       await tester.pumpWidget(const SizedBox.shrink());
       await frames(tester);
     });
