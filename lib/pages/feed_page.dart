@@ -681,27 +681,36 @@ class _FeedPageState extends State<FeedPage>
               top: 28.h,
               bottom: 12.h,
             ),
-            child: RichText(
-              text: TextSpan(
-                children: [
-                  TextSpan(
-                    text: '${comment.nomeUsuario}: ',
-                    style: TextStyle(
-                      color: const Color(0xFFFF6961),
-                      fontSize: 13.sp,
-                      fontWeight: FontWeight.w600,
-                    ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RichText(
+                  text: TextSpan(
+                    children: [
+                      TextSpan(
+                        text: '${comment.nomeUsuario}: ',
+                        style: TextStyle(
+                          color: const Color(0xFFFF6961),
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      TextSpan(
+                        text: comment.conteudo,
+                        style: TextStyle(
+                          color: const Color(0xFF5D201C),
+                          fontSize: 13.sp,
+                          height: 1.4,
+                        ),
+                      ),
+                    ],
                   ),
-                  TextSpan(
-                    text: comment.conteudo,
-                    style: TextStyle(
-                      color: const Color(0xFF5D201C),
-                      fontSize: 13.sp,
-                      height: 1.4,
-                    ),
-                  ),
+                ),
+                if (comment.criadoEm != null) ...[
+                  SizedBox(height: 6.h),
+                  FeedTimestamp(comment.criadoEm),
                 ],
-              ),
+              ],
             ),
           ),
           Positioned(

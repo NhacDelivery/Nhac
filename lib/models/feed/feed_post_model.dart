@@ -1,9 +1,11 @@
 class TopCommentModel {
+  final DateTime? criadoEm;
   final String nomeUsuario;
   final String conteudo;
   final int curtidas;
 
   const TopCommentModel({
+    this.criadoEm,
     required this.nomeUsuario,
     required this.conteudo,
     required this.curtidas,
@@ -82,7 +84,8 @@ class FeedPostModel {
           ? TopCommentModel(
               nomeUsuario: map['topComment']['nomeUsuario'] as String,
               conteudo: map['topComment']['conteudo'] as String,
-              curtidas: 0,
+              curtidas: (map['topComment']['curtidas'] as num? ?? 0).toInt(),
+              criadoEm: DateTime.tryParse(map['topComment']['criadoEm'] as String? ?? ''),
             )
           : null,
       avatarUrl: map['avatarUrl'] as String?,
