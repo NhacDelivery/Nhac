@@ -404,29 +404,12 @@ class AuthService with ChangeNotifier {
   }
 
   Future<void> updateFcmToken({required String fcmToken}) async {
-    if (_usuarioId == null) {
-      throw AuthException('Utilizador não autenticado.');
-    }
-
-    final uid = _usuarioId!;
-    final generation = _sessionGeneration;
+    final uid = _usuarioId;
+    if (uid == null) throw AuthException('Utilizador não autenticado.');
     try {
-      final response = await _dio.put(
-        '/usuarios/$uid',
-        data: {'fcmToken': fcmToken.trim()},
-      );
-      if (_usuarioId != uid || _sessionGeneration != generation) return;
-      final tokenFresquinho = response.data['token'] as String?;
-      if (tokenFresquinho != null && tokenFresquinho.isNotEmpty) {
-        await _sessionStorage.salvarSessao(
-          token: tokenFresquinho,
-          usuarioId: uid,
-          nome: _nome ?? 'Usuário',
-        );
-        if (_usuarioId != uid || _sessionGeneration != generation) return;
-        ApiClient().atualizarTokenCache(tokenFresquinho);
-        notifyListeners();
-      }
+      // Registrar o dispositivo não altera a identidade nem regrava a sessão.
+      // Uma resposta tardia de outra conta não pode restaurar suas credenciais.
+      await _dio.put('/usuarios/$uid', data: {'fcmToken': fcmToken.trim()});
     } catch (e) {
       throw mapException(e);
     }
