@@ -37,6 +37,7 @@ import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/services/home_order_route_observer.dart';
 import 'package:nhac/models/produto/produtos.dart';
 import 'package:nhac/pages/pedido_entregue_page.dart';
+import 'package:nhac/pages/mensagens_page.dart';
 
 class _SlideRightToLeftPageRoute<T> extends PageRoute<T>
     with MaterialRouteTransitionMixin<T> {
@@ -419,6 +420,13 @@ final GoRouter appRouter = GoRouter(
       child: PedidoEntreguePage(
         pedidoId: state.uri.queryParameters['pedidoId'] ?? '',
       ),
+    ),
+  ),
+  GoRoute(
+    path: '/mensagens',
+    pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+      key: state.pageKey,
+      child: const MensagensPage(),
     ),
   ),
   GoRoute(

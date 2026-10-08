@@ -109,8 +109,20 @@ class _FeedPageState extends State<FeedPage>
                           color: const Color(0xFF5D201C),
                         ),
                       ),
-                      Icon(Icons.notifications_none_outlined,
-                          color: const Color(0xFF5D201C), size: 26.r),
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              context.push('/mensagens');
+                            },
+                            child: Icon(Icons.chat_bubble_outline,
+                                color: const Color(0xFF5D201C), size: 26.r),
+                          ),
+                          SizedBox(width: 16.w),
+                          Icon(Icons.notifications_none_outlined,
+                              color: const Color(0xFF5D201C), size: 26.r),
+                        ],
+                      ),
                     ],
                   ),
                   SizedBox(height: 16.h),

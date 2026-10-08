@@ -6,6 +6,8 @@
 
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/models/chat/mensagem_chat.dart';
+import 'package:nhac/models/chat/conversa_resumo.dart';
+import 'package:nhac/models/chat/conversa_pessoa_resumo.dart';
 import 'package:nhac/services/api_client.dart';
 
 class ChatRepository {
@@ -56,6 +58,38 @@ class ChatRepository {
       await _dio.patch('/conversas/$conversaId/lida');
     } catch (_) {
       // ignorado
+    }
+  }
+
+  /// GET /conversas - lista de conversas ativas do cliente.
+  Future<List<ConversaResumo>> listarConversas({int pagina = 0, int tamanho = 20}) async {
+    try {
+      final response = await _dio.get(
+        '/lojas/',
+        queryParameters: {'page': pagina, 'size': tamanho},
+      );
+      final conteudo = (response.data['content'] as List?) ?? (response.data as List?) ?? const [];
+      return conteudo
+          .map((item) => ConversaResumo.fromMap(Map<String, dynamic>.from(item)))
+          .toList();
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  /// GET /conversas/pessoas - lista de conversas ativas do cliente com outras pessoas.
+  Future<List<ConversaPessoaResumo>> listarConversasPessoas({int pagina = 0, int tamanho = 20}) async {
+    try {
+      final response = await _dio.get(
+        '/conversas/pessoas',
+        queryParameters: {'page': pagina, 'size': tamanho},
+      );
+      final conteudo = (response.data['content'] as List?) ?? (response.data as List?) ?? const [];
+      return conteudo
+          .map((item) => ConversaPessoaResumo.fromMap(Map<String, dynamic>.from(item)))
+          .toList();
+    } catch (e) {
+      throw mapException(e);
     }
   }
 }
