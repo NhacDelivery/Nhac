@@ -19,6 +19,8 @@ class PreferenciasComidaService {
     final response = await ApiClient().dio.get(
           '/usuarios/$uid/preferencias-comida',
         );
+    // Uma escolha feita durante o GET tem prioridade sobre a resposta antiga.
+    if (prefs.getString(_pendente(uid)) != null) return carregar(uid);
     final salvas = response.data['preferencias'] as List?;
     if (salvas == null) {
       await sincronizar(uid, local);
@@ -44,6 +46,11 @@ class PreferenciasComidaService {
       '/usuarios/$uid/preferencias-comida',
       data: {'preferencias': valores.toList()..sort()},
     );
-    await (await SharedPreferences.getInstance()).remove(_pendente(uid));
+    final prefs = await SharedPreferences.getInstance();
+    final confirmado = jsonEncode(valores.toList()..sort());
+    // Uma resposta antiga não pode apagar uma escolha mais recente pendente.
+    if (prefs.getString(_pendente(uid)) == confirmado) {
+      await prefs.remove(_pendente(uid));
+    }
   }
 }

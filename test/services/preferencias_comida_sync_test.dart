@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -13,6 +14,8 @@ class PreferenciasAdapter implements HttpClientAdapter {
   bool falha = false;
   List<String>? servidor;
   int envios = 0;
+  Completer<void>? primeiroEnvio;
+  bool falharSegundo = false;
   @override
   Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? body,
       Future<void>? cancel) async {
@@ -21,7 +24,11 @@ class PreferenciasAdapter implements HttpClientAdapter {
           requestOptions: options, reason: 'offline');
     if (options.method == 'PUT') {
       envios++;
+      if (envios == 2 && falharSegundo)
+        throw DioException.connectionError(
+            requestOptions: options, reason: 'offline');
       servidor = List<String>.from(options.data['preferencias']);
+      if (envios == 1 && primeiroEnvio != null) await primeiroEnvio!.future;
     }
     return ResponseBody.fromString(jsonEncode({'preferencias': servidor}), 200,
         headers: {
@@ -65,5 +72,24 @@ void main() {
     expect(
         await LocalCacheService.carregarPreferenciasComida('cliente'), isEmpty);
     expect(adapter.envios, 0);
+  });
+  test('confirmação antiga não apaga uma escolha nova ainda sem resposta',
+      () async {
+    adapter.primeiroEnvio = Completer<void>();
+    adapter.falharSegundo = true;
+    final anterior = PreferenciasComidaService.salvar('cliente', {'Pizza'});
+    while (adapter.envios == 0) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    await expectLater(PreferenciasComidaService.salvar('cliente', {'Sushi'}),
+        throwsA(isA<DioException>()));
+    adapter.primeiroEnvio!.complete();
+    await anterior;
+    final prefs = await SharedPreferences.getInstance();
+    expect(jsonDecode(prefs.getString('preferencias_comida_sync_cliente')!),
+        ['Sushi']);
+    adapter.falharSegundo = false;
+    expect(await PreferenciasComidaService.carregar('cliente'), {'Sushi'});
+    expect(adapter.servidor, ['Sushi']);
   });
 }

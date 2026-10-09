@@ -19,4 +19,4 @@ O GitGuardian apontou ocorrências em commits antigos do PR 31. A remoção no c
 
 ## Validação local
 
-300 testes Flutter passaram, incluindo recuperação da edição incerta e sincronização das preferências. Três testes Python dos contratos E2E passaram. A análise Flutter não apresentou erros ou warnings após preparar o arquivo de ambiente local; há avisos de estilo preexistentes. APK e Universal Links no aparelho precisam das configurações acima e não foram comprovados neste ambiente.
+301 testes Flutter passaram, incluindo recuperação da edição incerta e sincronização das preferências, incluindo proteção contra uma confirmação antiga apagar uma escolha mais recente pendente. Três testes Python dos contratos E2E passaram. A análise Flutter não apresentou erros ou warnings após preparar o arquivo de ambiente local; há avisos de estilo preexistentes. APK e Universal Links no aparelho precisam das configurações acima e não foram comprovados neste ambiente.
