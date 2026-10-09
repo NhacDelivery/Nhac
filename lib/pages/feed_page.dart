@@ -225,6 +225,15 @@ class _FeedPageState extends State<FeedPage>
                       ),
                       if (!widget.salvos)
                         IconButton(
+                          tooltip: 'Mensagens',
+                          icon: const Icon(
+                            Icons.chat_bubble_outline,
+                            color: Color(0xFF5D201C),
+                          ),
+                          onPressed: () => context.push('/mensagens'),
+                        ),
+                      if (!widget.salvos)
+                        IconButton(
                           tooltip: 'Publicações salvas',
                           icon: const Icon(
                             Icons.bookmarks_outlined,
@@ -260,11 +269,9 @@ class _FeedPageState extends State<FeedPage>
                       Navigator.push(
                         context,
                         PageRouteBuilder(
-                          pageBuilder: (
-                            context,
-                            animation,
-                            secondaryAnimation,
-                          ) => const SearchPage(),
+                          pageBuilder:
+                              (context, animation, secondaryAnimation) =>
+                                  const SearchPage(),
                           transitionsBuilder:
                               (context, animation, secondaryAnimation, child) {
                                 return FadeTransition(
@@ -286,8 +293,9 @@ class _FeedPageState extends State<FeedPage>
                         borderRadius: BorderRadius.circular(50.r),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF5D201C)
-                                .withValues(alpha: 0.05),
+                            color: const Color(
+                              0xFF5D201C,
+                            ).withValues(alpha: 0.05),
                             blurRadius: 10.r,
                             offset: const Offset(0.0, 4.0),
                           ),

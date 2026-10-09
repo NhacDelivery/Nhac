@@ -28,12 +28,22 @@ class FeedAdapter implements HttpClientAdapter {
     expect(options.path, '/feed/posts');
     calls++;
     return ResponseBody.fromString(
-      fail ? '{"message":"offline"}' : jsonEncode({
-        'content': withPosts ? [for (var i = 0; i < 20; i++) {
-          'id': 'p$i', 'nomeUsuario': 'Autor $i',
-          'conteudo': 'Conteúdo $i', 'curtidas': 0, 'comentarios': 0,
-        }] : [],
-      }),
+      fail
+          ? '{"message":"offline"}'
+          : jsonEncode({
+              'content': withPosts
+                  ? [
+                      for (var i = 0; i < 20; i++)
+                        {
+                          'id': 'p$i',
+                          'nomeUsuario': 'Autor $i',
+                          'conteudo': 'Conteúdo $i',
+                          'curtidas': 0,
+                          'comentarios': 0,
+                        },
+                    ]
+                  : [],
+            }),
       fail ? 503 : 200,
       headers: {
         Headers.contentTypeHeader: ['application/json'],
@@ -48,15 +58,105 @@ class FeedAdapter implements HttpClientAdapter {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('feed permite publicar, remove sino duplicado e recupera falha', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    dotenv.testLoad(fileInput: 'API_BASE_URL=http://localhost:8080/api/v1');
+    final adapter = FeedAdapter();
+    final api = ApiClient();
+    final oldAdapter = api.dio.httpClientAdapter;
+    api.dio.httpClientAdapter = adapter;
+    api.atualizarTokenCache('test-token');
+    addTearDown(() {
+      api.dio.httpClientAdapter = oldAdapter;
+      api.atualizarTokenCache(null);
+    });
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, __) => const Scaffold(body: FeedPage()),
+        ),
+        GoRoute(
+          path: '/mensagens',
+          builder: (context, _) => Scaffold(
+            body: TextButton(
+              onPressed: () => context.pop(),
+              child: const Text('Voltar das mensagens'),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: '/feed-publicar',
+          builder: (_, __) =>
+              const Scaffold(body: Text('Formulário de publicação')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    Future<void> advance() async {
+      // The banner carousel and shimmer intentionally animate continuously.
+      for (var frame = 0; frame < 10; frame++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+    }
+
+    await mockNetworkImagesFor(() async {
+      await tester.pumpWidget(
+        ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, __) => MaterialApp.router(routerConfig: router),
+        ),
+      );
+      await advance();
+      expect(adapter.calls, 1);
+      expect(find.byTooltip('Criar publicação'), findsOneWidget);
+      expect(find.byTooltip('Notificações'), findsNothing);
+      expect(find.textContaining('Prévia do Feed'), findsNothing);
+      expect(find.text('Não foi possível carregar o feed.'), findsOneWidget);
+      expect(find.text('Nenhum post por aqui ainda.'), findsNothing);
+
+      adapter.fail = false;
+      await tester.ensureVisible(find.text('Tentar novamente'));
+      await tester.tap(find.text('Tentar novamente'));
+      await advance();
+      expect(adapter.calls, 2);
+      expect(find.text('Nenhum post por aqui ainda.'), findsOneWidget);
+      expect(find.text('Não foi possível carregar o feed.'), findsNothing);
+
+      tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position
+          .jumpTo(0);
+      await advance();
+      expect(find.byTooltip('Publicações salvas'), findsOneWidget);
+      await tester.tap(find.byTooltip('Mensagens'));
+      await advance();
+      expect(find.text('Voltar das mensagens'), findsOneWidget);
+      await tester.tap(find.text('Voltar das mensagens'));
+      await advance();
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byTooltip('Criar publicação'));
+      await advance();
+      expect(find.text('Formulário de publicação'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await advance();
+    });
+  });
+
   testWidgets(
-    'feed permite publicar, remove sino duplicado e recupera falha',
+    'voltar de publicação preserva lista e posição durante atualização',
     (tester) async {
-      tester.view.physicalSize = const Size(320, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
       dotenv.testLoad(fileInput: 'API_BASE_URL=http://localhost:8080/api/v1');
-      final adapter = FeedAdapter();
+      final adapter = FeedAdapter()
+        ..fail = false
+        ..withPosts = true
+        ..detail = Completer<ResponseBody>();
       final api = ApiClient();
       final oldAdapter = api.dio.httpClientAdapter;
       api.dio.httpClientAdapter = adapter;
@@ -72,17 +172,19 @@ void main() {
             builder: (_, __) => const Scaffold(body: FeedPage()),
           ),
           GoRoute(
-            path: '/feed-publicar',
-            builder: (_, __) =>
-                const Scaffold(body: Text('Formulário de publicação')),
+            path: '/feed-post',
+            builder: (context, _) => Scaffold(
+              body: TextButton(
+                onPressed: () => context.pop(),
+                child: const Text('Voltar ao feed'),
+              ),
+            ),
           ),
         ],
       );
       addTearDown(router.dispose);
-
       Future<void> advance() async {
-        // The banner carousel and shimmer intentionally animate continuously.
-        for (var frame = 0; frame < 10; frame++) {
+        for (var i = 0; i < 10; i++) {
           await tester.pump(const Duration(milliseconds: 100));
         }
       }
@@ -95,89 +197,44 @@ void main() {
           ),
         );
         await advance();
-        expect(adapter.calls, 1);
-        expect(find.byTooltip('Criar publicação'), findsOneWidget);
-        expect(find.byTooltip('Notificações'), findsNothing);
-        expect(find.textContaining('Prévia do Feed'), findsNothing);
-        expect(find.text('Não foi possível carregar o feed.'), findsOneWidget);
-        expect(find.text('Nenhum post por aqui ainda.'), findsNothing);
-
-        adapter.fail = false;
-        await tester.ensureVisible(find.text('Tentar novamente'));
-        await tester.tap(find.text('Tentar novamente'));
+        await tester.scrollUntilVisible(
+          find.byKey(const ValueKey('p5')),
+          250,
+          scrollable: find.byType(Scrollable).first,
+        );
         await advance();
-        expect(adapter.calls, 2);
-        expect(find.text('Nenhum post por aqui ainda.'), findsOneWidget);
-        expect(find.text('Não foi possível carregar o feed.'), findsNothing);
-
-        tester
+        final position = tester
             .state<ScrollableState>(find.byType(Scrollable).first)
-            .position
-            .jumpTo(0);
+            .position;
+        final offset = position.pixels;
+        await tester.tap(find.byKey(const ValueKey('p5')));
         await advance();
-        await tester.tap(find.byTooltip('Criar publicação'));
+        await tester.tap(find.text('Voltar ao feed'));
         await advance();
-        expect(find.text('Formulário de publicação'), findsOneWidget);
+        expect(find.byKey(const ValueKey('p5')), findsOneWidget);
+        expect(position.pixels, closeTo(offset, 1));
+        expect(adapter.calls, 1);
+        adapter.detail!.complete(
+          ResponseBody.fromString(
+            jsonEncode({
+              'id': 'p5',
+              'nomeUsuario': 'Autor 5',
+              'conteudo': 'Conteúdo 5',
+              'curtidas': 1,
+              'comentarios': 0,
+            }),
+            200,
+            headers: {
+              Headers.contentTypeHeader: ['application/json'],
+            },
+          ),
+        );
+        await advance();
+        expect(position.pixels, closeTo(offset, 1));
+        expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
         await advance();
       });
     },
   );
-
-  testWidgets('voltar de publicação preserva lista e posição durante atualização', (tester) async {
-    dotenv.testLoad(fileInput: 'API_BASE_URL=http://localhost:8080/api/v1');
-    final adapter = FeedAdapter()
-      ..fail = false
-      ..withPosts = true
-      ..detail = Completer<ResponseBody>();
-    final api = ApiClient();
-    final oldAdapter = api.dio.httpClientAdapter;
-    api.dio.httpClientAdapter = adapter;
-    api.atualizarTokenCache('test-token');
-    addTearDown(() {
-      api.dio.httpClientAdapter = oldAdapter;
-      api.atualizarTokenCache(null);
-    });
-    final router = GoRouter(routes: [
-      GoRoute(path: '/', builder: (_, __) => const Scaffold(body: FeedPage())),
-      GoRoute(path: '/feed-post', builder: (context, _) => Scaffold(
-        body: TextButton(onPressed: () => context.pop(), child: const Text('Voltar ao feed')),
-      )),
-    ]);
-    addTearDown(router.dispose);
-    Future<void> advance() async {
-      for (var i = 0; i < 10; i++) {
-        await tester.pump(const Duration(milliseconds: 100));
-      }
-    }
-    await mockNetworkImagesFor(() async {
-      await tester.pumpWidget(ScreenUtilInit(
-        designSize: const Size(390, 844),
-        builder: (_, __) => MaterialApp.router(routerConfig: router),
-      ));
-      await advance();
-      await tester.scrollUntilVisible(find.byKey(const ValueKey('p5')), 250,
-        scrollable: find.byType(Scrollable).first);
-      await advance();
-      final position = tester.state<ScrollableState>(find.byType(Scrollable).first).position;
-      final offset = position.pixels;
-      await tester.tap(find.byKey(const ValueKey('p5')));
-      await advance();
-      await tester.tap(find.text('Voltar ao feed'));
-      await advance();
-      expect(find.byKey(const ValueKey('p5')), findsOneWidget);
-      expect(position.pixels, closeTo(offset, 1));
-      expect(adapter.calls, 1);
-      adapter.detail!.complete(ResponseBody.fromString(jsonEncode({
-        'id': 'p5', 'nomeUsuario': 'Autor 5', 'conteudo': 'Conteúdo 5',
-        'curtidas': 1, 'comentarios': 0,
-      }), 200, headers: {Headers.contentTypeHeader: ['application/json']}));
-      await advance();
-      expect(position.pixels, closeTo(offset, 1));
-      expect(tester.takeException(), isNull);
-      await tester.pumpWidget(const SizedBox.shrink());
-      await advance();
-    });
-  });
-
 }
