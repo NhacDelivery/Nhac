@@ -21,9 +21,15 @@ class ConversaResumo {
     return ConversaResumo(
       id: map['id']?.toString() ?? map['conversaId']?.toString() ?? '',
       lojaId: map['lojaId']?.toString() ?? '',
-      lojaNome: map['lojaNome']?.toString() ?? map['nomeLoja']?.toString() ?? map['nome']?.toString() ?? 'Loja',
+      lojaNome:
+          map['lojaNome']?.toString() ??
+          map['nomeLoja']?.toString() ??
+          map['nome']?.toString() ??
+          'Loja',
       ultimaMensagem: map['ultimaMensagem']?.toString() ?? '',
-      ultimaMensagemData: DateTime.tryParse(map['ultimaMensagemData']?.toString() ?? '') ?? DateTime.now(),
+      ultimaMensagemData:
+          DateTime.tryParse(map['ultimaMensagemData']?.toString() ?? '') ??
+          DateTime.now(),
       mensagensNaoLidas: safeInt(map['mensagensNaoLidas']),
     );
   }

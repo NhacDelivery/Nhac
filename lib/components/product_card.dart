@@ -19,6 +19,7 @@ class ProductCard extends StatefulWidget {
 
   final ProdutosModel produto;
   final bool lojaFechada;
+
   /// Callback que recebe a posição global do botão "+" e a URL da imagem
   /// para disparar a animação fly-to-cart. Se null, não dispara animação.
   final void Function(Offset origin, String imageUrl)? onFlyToCart;
@@ -27,7 +28,8 @@ class ProductCard extends StatefulWidget {
   State<ProductCard> createState() => _ProductCardState();
 }
 
-class _ProductCardState extends State<ProductCard> with SingleTickerProviderStateMixin {
+class _ProductCardState extends State<ProductCard>
+    with SingleTickerProviderStateMixin {
   late AnimationController _shakeController;
 
   @override
@@ -72,7 +74,8 @@ class _ProductCardState extends State<ProductCard> with SingleTickerProviderStat
             child: Stack(
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
+                  borderRadius:
+                      BorderRadius.vertical(top: Radius.circular(16.r)),
                   child: CachedNetworkImage(
                     imageUrl: widget.produto.imagemUrl,
                     fit: BoxFit.cover,
@@ -108,9 +111,6 @@ class _ProductCardState extends State<ProductCard> with SingleTickerProviderStat
                   overflow: TextOverflow.ellipsis,
                 ),
                 SizedBox(height: 4.h),
-                Text("500g",
-                    style: TextStyle(
-                        color: Colors.grey.shade600, fontSize: 12.sp)),
                 SizedBox(height: 8.h),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -129,7 +129,8 @@ class _ProductCardState extends State<ProductCard> with SingleTickerProviderStat
                         return AnimatedBuilder(
                           animation: _shakeController,
                           builder: (context, child) {
-                            final sineValue = sin(5 * pi * _shakeController.value);
+                            final sineValue =
+                                sin(5 * pi * _shakeController.value);
                             return Transform.translate(
                               offset: Offset(sineValue * 2, 2),
                               child: child,
@@ -138,13 +139,15 @@ class _ProductCardState extends State<ProductCard> with SingleTickerProviderStat
                           child: InkWell(
                             onTap: () async {
                               if (widget.lojaFechada) {
-                                context.showError('Esta loja está fechada no momento.');
+                                context.showError(
+                                    'Esta loja está fechada no momento.');
                                 _triggerShake();
                                 return;
                               }
 
                               try {
-                                final cartProvider = context.read<CartProvider>();
+                                final cartProvider =
+                                    context.read<CartProvider>();
                                 await cartProvider.adicionarItemComQuantidade(
                                   idProduto: widget.produto.id,
                                   nome: widget.produto.nome,
@@ -153,15 +156,18 @@ class _ProductCardState extends State<ProductCard> with SingleTickerProviderStat
                                   lojaId: widget.produto.lojaId,
                                   quantidade: 1,
                                 );
-                                
+
                                 if (context.mounted) {
                                   if (widget.onFlyToCart != null) {
-                                    final renderBox = btnContext.findRenderObject() as RenderBox?;
-                                    if (renderBox != null && renderBox.attached) {
+                                    final renderBox = btnContext
+                                        .findRenderObject() as RenderBox?;
+                                    if (renderBox != null &&
+                                        renderBox.attached) {
                                       final origin = renderBox.localToGlobal(
                                         renderBox.size.center(Offset.zero),
                                       );
-                                      widget.onFlyToCart!(origin, widget.produto.imagemUrl);
+                                      widget.onFlyToCart!(
+                                          origin, widget.produto.imagemUrl);
                                     }
                                   }
 
@@ -169,12 +175,15 @@ class _ProductCardState extends State<ProductCard> with SingleTickerProviderStat
                                     context,
                                     type: NotificationType.success,
                                     imageUrl: widget.produto.imagemUrl,
-                                    message: '${widget.produto.nome} adicionado!',
+                                    message:
+                                        '${widget.produto.nome} adicionado!',
                                   );
                                 }
                               } catch (e) {
                                 if (context.mounted) {
-                                  context.showError(e.toString().replaceAll('Exception: ', ''));
+                                  context.showError(e
+                                      .toString()
+                                      .replaceAll('Exception: ', ''));
                                   _triggerShake();
                                 }
                               }
@@ -182,9 +191,12 @@ class _ProductCardState extends State<ProductCard> with SingleTickerProviderStat
                             child: Container(
                               padding: EdgeInsets.all(4.w),
                               decoration: BoxDecoration(
-                                  color: widget.lojaFechada ? Colors.grey.shade400 : const Color(0xFF5D201C),
+                                  color: widget.lojaFechada
+                                      ? Colors.grey.shade400
+                                      : const Color(0xFF5D201C),
                                   shape: BoxShape.circle),
-                              child: Icon(Icons.add, color: Colors.white, size: 16.r),
+                              child: Icon(Icons.add,
+                                  color: Colors.white, size: 16.r),
                             ),
                           ),
                         );

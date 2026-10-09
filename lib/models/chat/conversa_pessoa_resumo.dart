@@ -20,10 +20,14 @@ class ConversaPessoaResumo {
   factory ConversaPessoaResumo.fromMap(Map<String, dynamic> map) {
     return ConversaPessoaResumo(
       id: map['id']?.toString() ?? map['conversaId']?.toString() ?? '',
-      pessoaId: map['pessoaId']?.toString() ?? map['usuarioId']?.toString() ?? '',
-      pessoaNome: map['pessoaNome']?.toString() ?? map['nome']?.toString() ?? 'Usuário',
+      pessoaId:
+          map['pessoaId']?.toString() ?? map['usuarioId']?.toString() ?? '',
+      pessoaNome:
+          map['pessoaNome']?.toString() ?? map['nome']?.toString() ?? 'Usuário',
       ultimaMensagem: map['ultimaMensagem']?.toString() ?? '',
-      ultimaMensagemData: DateTime.tryParse(map['ultimaMensagemData']?.toString() ?? '') ?? DateTime.now(),
+      ultimaMensagemData:
+          DateTime.tryParse(map['ultimaMensagemData']?.toString() ?? '') ??
+          DateTime.now(),
       mensagensNaoLidas: safeInt(map['mensagensNaoLidas']),
     );
   }

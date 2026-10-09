@@ -46,11 +46,9 @@ Future<void> _firebaseMessagingBackgroundHandler(
 
   if (message.data.containsKey('pedidoId') &&
       message.data.containsKey('status')) {
-    final status =
-        StatusPedido.fromApi(message.data['status']?.toString());
+    final status = StatusPedido.fromApi(message.data['status']?.toString());
 
-    final nomeProduto =
-        message.data['nomeProduto']?.toString() ?? 'Seu pedido';
+    final nomeProduto = message.data['nomeProduto']?.toString() ?? 'Seu pedido';
 
     if (status.terminal) {
       await LiveNotificationService.cancelLiveNotification(
@@ -101,7 +99,7 @@ Future<void> main() async {
 
       // Set tracesSampleRate to 1.0 to capture
       // 100% of transactions for tracing.
-      options.tracesSampleRate = 1.0;
+      options.tracesSampleRate = kDebugMode ? 1.0 : 0.1;
 
       // The sampling rate for profiling is relative
       // to tracesSampleRate.
@@ -133,10 +131,15 @@ Future<void> main() async {
             _firebaseMessagingBackgroundHandler,
           );
 
-          final pushService =
-              PushNotificationService(authServiceRoteador);
+          final pushService = PushNotificationService(authServiceRoteador);
 
-          await pushService.initialize();
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            try {
+              await pushService.initialize();
+            } catch (e, stack) {
+              await Sentry.captureException(e, stackTrace: stack);
+            }
+          });
         }
 
         sharedPrefs = await SharedPreferences.getInstance();

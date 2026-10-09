@@ -10,6 +10,7 @@ class PedidoStatusSocketService {
   StompClient? _client;
   String? _pedidoId;
   bool _disposed = false;
+  int _generation = 0;
 
   final _statusController = StreamController<StatusPedido>.broadcast();
   final _conectadoController = StreamController<bool>.broadcast();
@@ -38,9 +39,10 @@ class PedidoStatusSocketService {
   Future<void> conectar(String pedidoId) async {
     if (_disposed || _client != null) return;
     _pedidoId = pedidoId;
+    final generation = ++_generation;
 
     final token = await SessionStorageService().obterToken();
-    if (_disposed || _client != null) return;
+    if (_disposed || _client != null || generation != _generation) return;
     if (token == null || token.isEmpty) return;
 
     final headers = {'Authorization': 'Bearer $token'};
@@ -53,7 +55,7 @@ class PedidoStatusSocketService {
         heartbeatIncoming: const Duration(seconds: 10),
         heartbeatOutgoing: const Duration(seconds: 10),
         onConnect: (_) {
-          if (_disposed) return;
+          if (_disposed || generation != _generation) return;
           _emitConectado(true);
           final id = _pedidoId;
           final client = _client;
@@ -61,7 +63,7 @@ class PedidoStatusSocketService {
           client.subscribe(
             destination: '/topic/pedidos/$id/status',
             callback: (frame) {
-              if (_disposed) return;
+              if (_disposed || generation != _generation) return;
               final raw = frame.body?.replaceAll('"', '').trim();
               final parsed = StatusPedido.fromApi(raw);
               if (parsed != StatusPedido.desconhecido) {
@@ -85,9 +87,11 @@ class PedidoStatusSocketService {
   }
 
   Future<void> desconectar() async {
+    _generation++;
     _client?.deactivate();
     _client = null;
     _pedidoId = null;
+    _emitConectado(false);
   }
 
   void dispose() {

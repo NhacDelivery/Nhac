@@ -1,0 +1,60 @@
+// Local E2E fixture only. Simulated failures do not change production accounts.
+const { chromium } = require('playwright');
+const fs = require('node:fs');
+const dir = process.env.NHAC_UX_SHOTS || 'build/ux-validation/screenshots';
+fs.mkdirSync(dir, { recursive: true });
+(async () => {
+ const browser = await chromium.launch({ headless: true, args: ['--no-sandbox'] });
+ try {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.route('**/assets/.env', r => r.fulfill({ contentType: 'text/plain', body: 'API_BASE_URL=http://127.0.0.1:8089/api/v1\nE2E_MODE=true\nGOOGLE_API_KEY=\nSENTRY_DSN=\nSTRIPE_PUBLISHABLE_KEY=\n' }));
+  await page.route('**/i.pravatar.cc/**',r=>r.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4CYAAAAASUVORK5CYII=','base64')}));
+  let failAddresses = true;
+  await page.route('**/usuarios/*/enderecos', r => failAddresses
+    ? r.fulfill({status:503,contentType:'application/json',body:'{"message":"Falha de teste"}'}) : r.continue());
+  await page.goto('http://localhost:3000');
+  await page.waitForTimeout(8000);
+  await page.locator('flt-semantics-placeholder').evaluate(el=>el.click()).catch(()=>{});
+  await page.getByText('Começar',{exact:true}).click();
+  await page.waitForTimeout(800);
+  await page.locator('input').fill('e2e.cliente@nhac.local');
+  await page.getByRole('button',{name:'Continuar',exact:true}).click();
+  await page.waitForTimeout(800);
+  await page.locator('input').fill('NhacE2E#123');
+  await page.getByRole('button',{name:'Continuar',exact:true}).click();
+  await page.waitForTimeout(2500);
+  await page.mouse.click(345,810);
+  await page.getByText('Endereços Salvos Casa, Trabalho...', {exact:true}).waitFor();
+  await page.getByText('Endereços Salvos Casa, Trabalho...', {exact:true}).click();
+  await page.waitForTimeout(2500);
+  await page.getByText('Não foi possível atualizar os endereços. Tente novamente.', {exact:false}).waitFor();
+  if(await page.getByText('Nenhum endereço salvo ainda.',{exact:true}).count()) throw Error('Falha confundida com lista vazia');
+  await page.screenshot({path:dir+'/addresses-failure.png'});
+  failAddresses = false;
+  await page.getByRole('button',{name:'Tentar novamente',exact:true}).click();
+  await page.getByText('Não foi possível atualizar os endereços.',{exact:false}).waitFor({state:'hidden'});
+  await page.waitForTimeout(500);
+  await page.screenshot({path:dir+'/addresses-recovered.png'});
+  let pixCalls = 0;
+  await page.route('**/pedidos/ux-pix/pagamento', r => r.fulfill({contentType:'application/json',body:JSON.stringify({pedidoId:'ux-pix',formaPagamento:'PIX',status:'PENDENTE',valorTotal:12,pixCopiaECola:'000201-pix-teste',simulacaoDisponivel:false})}));
+  await page.route('**/pedidos/ux-pix', r => {pixCalls++;return r.fulfill({status:503,contentType:'application/json',body:'{"message":"Consulta indisponível"}'});});
+  await page.evaluate(()=>{location.hash='/pagamento?pedidoId=ux-pix';});
+  await page.waitForTimeout(2000);
+  await page.getByText('Pagamento ainda não verificado',{exact:false}).waitFor();
+  const before = pixCalls;
+  await page.getByRole('button',{name:'Já paguei, verificar pedido',exact:true}).click();
+  await page.waitForTimeout(500);
+  if(pixCalls <= before) throw Error('Botão manual não consultou pedido');
+  await page.setViewportSize({width:320,height:1000});
+  await page.waitForTimeout(500);
+  await page.screenshot({path:dir+'/pix-narrow-failure.png',fullPage:true});
+  await page.keyboard.press('Tab');
+  await page.setViewportSize({width:1280,height:900});
+  await page.waitForTimeout(300);
+  await page.screenshot({path:dir+'/pix-desktop-failure.png',fullPage:true});
+  if(errors.length) throw Error(JSON.stringify(errors));
+  console.log(JSON.stringify({addressesErrorRecovered:true,pixManualAfterError:true,pixCalls,viewports:['390x844','320x1000','1280x900'],pageErrors:errors}));
+ } finally { await browser.close(); }
+})().catch(e=>{ console.error(e); process.exitCode=1; });

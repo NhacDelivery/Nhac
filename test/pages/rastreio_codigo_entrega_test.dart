@@ -17,9 +17,13 @@ import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/services/pedido_status_socket_service.dart';
 
 class MockPedidoRepository extends Mock implements PedidoRepository {}
+
 class MockLojaRepository extends Mock implements LojaRepository {}
+
 class MockEntregaRepository extends Mock implements EntregaRepository {}
-class MockPedidoStatusSocketService extends Mock implements PedidoStatusSocketService {}
+
+class MockPedidoStatusSocketService extends Mock
+    implements PedidoStatusSocketService {}
 
 void main() {
   late MockPedidoRepository mockPedidoRepository;
@@ -38,6 +42,7 @@ void main() {
     mockEntregaRepository = MockEntregaRepository();
     mockSocket = MockPedidoStatusSocketService();
 
+    when(() => mockSocket.conectado).thenAnswer((_) => const Stream.empty());
     when(() => mockSocket.status).thenAnswer((_) => const Stream.empty());
     when(() => mockSocket.conectar(any())).thenAnswer((_) async {});
     when(() => mockSocket.dispose()).thenReturn(null);
@@ -48,9 +53,12 @@ void main() {
       categoria: 'Pizzaria',
       imagemUrl: '',
     );
-    when(() => mockLojaRepository.buscarLoja(any())).thenAnswer((_) async => loja);
-    when(() => mockEntregaRepository.buscarRota(any())).thenThrow(Exception('sem rota'));
-    when(() => mockEntregaRepository.buscarLocalizacaoEntregador(any())).thenAnswer((_) async => null);
+    when(() => mockLojaRepository.buscarLoja(any()))
+        .thenAnswer((_) async => loja);
+    when(() => mockEntregaRepository.buscarRota(any()))
+        .thenThrow(Exception('sem rota'));
+    when(() => mockEntregaRepository.buscarLocalizacaoEntregador(any()))
+        .thenAnswer((_) async => null);
   });
 
   final endereco = EnderecoModel(
@@ -112,13 +120,16 @@ void main() {
   }
 
   group('F2 - Código de entrega no acompanhamento', () {
-    testWidgets('Estado 1: com código em saiuEntrega exibe 4 dígitos grandes e texto de instrução', (tester) async {
+    testWidgets(
+        'Estado 1: com código em saiuEntrega exibe 4 dígitos grandes e texto de instrução',
+        (tester) async {
       setupScreen(tester);
       final pedido = criarPedido(
         status: StatusPedido.saiuEntrega,
         codigoEntrega: '1234',
       );
-      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100')).thenAnswer((_) async => pedido);
+      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100'))
+          .thenAnswer((_) async => pedido);
 
       await tester.pumpWidget(createWidgetUnderTest('ped-100'));
       await tester.pump();
@@ -126,11 +137,15 @@ void main() {
 
       expect(find.byKey(const Key('cartao-codigo-entrega')), findsOneWidget);
       expect(find.text('1234'), findsOneWidget);
-      expect(find.text('Informe este código ao entregador só quando receber o pedido.'), findsOneWidget);
+      expect(
+          find.text(
+              'Informe este código ao entregador só quando receber o pedido.'),
+          findsOneWidget);
       expect(find.byType(LoadingNhac), findsNothing);
     });
 
-    testWidgets('Acessibilidade: Semantics lê o código dígito a dígito', (tester) async {
+    testWidgets('Acessibilidade: Semantics lê o código dígito a dígito',
+        (tester) async {
       setupScreen(tester);
       final semantics = tester.ensureSemantics();
 
@@ -138,23 +153,28 @@ void main() {
         status: StatusPedido.saiuEntrega,
         codigoEntrega: '5678',
       );
-      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100')).thenAnswer((_) async => pedido);
+      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100'))
+          .thenAnswer((_) async => pedido);
 
       await tester.pumpWidget(createWidgetUnderTest('ped-100'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.bySemanticsLabel('Código de entrega: 5 6 7 8'), findsOneWidget);
+      expect(
+          find.bySemanticsLabel('Código de entrega: 5 6 7 8'), findsOneWidget);
       semantics.dispose();
     });
 
-    testWidgets('Estado 2: carregando código em saiuEntrega quando ainda não recebido da rede', (tester) async {
+    testWidgets(
+        'Estado 2: carregando código em saiuEntrega quando ainda não recebido da rede',
+        (tester) async {
       setupScreen(tester);
       final pedido = criarPedido(
         status: StatusPedido.saiuEntrega,
         codigoEntrega: null,
       );
-      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100')).thenAnswer((_) async => pedido);
+      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100'))
+          .thenAnswer((_) async => pedido);
 
       await tester.pumpWidget(createWidgetUnderTest('ped-100'));
       await tester.pump();
@@ -163,26 +183,37 @@ void main() {
       expect(find.byKey(const Key('cartao-codigo-entrega')), findsOneWidget);
       expect(find.text('Carregando código…'), findsOneWidget);
       expect(find.byType(LoadingNhac), findsOneWidget);
-      expect(find.text('Informe este código ao entregador só quando receber o pedido.'), findsOneWidget);
+      expect(
+          find.text(
+              'Informe este código ao entregador só quando receber o pedido.'),
+          findsOneWidget);
     });
 
-    testWidgets('Estado 3: sem código antes da saída para entrega', (tester) async {
+    testWidgets('Estado 3: sem código antes da saída para entrega',
+        (tester) async {
       setupScreen(tester);
-      for (final status in [StatusPedido.pendente, StatusPedido.pago, StatusPedido.preparando]) {
+      for (final status in [
+        StatusPedido.pendente,
+        StatusPedido.pago,
+        StatusPedido.preparando
+      ]) {
         final pedido = criarPedido(
           status: status,
           codigoEntrega: '1234',
         );
-        when(() => mockPedidoRepository.buscarPedidoPorId('ped-100')).thenAnswer((_) async => pedido);
+        when(() => mockPedidoRepository.buscarPedidoPorId('ped-100'))
+            .thenAnswer((_) async => pedido);
 
         await tester.pumpWidget(createWidgetUnderTest('ped-100'));
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 100));
 
         expect(find.byKey(const Key('cartao-codigo-entrega')), findsNothing);
-        expect(find.text('Informe este código ao entregador só quando receber o pedido.'), findsNothing);
+        expect(
+            find.text(
+                'Informe este código ao entregador só quando receber o pedido.'),
+            findsNothing);
       }
     });
   });
 }
-

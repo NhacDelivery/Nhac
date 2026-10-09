@@ -33,8 +33,11 @@ class ChatRepository {
 
   /// GET /conversas/{conversaId}/mensagens — página mais recente primeiro.
   /// Devolvemos já invertido (mais antiga primeiro), que é a ordem da tela.
-  Future<List<MensagemChat>> historico(String conversaId,
-      {int pagina = 0, int tamanho = 30}) async {
+  Future<List<MensagemChat>> historico(
+    String conversaId, {
+    int pagina = 0,
+    int tamanho = 30,
+  }) async {
     try {
       final response = await _dio.get(
         '/conversas/$conversaId/mensagens',
@@ -62,15 +65,23 @@ class ChatRepository {
   }
 
   /// GET /conversas - lista de conversas ativas do cliente.
-  Future<List<ConversaResumo>> listarConversas({int pagina = 0, int tamanho = 20}) async {
+  Future<List<ConversaResumo>> listarConversas({
+    int pagina = 0,
+    int tamanho = 20,
+  }) async {
     try {
       final response = await _dio.get(
         '/lojas/',
         queryParameters: {'page': pagina, 'size': tamanho},
       );
-      final conteudo = (response.data['content'] as List?) ?? (response.data as List?) ?? const [];
+      final conteudo =
+          (response.data['content'] as List?) ??
+          (response.data as List?) ??
+          const [];
       return conteudo
-          .map((item) => ConversaResumo.fromMap(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => ConversaResumo.fromMap(Map<String, dynamic>.from(item)),
+          )
           .toList();
     } catch (e) {
       throw mapException(e);
@@ -78,15 +89,24 @@ class ChatRepository {
   }
 
   /// GET /conversas/pessoas - lista de conversas ativas do cliente com outras pessoas.
-  Future<List<ConversaPessoaResumo>> listarConversasPessoas({int pagina = 0, int tamanho = 20}) async {
+  Future<List<ConversaPessoaResumo>> listarConversasPessoas({
+    int pagina = 0,
+    int tamanho = 20,
+  }) async {
     try {
       final response = await _dio.get(
         '/conversas/pessoas',
         queryParameters: {'page': pagina, 'size': tamanho},
       );
-      final conteudo = (response.data['content'] as List?) ?? (response.data as List?) ?? const [];
+      final conteudo =
+          (response.data['content'] as List?) ??
+          (response.data as List?) ??
+          const [];
       return conteudo
-          .map((item) => ConversaPessoaResumo.fromMap(Map<String, dynamic>.from(item)))
+          .map(
+            (item) =>
+                ConversaPessoaResumo.fromMap(Map<String, dynamic>.from(item)),
+          )
           .toList();
     } catch (e) {
       throw mapException(e);

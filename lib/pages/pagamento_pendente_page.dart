@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/components/loading_nhac.dart';
+import 'package:nhac/components/nota_fiscal_pedido.dart';
 import 'package:nhac/globals/app_constants.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/globals/exceptions.dart';
@@ -46,7 +47,7 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
           return;
         }
         if (pedido.status.pagamentoConfirmado) {
-          context.go('/rastreio?pedidoId=${widget.pedidoId}');
+          await mostrarNotaFiscalEVerPedido(context, pedidoId: widget.pedidoId);
           return;
         }
       } catch (_) { /* A tela oferece nova tentativa. */ }
@@ -87,7 +88,7 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
       final pedido = await _repository.buscarPedidoPorId(widget.pedidoId);
       if (!mounted) return;
       if (pedido.status.pagamentoConfirmado) {
-        context.go('/rastreio?pedidoId=${widget.pedidoId}');
+        await mostrarNotaFiscalEVerPedido(context, pedidoId: widget.pedidoId);
       } else {
         context.showSuccess('Pagamento enviado. Aguardando confirmação.');
         context.go('/rastreio?pedidoId=${widget.pedidoId}');

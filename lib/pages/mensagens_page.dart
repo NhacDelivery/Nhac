@@ -31,16 +31,28 @@ class _MensagensPageState extends State<MensagensPage> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: Icon(Icons.arrow_back, color: const Color(0xFF5D201C), size: 24.r),
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: const Color(0xFF5D201C),
+                      size: 24.r,
+                    ),
                     onPressed: () => context.pop(),
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: Icon(Icons.search, color: const Color(0xFF5D201C), size: 28.r),
+                    icon: Icon(
+                      Icons.search,
+                      color: const Color(0xFF5D201C),
+                      size: 28.r,
+                    ),
                     onPressed: () {},
                   ),
                   IconButton(
-                    icon: Icon(Icons.more_vert, color: const Color(0xFF5D201C), size: 28.r),
+                    icon: Icon(
+                      Icons.more_vert,
+                      color: const Color(0xFF5D201C),
+                      size: 28.r,
+                    ),
                     onPressed: () {},
                   ),
                 ],
@@ -83,8 +95,14 @@ class _MensagensPageState extends State<MensagensPage> {
         backgroundColor: Colors.white,
         selectedItemColor: const Color(0xFF5D201C),
         unselectedItemColor: Colors.grey.shade500,
-        selectedLabelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.sp),
-        unselectedLabelStyle: TextStyle(fontWeight: FontWeight.normal, fontSize: 12.sp),
+        selectedLabelStyle: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 12.sp,
+        ),
+        unselectedLabelStyle: TextStyle(
+          fontWeight: FontWeight.normal,
+          fontSize: 12.sp,
+        ),
         items: const [
           BottomNavigationBarItem(
             icon: Padding(
@@ -114,7 +132,9 @@ class _MensagensPageState extends State<MensagensPage> {
       future: ChatRepository().listarConversasPessoas(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: LoadingNhac(telaCheia: false, tamanho: 40));
+          return const Center(
+            child: LoadingNhac(telaCheia: false, tamanho: 40),
+          );
         }
 
         if (snapshot.hasError) {
@@ -127,7 +147,7 @@ class _MensagensPageState extends State<MensagensPage> {
         }
 
         final conversas = snapshot.data ?? [];
-        
+
         if (conversas.isEmpty) {
           return Center(
             child: Text(
@@ -145,7 +165,10 @@ class _MensagensPageState extends State<MensagensPage> {
             final dataStr = dateFormat.format(item.ultimaMensagemData);
 
             return ListTile(
-              contentPadding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 6.h),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 24.w,
+                vertical: 6.h,
+              ),
               leading: CircleAvatar(
                 radius: 25.r,
                 backgroundColor: Colors.grey.shade300,
@@ -159,7 +182,9 @@ class _MensagensPageState extends State<MensagensPage> {
                     child: Text(
                       item.pessoaNome,
                       style: TextStyle(
-                        fontWeight: item.mensagensNaoLidas > 0 ? FontWeight.bold : FontWeight.w500,
+                        fontWeight: item.mensagensNaoLidas > 0
+                            ? FontWeight.bold
+                            : FontWeight.w500,
                         fontSize: 17.sp,
                         color: const Color(0xFF5D201C),
                       ),
@@ -169,8 +194,12 @@ class _MensagensPageState extends State<MensagensPage> {
                     dataStr,
                     style: TextStyle(
                       fontSize: 13.sp,
-                      color: item.mensagensNaoLidas > 0 ? const Color(0xFFFF6961) : Colors.grey.shade500,
-                      fontWeight: item.mensagensNaoLidas > 0 ? FontWeight.bold : FontWeight.normal,
+                      color: item.mensagensNaoLidas > 0
+                          ? const Color(0xFFFF6961)
+                          : Colors.grey.shade500,
+                      fontWeight: item.mensagensNaoLidas > 0
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                   ),
                 ],
@@ -186,8 +215,12 @@ class _MensagensPageState extends State<MensagensPage> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 14.sp,
-                        color: item.mensagensNaoLidas > 0 ? const Color(0xFF5D201C) : Colors.grey.shade500,
-                        fontWeight: item.mensagensNaoLidas > 0 ? FontWeight.w500 : FontWeight.normal,
+                        color: item.mensagensNaoLidas > 0
+                            ? const Color(0xFF5D201C)
+                            : Colors.grey.shade500,
+                        fontWeight: item.mensagensNaoLidas > 0
+                            ? FontWeight.w500
+                            : FontWeight.normal,
                       ),
                     ),
                   ],
@@ -208,7 +241,9 @@ class _MensagensPageState extends State<MensagensPage> {
       future: ChatRepository().listarConversas(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: LoadingNhac(telaCheia: false, tamanho: 40));
+          return const Center(
+            child: LoadingNhac(telaCheia: false, tamanho: 40),
+          );
         }
 
         if (snapshot.hasError) {
@@ -221,7 +256,7 @@ class _MensagensPageState extends State<MensagensPage> {
         }
 
         final conversas = snapshot.data ?? [];
-        
+
         if (conversas.isEmpty) {
           return Center(
             child: Text(
@@ -239,7 +274,10 @@ class _MensagensPageState extends State<MensagensPage> {
             final dataStr = dateFormat.format(item.ultimaMensagemData);
 
             return ListTile(
-              contentPadding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 6.h),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: 24.w,
+                vertical: 6.h,
+              ),
               leading: CircleAvatar(
                 radius: 25.r,
                 backgroundColor: Colors.grey.shade300,
@@ -253,7 +291,9 @@ class _MensagensPageState extends State<MensagensPage> {
                     child: Text(
                       item.lojaNome,
                       style: TextStyle(
-                        fontWeight: item.mensagensNaoLidas > 0 ? FontWeight.bold : FontWeight.w500,
+                        fontWeight: item.mensagensNaoLidas > 0
+                            ? FontWeight.bold
+                            : FontWeight.w500,
                         fontSize: 17.sp,
                         color: const Color(0xFF5D201C),
                       ),
@@ -263,8 +303,12 @@ class _MensagensPageState extends State<MensagensPage> {
                     dataStr,
                     style: TextStyle(
                       fontSize: 13.sp,
-                      color: item.mensagensNaoLidas > 0 ? const Color(0xFFFF6961) : Colors.grey.shade500,
-                      fontWeight: item.mensagensNaoLidas > 0 ? FontWeight.bold : FontWeight.normal,
+                      color: item.mensagensNaoLidas > 0
+                          ? const Color(0xFFFF6961)
+                          : Colors.grey.shade500,
+                      fontWeight: item.mensagensNaoLidas > 0
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                     ),
                   ),
                 ],
@@ -290,8 +334,12 @@ class _MensagensPageState extends State<MensagensPage> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 14.sp,
-                        color: item.mensagensNaoLidas > 0 ? const Color(0xFF5D201C) : Colors.grey.shade500,
-                        fontWeight: item.mensagensNaoLidas > 0 ? FontWeight.w500 : FontWeight.normal,
+                        color: item.mensagensNaoLidas > 0
+                            ? const Color(0xFF5D201C)
+                            : Colors.grey.shade500,
+                        fontWeight: item.mensagensNaoLidas > 0
+                            ? FontWeight.w500
+                            : FontWeight.normal,
                       ),
                     ),
                   ],
@@ -300,10 +348,7 @@ class _MensagensPageState extends State<MensagensPage> {
               onTap: () {
                 context.push(
                   '/chat-loja',
-                  extra: {
-                    'lojaId': item.lojaId,
-                    'lojaNome': item.lojaNome,
-                  },
+                  extra: {'lojaId': item.lojaId, 'lojaNome': item.lojaNome},
                 );
               },
             );

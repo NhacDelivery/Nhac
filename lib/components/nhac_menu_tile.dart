@@ -4,13 +4,13 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 class NhacMenuTile extends StatefulWidget {
   final String titulo;
   final String? subtitulo;
-  final Future<void> Function() onTap;
+  final Future<void> Function()? onTap;
 
   const NhacMenuTile({
     super.key,
     required this.titulo,
     this.subtitulo,
-    required this.onTap,
+    this.onTap,
   });
 
   @override
@@ -23,7 +23,7 @@ class _NhacMenuTileState extends State<NhacMenuTile> {
   void _handleTap() async {
     if (_isTapped) return;
     setState(() => _isTapped = true);
-    await widget.onTap();
+    await widget.onTap?.call();
     await Future.delayed(const Duration(milliseconds: 600));
     if (mounted) {
       setState(() => _isTapped = false);
@@ -33,13 +33,14 @@ class _NhacMenuTileState extends State<NhacMenuTile> {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: _handleTap,
+      onTap: widget.onTap == null || _isTapped ? null : _handleTap,
       child: Container(
         color: Colors.transparent,
         padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 18.h),
         child: Row(
           children: [
-            Column(
+            Expanded(
+                child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
@@ -61,13 +62,13 @@ class _NhacMenuTileState extends State<NhacMenuTile> {
                   ),
                 ],
               ],
-            ),
-            const Spacer(),
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 16.r,
-              color: const Color(0xFF5D201C),
-            ),
+            )),
+            if (widget.onTap != null)
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16.r,
+                color: const Color(0xFF5D201C),
+              ),
           ],
         ),
       ),

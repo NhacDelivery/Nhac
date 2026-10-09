@@ -1,0 +1,103 @@
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:dio/dio.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:nhac/controllers/cart_provider.dart';
+import 'package:nhac/controllers/endereco_provider.dart';
+import 'package:nhac/controllers/user_provider.dart';
+import 'package:nhac/pages/home_page.dart' as current;
+import 'package:nhac/pages/rastreio_pedido_page.dart' as tracking;
+import 'package:nhac/services/api_client.dart';
+import 'package:nhac/services/auth_service.dart';
+import 'package:nhac/services/connectivity_service.dart';
+import 'package:nhac/services/home_order_route_observer.dart';
+import 'package:nhac/services/local_cache_service.dart';
+import 'package:nhac/services/shared_get.dart';
+import '.request_baseline/home_page.dart' as baseline;
+import '.request_baseline/rastreio_pedido_page.dart' as baselineTracking;
+import 'pages/home_navigation_bar_test.dart' as mocks;
+
+class ScenarioAdapter implements HttpClientAdapter {
+  final requests = <String>[];
+  final order = {
+    'id':'p1','usuarioId':'user-1','lojaId':'l1','lojaNome':'Loja', 'status':'PREPARANDO',
+    'formaPagamento':'DINHEIRO','valorTotal':20,'taxaFrete':5,'itens':[],
+    'enderecoEntrega':{'rua':'Rua','numero':'1','bairro':'Centro','cidade':'São Paulo','estado':'SP','cep':'01000000'},
+  };
+  @override
+  Future<ResponseBody> fetch(RequestOptions o, Stream<Uint8List>? body, Future<void>? cancel) async {
+    requests.add('${o.method} ${o.uri.path}${o.uri.query.isEmpty ? '' : '?${o.uri.query}'}');
+    Object? data; var status = 200;
+    if (o.path == '/produtos/promocoes') {
+      data = {'content':[{'id':'promo', 'lojaId':'l1', 'nome':'Pizza', 'preco':19,'percentualDesconto':10, 'lojaAberta':true}], 'last':true};
+    } else if (o.path == '/produtos') {
+      final page = (o.queryParameters['page'] as int?) ?? 0;
+      data = {'content':[{'id':'p-$page','lojaId':'l1','nome':'Pizza','preco': page == 15 ? 19 : 30,
+        'percentualDesconto': page == 15 ? 10 : 0, 'lojaAberta':true}], 'last':page == 15};
+    } else if (o.path == '/lojas') {
+      data = {'content':[{'id':'l1','nome':'Loja','categoria':'Pizza','isAberto':true}], 'last':true};
+    } else if (o.path == '/lojas/l1') {
+      data = {'id':'l1','nome':'Loja','categoria':'Pizza','isAberto':true};
+    } else if (o.path == '/pedidos/ativos') { data = [order];
+    } else if (o.path == '/pedidos/ativo' || o.path == '/pedidos/p1') { data = order;
+    } else if (o.path == '/entregas/p1/rota') {
+      status = 400; data = {'error':'REGRA_DE_NEGOCIO','message':'Este pedido não possui coordenadas de entrega.'};
+    } else if (o.path == '/entregas/p1/localizacao-entregador') { status = 204;
+    } else { data = {'content':[], 'last':true}; }
+    return ResponseBody.fromString(status == 204 ? '' : jsonEncode(data), status,
+      headers:{Headers.contentTypeHeader:['application/json']});
+  }
+  @override
+  void close({bool force = false}) {}
+}
+
+void main() {
+  for (final before in [true,false]) {
+    testWidgets('contagem ${before ? 'antes' : 'depois'}: mesmos cenários HTTP simulado', (tester) async {
+      dotenv.testLoad(fileInput:'API_BASE_URL=http://localhost:8080\nE2E_MODE=true');
+      SharedPreferences.setMockInitialValues({}); FlutterSecureStorage.setMockInitialValues({});
+      LocalCacheService.limparCacheHome();
+      ApiClient().atualizarTokenCache('benchmark'); SharedGet.forClient(ApiClient().dio).invalidate();
+      final adapter = ScenarioAdapter(); ApiClient().dio.httpClientAdapter = adapter;
+      tester.view.physicalSize = const Size(430,932); tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
+      final router = GoRouter(observers:[homeOrderRouteObserver], routes:[
+        GoRoute(path:'/', builder:(_,__) => before ? const baseline.HomePage() : const current.HomePage()),
+        GoRoute(path:'/rastreio', builder:(_,__) => before
+          ? const baselineTracking.RastreioPedidoPage(pedidoId:'p1')
+          : const tracking.RastreioPedidoPage(pedidoId:'p1')),
+      ]);
+      await tester.pumpWidget(MultiProvider(providers:[
+        ChangeNotifierProvider<UserProvider>.value(value:mocks.MockUserProvider()),
+        ChangeNotifierProvider<CartProvider>.value(value:mocks.MockCartProvider()),
+        ChangeNotifierProvider<EnderecoProvider>.value(value:mocks.MockEnderecoProvider()),
+        ChangeNotifierProvider<AuthService>.value(value:mocks.MockAuthService()),
+        ChangeNotifierProvider<ConnectivityService>.value(value:mocks.MockConnectivityService()),
+      ], child:ScreenUtilInit(designSize:const Size(390,844), builder:(_,__) => MaterialApp.router(routerConfig:router,
+        builder:(context,child) => MediaQuery(data:MediaQuery.of(context).copyWith(textScaler:const TextScaler.linear(0.8)),child:child!)))));
+      Future<void> flush() async { for(var i=0;i<35;i++) { await tester.pump(const Duration(milliseconds:100)); } }
+      final counts = <String,int>{};
+      await flush(); counts['abrir_home'] = adapter.requests.length; adapter.requests.clear();
+      await tester.tap(find.byIcon(Icons.newspaper_outlined).hitTestable()); await flush();
+      await tester.tap(find.byIcon(Icons.house_outlined).hitTestable()); await flush();
+      tester.widget<PageView>(find.byType(PageView).first).controller!.jumpToPage(0); await flush();
+      counts['trocar_aba_e_voltar'] = adapter.requests.length; adapter.requests.clear();
+      router.push('/rastreio'); await flush(); router.pop(); await flush();
+      tester.widget<PageView>(find.byType(PageView).first).controller!.jumpToPage(0); await flush();
+      counts['abrir_rastreio_e_voltar'] = adapter.requests.length; adapter.requests.clear();
+      final refresh = tester.widget<CupertinoSliverRefreshControl>(find.byType(CupertinoSliverRefreshControl, skipOffstage:false).first);
+      refresh.onRefresh!(); await flush();
+      counts['refresh_manual'] = adapter.requests.length;
+      print('CONTAGEM_${before ? 'ANTES' : 'DEPOIS'} ${jsonEncode(counts)}');
+      await tester.pumpWidget(const SizedBox()); router.dispose();
+    });
+  }
+}

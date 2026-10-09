@@ -1,4 +1,8 @@
+import 'package:nhac/pages/feed_link_page.dart';
+import 'package:nhac/pages/feed_page.dart';
+import 'package:nhac/pages/produto_link_page.dart';
 import 'package:flutter/material.dart';
+import 'package:nhac/pages/feed_publish_page.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/pages/auth/cadastro/verificar_email_cadastro.dart';
 import 'package:nhac/pages/bem_vindo.dart';
@@ -6,6 +10,7 @@ import 'package:nhac/pages/auth/continuar_senha.dart';
 import 'package:nhac/pages/auth/email_cliente.dart';
 import 'package:nhac/pages/auth/insira_telefone.dart';
 import 'package:nhac/pages/carrinho_page.dart';
+import 'package:nhac/models/chat/pedido_chat_referencia.dart';
 import 'package:nhac/pages/chat_loja_page.dart';
 import 'package:nhac/pages/checkout_page.dart';
 import 'package:nhac/pages/pagamento_pendente_page.dart';
@@ -41,10 +46,7 @@ import 'package:nhac/pages/mensagens_page.dart';
 
 class _SlideRightToLeftPageRoute<T> extends PageRoute<T>
     with MaterialRouteTransitionMixin<T> {
-  _SlideRightToLeftPageRoute({
-    required this.child,
-    required super.settings,
-  });
+  _SlideRightToLeftPageRoute({required this.child, required super.settings});
 
   final Widget child;
 
@@ -61,8 +63,12 @@ class _SlideRightToLeftPageRoute<T> extends PageRoute<T>
   Duration get reverseTransitionDuration => const Duration(milliseconds: 400);
 
   @override
-  Widget buildTransitions(BuildContext context, Animation<double> animation,
-      Animation<double> secondaryAnimation, Widget child) {
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
     var curvedAnimation = CurvedAnimation(
       parent: animation,
       curve: Curves.easeOutQuart,
@@ -101,19 +107,13 @@ class _SlideRightToLeftPageRoute<T> extends PageRoute<T>
 }
 
 class SlideRightToLeftPage<T> extends Page<T> {
-  const SlideRightToLeftPage({
-    required super.key,
-    required this.child,
-  });
+  const SlideRightToLeftPage({required super.key, required this.child});
 
   final Widget child;
 
   @override
   Route<T> createRoute(BuildContext context) {
-    return _SlideRightToLeftPageRoute<T>(
-      child: child,
-      settings: this,
-    );
+    return _SlideRightToLeftPageRoute<T>(child: child, settings: this);
   }
 }
 
@@ -125,20 +125,34 @@ Page _buildSlideRightToLeftPage({
 }
 
 final authServiceRoteador = AuthService();
+String? pendingFeedPath;
 
 @NowaGenerated()
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
   observers: [homeOrderRouteObserver],
   refreshListenable: authServiceRoteador,
- redirect: (BuildContext context, GoRouterState state) {
+  redirect: (BuildContext context, GoRouterState state) {
+    if (state.uri.path.startsWith('/publicacao/'))
+      pendingFeedPath = state.uri.path;
+    if (estaSessaoProntaParaFeed()) {
+      final path = pendingFeedPath!;
+      pendingFeedPath = null;
+      if (state.uri.path != path) return path;
+    }
     if (!authServiceRoteador.carregado) {
-      return '/splash';
+      if (state.matchedLocation == '/splash') return null;
+      return state.matchedLocation.startsWith('/produto/')
+          ? '/splash?produto=${Uri.encodeQueryComponent(state.uri.path)}'
+          : '/splash';
     }
 
     final bool estaAutenticado = authServiceRoteador.isAuthenticated;
 
-    final bool telaPublica = state.matchedLocation == '/' ||
+    final bool telaPublica =
+        state.matchedLocation.startsWith('/publicacao/') ||
+        state.matchedLocation.startsWith('/produto/') ||
+        state.matchedLocation == '/' ||
         state.matchedLocation == '/splash' ||
         state.matchedLocation == '/bem-vindo' ||
         state.matchedLocation == '/bem-vindo-motoca' ||
@@ -149,20 +163,39 @@ final GoRouter appRouter = GoRouter(
         state.matchedLocation.startsWith('/recuperacao') ||
         state.matchedLocation.startsWith('/cadastro');
 
-    final bool noMeioDoCadastro = state.matchedLocation == '/verificacao_numero' || 
-                                  state.matchedLocation.startsWith('/cadastro');
+    final bool noMeioDoCadastro =
+        state.matchedLocation == '/verificacao_numero' ||
+        state.matchedLocation.startsWith('/cadastro');
 
     if (!estaAutenticado && !telaPublica) {
       return '/bem-vindo';
     }
 
-    if (estaAutenticado && telaPublica && state.matchedLocation != '/splash' && !noMeioDoCadastro) {
+    if (estaAutenticado &&
+        telaPublica &&
+        state.matchedLocation != '/splash' &&
+        !state.matchedLocation.startsWith('/produto/') &&
+        !state.matchedLocation.startsWith('/publicacao/') &&
+        !noMeioDoCadastro) {
       return '/home-page';
     }
 
-    return null; 
+    return null;
   },
   routes: [
+    GoRoute(
+      path: '/publicacao/:id',
+      builder: (_, state) => FeedLinkPage(id: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/feed-salvos',
+      builder: (_, __) => const Scaffold(body: FeedPage(salvos: true)),
+    ),
+    GoRoute(
+      path: '/produto/:id',
+      builder: (context, state) =>
+          ProdutoLinkPage(produtoId: state.pathParameters['id']!),
+    ),
     GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
     GoRoute(
       path: '/home-page',
@@ -203,10 +236,8 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/cadastro/nome',
-      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
-        key: state.pageKey,
-        child: const Nome(),
-      ),
+      pageBuilder: (context, state) =>
+          _buildSlideRightToLeftPage(key: state.pageKey, child: const Nome()),
     ),
     GoRoute(
       path: '/cadastro/verificar-email',
@@ -283,7 +314,6 @@ final GoRouter appRouter = GoRouter(
         child: const EditarSenhaPage(),
       ),
     ),
-
     GoRoute(
       path: '/enderecos-salvos',
       pageBuilder: (context, state) => _buildSlideRightToLeftPage(
@@ -306,106 +336,109 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
     GoRoute(
-    path: '/carrinho',
-    pageBuilder: (context, state) => _buildSlideRightToLeftPage(
-      key: state.pageKey,
-      child: const CarrinhoPage(),
-    ),
-  ),
-  GoRoute(
-    path: '/checkout',
-    pageBuilder: (context, state) => _buildSlideRightToLeftPage(
-      key: state.pageKey,
-      child: const CheckoutPage(),
-    ),
-  ),
-  GoRoute(
-    path: '/pagamento',
-    pageBuilder: (context, state) => _buildSlideRightToLeftPage(
-      key: state.pageKey,
-      child: PagamentoPendentePage(
-        pedidoId: state.uri.queryParameters['pedidoId'] ?? '',
+      path: '/carrinho',
+      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+        key: state.pageKey,
+        child: const CarrinhoPage(),
       ),
     ),
-  ),
-  GoRoute(
-    path: '/meus-pedidos',
-    pageBuilder: (context, state) => _buildSlideRightToLeftPage(
-      key: state.pageKey,
-      child: const MeusPedidosPage(),
+    GoRoute(
+      path: '/checkout',
+      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+        key: state.pageKey,
+        child: const CheckoutPage(),
+      ),
     ),
-  ),
-  GoRoute(
-    path: '/search',
-    pageBuilder: (context, state) {
-      final categoria = state.uri.queryParameters['categoria'];
-      return _buildSlideRightToLeftPage(
+    GoRoute(
+      path: '/pagamento',
+      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
         key: state.pageKey,
-        child: SearchPage(initialCategory: categoria),
-      );
-    },
-  ),
-  GoRoute(
-    path: '/recuperacao/input',
-    pageBuilder: (context, state) {
-      final metodo = state.extra as String? ?? 'email';
-      return _buildSlideRightToLeftPage(
-        key: state.pageKey,
-        child: RecuperacaoInputPage(metodo: metodo),
-      );
-    },
-  ),
-  GoRoute(
-    path: '/recuperacao/codigo',
-    pageBuilder: (context, state) {
-      final data = state.extra as Map<String, dynamic>? ?? {};
-      return _buildSlideRightToLeftPage(
-        key: state.pageKey,
-        child: InserirCodigoRecuperacaoPage(
-          metodo: data['metodo'] ?? 'email',
-          contato: data['contato'] ?? '',
+        child: PagamentoPendentePage(
+          pedidoId: state.uri.queryParameters['pedidoId'] ?? '',
         ),
-      );
-    },
-  ),
-  GoRoute(
-    path: '/recuperacao/nova-senha',
-    pageBuilder: (context, state) {
-      final data = state.extra as Map<String, dynamic>? ?? {};
-      return _buildSlideRightToLeftPage(
+      ),
+    ),
+    GoRoute(
+      path: '/meus-pedidos',
+      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
         key: state.pageKey,
-        child: NovaSenhaRecuperacaoPage(
-          metodo: data['metodo'] ?? 'email',
-          contato: data['contato'] ?? '',
-          codigo: data['codigo'] ?? '',
-        ),
-      );
-    },
-  ),
-  GoRoute(
-    path: '/rastreio',
-    pageBuilder: (context, state) {
-      final pedidoId = state.uri.queryParameters['pedidoId'] ?? '';
-      return CustomTransitionPage(
-        key: state.pageKey,
-        child: RastreioPedidoPage(pedidoId: pedidoId),
-        transitionsBuilder: (context, animation, secondaryAnimation, child) {
-          const begin = Offset(0.0, 1.0);
-          const end = Offset.zero;
-          const curve = Curves.easeOutCubic;
+        child: const MeusPedidosPage(),
+      ),
+    ),
+    GoRoute(
+      path: '/search',
+      pageBuilder: (context, state) {
+        final categoria = state.uri.queryParameters['categoria'];
+        return _buildSlideRightToLeftPage(
+          key: state.pageKey,
+          child: SearchPage(initialCategory: categoria),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/recuperacao/input',
+      pageBuilder: (context, state) {
+        final metodo = state.extra as String? ?? 'email';
+        return _buildSlideRightToLeftPage(
+          key: state.pageKey,
+          child: RecuperacaoInputPage(metodo: metodo),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/recuperacao/codigo',
+      pageBuilder: (context, state) {
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return _buildSlideRightToLeftPage(
+          key: state.pageKey,
+          child: InserirCodigoRecuperacaoPage(
+            metodo: data['metodo'] ?? 'email',
+            contato: data['contato'] ?? '',
+          ),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/recuperacao/nova-senha',
+      pageBuilder: (context, state) {
+        final data = state.extra as Map<String, dynamic>? ?? {};
+        return _buildSlideRightToLeftPage(
+          key: state.pageKey,
+          child: NovaSenhaRecuperacaoPage(
+            metodo: data['metodo'] ?? 'email',
+            contato: data['contato'] ?? '',
+            codigo: data['codigo'] ?? '',
+          ),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/rastreio',
+      pageBuilder: (context, state) {
+        final pedidoId = state.uri.queryParameters['pedidoId'] ?? '';
+        return CustomTransitionPage(
+          key: state.pageKey,
+          child: RastreioPedidoPage(pedidoId: pedidoId),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            const begin = Offset(0.0, 1.0);
+            const end = Offset.zero;
+            const curve = Curves.easeOutCubic;
 
-          var tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
-          return SlideTransition(
-            position: animation.drive(tween),
-            child: child,
-          );
-        },
-        transitionDuration: const Duration(milliseconds: 300),
-      );
-    },
-  ),
-  GoRoute(
-    path: '/pedido-detalhes',
+            var tween = Tween(
+              begin: begin,
+              end: end,
+            ).chain(CurveTween(curve: curve));
+            return SlideTransition(
+              position: animation.drive(tween),
+              child: child,
+            );
+          },
+          transitionDuration: const Duration(milliseconds: 300),
+        );
+      },
+    ),
+    GoRoute(
+      path: '/pedido-detalhes',
       pageBuilder: (context, state) => _buildSlideRightToLeftPage(
         key: state.pageKey,
         child: PedidoEntreguePage(
@@ -415,22 +448,22 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/pedido-entregue',
-    pageBuilder: (context, state) => _buildSlideRightToLeftPage(
-      key: state.pageKey,
-      child: PedidoEntreguePage(
-        pedidoId: state.uri.queryParameters['pedidoId'] ?? '',
+      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+        key: state.pageKey,
+        child: PedidoEntreguePage(
+          pedidoId: state.uri.queryParameters['pedidoId'] ?? '',
+        ),
       ),
     ),
-  ),
-  GoRoute(
-    path: '/mensagens',
-    pageBuilder: (context, state) => _buildSlideRightToLeftPage(
-      key: state.pageKey,
-      child: const MensagensPage(),
+    GoRoute(
+      path: '/mensagens',
+      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+        key: state.pageKey,
+        child: const MensagensPage(),
+      ),
     ),
-  ),
-  GoRoute(
-    path: '/chat-loja',
+    GoRoute(
+      path: '/chat-loja',
       pageBuilder: (context, state) {
         final dados = state.extra as Map<String, dynamic>? ?? const {};
         return _buildSlideRightToLeftPage(
@@ -439,10 +472,21 @@ final GoRouter appRouter = GoRouter(
             lojaId: (dados['lojaId'] ?? '').toString(),
             lojaNome: (dados['lojaNome'] ?? 'Loja').toString(),
             produtoReferencia: dados['produto'] is ProdutosModel
-                ? dados['produto'] as ProdutosModel : null,
+                ? dados['produto'] as ProdutosModel
+                : null,
+            pedidoReferencia: dados['pedido'] is PedidoChatReferencia
+                ? dados['pedido'] as PedidoChatReferencia
+                : null,
           ),
         );
       },
+    ),
+    GoRoute(
+      path: '/feed-publicar',
+      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+        key: state.pageKey,
+        child: const FeedPublishPage(),
+      ),
     ),
     GoRoute(
       path: '/feed-post',
@@ -456,11 +500,14 @@ final GoRouter appRouter = GoRouter(
             ),
           );
         }
-        
+
         final post = state.extra as FeedPostModel;
         return CustomTransitionPage(
           key: state.pageKey,
-          child: FeedPostDetailPage(post: post),
+          child: FeedPostDetailPage(
+            post: post,
+            focarComentario: state.uri.queryParameters['comentar'] == 'true',
+          ),
           transitionDuration: const Duration(milliseconds: 400),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
@@ -469,4 +516,9 @@ final GoRouter appRouter = GoRouter(
       },
     ),
   ],
-  );
+);
+
+bool estaSessaoProntaParaFeed() =>
+    authServiceRoteador.carregado &&
+    authServiceRoteador.isAuthenticated &&
+    pendingFeedPath != null;

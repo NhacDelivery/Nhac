@@ -1,3 +1,7 @@
+import 'package:nhac/repositories/pedido_repository.dart';
+
+import 'dart:convert';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
@@ -10,16 +14,22 @@ import 'package:nhac/services/session_storage_service.dart';
 
 class PushNotificationService {
   static String? pendingPedidoId;
-  static const MethodChannel _nativeChannel = MethodChannel('com.feentzs.nhac/live_notification');
+  static const MethodChannel _nativeChannel = MethodChannel(
+    'com.feentzs.nhac/live_notification',
+  );
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _localNotifications =
+      FlutterLocalNotificationsPlugin();
   final AuthService _authService;
 
   PushNotificationService(this._authService);
 
   static String? pendingStatus;
 
-  void _abrirPedido(String? pedidoId, {String? status}) {
+  static bool pertenceAConta(Map<String, dynamic> data, String? uid) =>
+      uid != null && data['usuarioId']?.toString() == uid;
+
+  Future<void> _abrirPedido(String? pedidoId, {String? status}) async {
     if (pedidoId == null || pedidoId.isEmpty) return;
     if (!_authService.isAuthenticated ||
         appRouter.routeInformationProvider.value.uri.path == '/splash') {
@@ -27,12 +37,26 @@ class PushNotificationService {
       pendingStatus = status;
       return;
     }
+    final uid = _authService.usuarioId;
+    try {
+      final pedido = await PedidoRepository().buscarPedidoPorId(pedidoId);
+      if (uid == null ||
+          uid != _authService.usuarioId ||
+          pedido.usuarioId != uid)
+        return;
+    } catch (_) {
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_authService.isAuthenticated) {
+      if (_authService.isAuthenticated && _authService.usuarioId == uid) {
         if (status?.toUpperCase() == 'ENTREGUE') {
-          appRouter.go('/pedido-entregue?pedidoId=${Uri.encodeQueryComponent(pedidoId)}');
+          appRouter.go(
+            '/pedido-entregue?pedidoId=${Uri.encodeQueryComponent(pedidoId)}',
+          );
         } else {
-          appRouter.go('/rastreio?pedidoId=${Uri.encodeQueryComponent(pedidoId)}');
+          appRouter.go(
+            '/rastreio?pedidoId=${Uri.encodeQueryComponent(pedidoId)}',
+          );
         }
       }
     });
@@ -41,7 +65,8 @@ class PushNotificationService {
   void _abrirPedidoPendenteAposLogin() {
     final pedidoId = pendingPedidoId;
     final status = pendingStatus;
-    if (pedidoId == null || !_authService.isAuthenticated ||
+    if (pedidoId == null ||
+        !_authService.isAuthenticated ||
         appRouter.routeInformationProvider.value.uri.path == '/splash') {
       return;
     }
@@ -50,22 +75,27 @@ class PushNotificationService {
     _abrirPedido(pedidoId, status: status);
   }
 
-  final AndroidNotificationChannel _androidChannel = const AndroidNotificationChannel(
-    'nhac_high_importance_channel', 
-    'Notificações de Pedidos', 
-    description: 'Avisos importantes sobre o estado do seu pedido.',
-    importance: Importance.max, 
-    playSound: true,
-    enableVibration: true,
-  );
+  final AndroidNotificationChannel _androidChannel =
+      const AndroidNotificationChannel(
+        'nhac_high_importance_channel',
+        'Notificações de Pedidos',
+        description: 'Avisos importantes sobre o estado do seu pedido.',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      );
 
   Future<void> initialize() async {
     _authService.addListener(_abrirPedidoPendenteAposLogin);
     _nativeChannel.setMethodCallHandler((call) async {
-      if (call.method == 'openOrder') _abrirPedido(call.arguments?.toString());
+      // Native legacy intents contain no recipient; opening requires a signed-in order lookup.
+      if (call.method == 'openOrder' && _authService.isAuthenticated)
+        _abrirPedido(call.arguments?.toString());
     });
     try {
-      _abrirPedido(await _nativeChannel.invokeMethod<String>('consumePendingOrder'));
+      _abrirPedido(
+        await _nativeChannel.invokeMethod<String>('consumePendingOrder'),
+      );
     } on MissingPluginException {
       // A implementação nativa só existe no Android.
     }
@@ -84,18 +114,30 @@ class PushNotificationService {
       // Envia FCM token ao backend quando o usuário faz login
       // Cria uma variável para guardar o estado anterior do usuário
       String? lastUserId = _authService.usuarioId;
-      _authService.addListener(() async {
+      Future<void> tokenOperations = Future<void>.value();
+      _authService.addListener(() {
         final currentUserId = _authService.usuarioId;
-        // Só executa se houver um usuário logado E se ele for diferente do anterior (ou seja, acabou de logar)
-        if (currentUserId != null && currentUserId != lastUserId) {
-          final fcmToken = await _fcm.getToken();
-          if (fcmToken != null) {
-            await _guardarTokenNoBancoDeDados(fcmToken);
-          }
-        }
-        
-        // Atualiza a referência para a próxima checagem
+        if (currentUserId == lastUserId) return;
+        final previous = lastUserId;
         lastUserId = currentUserId;
+        tokenOperations = tokenOperations
+            .then((_) async {
+              if (previous != null) {
+                await _localNotifications.cancelAll();
+                await _fcm.deleteToken();
+              }
+              if (currentUserId == null ||
+                  currentUserId != _authService.usuarioId)
+                return;
+              final token = await _fcm.getToken();
+              if (token != null && currentUserId == _authService.usuarioId)
+                await _guardarTokenNoBancoDeDados(token);
+            })
+            .catchError((Object e) {
+              debugPrint(
+                'Não foi possível atualizar o dispositivo de notificações: $e',
+              );
+            });
       });
 
       _fcm.onTokenRefresh.listen((novoToken) {
@@ -103,53 +145,64 @@ class PushNotificationService {
       });
 
       await _localNotifications
-          .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.createNotificationChannel(_androidChannel);
 
-      const AndroidInitializationSettings androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-      const InitializationSettings initSettings = InitializationSettings(android: androidInit);
+      const AndroidInitializationSettings androidInit =
+          AndroidInitializationSettings('@mipmap/ic_launcher');
+      const InitializationSettings initSettings = InitializationSettings(
+        android: androidInit,
+      );
 
       await _localNotifications.initialize(
         settings: initSettings,
         onDidReceiveNotificationResponse: (response) {
           final payload = response.payload;
-          if (payload != null && payload.startsWith('ENTREGUE:')) {
-            _abrirPedido(payload.substring('ENTREGUE:'.length), status: 'ENTREGUE');
-          } else {
-            _abrirPedido(payload);
+          if (payload == null) return;
+          try {
+            final data = Map<String, dynamic>.from(jsonDecode(payload) as Map);
+            if (!pertenceAConta(data, _authService.usuarioId)) return;
+            _abrirPedido(
+              data['pedidoId'] as String?,
+              status: data['status'] as String?,
+            );
+          } catch (_) {
+            /* Legacy notifications have no account identity. */
           }
         },
       );
 
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
+        if (!pertenceAConta(message.data, _authService.usuarioId)) return;
         registrarMensagem(message, usuarioId: _authService.usuarioId);
         final status = message.data['status']?.toString();
         _abrirPedido(message.data['pedidoId']?.toString(), status: status);
       });
       final inicial = await _fcm.getInitialMessage();
-      if (inicial != null) {
+      if (inicial != null &&
+          pertenceAConta(inicial.data, _authService.usuarioId)) {
         await registrarMensagem(inicial, usuarioId: _authService.usuarioId);
         final status = inicial.data['status']?.toString();
         _abrirPedido(inicial.data['pedidoId']?.toString(), status: status);
       }
 
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        if (!pertenceAConta(message.data, _authService.usuarioId)) return;
         registrarMensagem(message, usuarioId: _authService.usuarioId);
         RemoteNotification? notification = message.notification;
         AndroidNotification? android = message.notification?.android;
 
         if (notification != null && android != null) {
-          final isEntregue = message.data['status']?.toString().toUpperCase() == 'ENTREGUE';
+          final isEntregue =
+              message.data['status']?.toString().toUpperCase() == 'ENTREGUE';
           final pid = message.data['pedidoId']?.toString() ?? '';
           _localNotifications.show(
-            id:
-            notification.hashCode,
-            title:
-            notification.title,
-            body:
-            notification.body,
-            notificationDetails: 
-            NotificationDetails(
+            id: notification.hashCode,
+            title: notification.title,
+            body: notification.body,
+            notificationDetails: NotificationDetails(
               android: AndroidNotificationDetails(
                 _androidChannel.id,
                 _androidChannel.name,
@@ -159,7 +212,11 @@ class PushNotificationService {
                 icon: '@mipmap/ic_launcher',
               ),
             ),
-            payload: isEntregue ? 'ENTREGUE:$pid' : pid,
+            payload: jsonEncode({
+              'usuarioId': _authService.usuarioId,
+              'pedidoId': pid,
+              'status': isEntregue ? 'ENTREGUE' : message.data['status'],
+            }),
           );
         }
       });
@@ -174,14 +231,17 @@ class PushNotificationService {
       final contaAtual =
           usuarioId ?? await SessionStorageService().obterUsuarioId();
       final destinatario = message.data['usuarioId']?.toString();
-      if (contaAtual == null ||
-          (destinatario != null && destinatario != contaAtual)) return;
+      if (contaAtual == null || destinatario != contaAtual) {
+        return;
+      }
       final pedidoId = message.data['pedidoId']?.toString();
       final status = StatusPedido.fromApi(message.data['status']?.toString());
-      final titulo = message.notification?.title ??
+      final titulo =
+          message.notification?.title ??
           message.data['titulo']?.toString() ??
           message.data['title']?.toString();
-      final corpo = message.notification?.body ??
+      final corpo =
+          message.notification?.body ??
           message.data['corpo']?.toString() ??
           message.data['body']?.toString();
       if (pedidoId != null &&
@@ -224,7 +284,9 @@ class PushNotificationService {
         debugPrint('❌ Erro ao guardar o token na API: $e');
       }
     } else {
-      debugPrint('Nenhum utilizador logado. O token não foi guardado na base de dados.');
+      debugPrint(
+        'Nenhum utilizador logado. O token não foi guardado na base de dados.',
+      );
     }
   }
 }

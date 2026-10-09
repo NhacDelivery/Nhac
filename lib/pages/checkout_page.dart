@@ -1,14 +1,14 @@
+import 'package:nhac/components/selecionar_endereco_padrao.dart';
 import 'package:flutter/material.dart';
-import 'package:barcode_widget/barcode_widget.dart';
-import 'package:nhac/components/loading_nhac.dart';
+import 'package:nhac/components/nota_fiscal_pedido.dart';
 import 'package:nhac/models/usuario/cupom_model.dart';
 import 'package:nhac/repositories/cupom_repository.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:nhac/models/pedido/criar_pedido_request.dart';
-import 'package:uuid/uuid.dart';
-import 'package:nhac/repositories/pedido_repository.dart';
+import 'package:nhac/services/checkout_tentativa_service.dart';
+import 'package:nhac/components/estado_com_retry.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:nhac/controllers/cart_provider.dart';
@@ -38,8 +38,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final TextEditingController _cpfController = TextEditingController();
 
   bool _mostrarCampoTroco = true;
-  final NumberFormat currencyFormat =
-      NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+  final NumberFormat currencyFormat = NumberFormat.currency(
+    locale: 'pt_BR',
+    symbol: 'R\$',
+  );
   bool _isLoading = true;
   bool _isSubmitting = false;
 
@@ -48,17 +50,80 @@ class _CheckoutPageState extends State<CheckoutPage> {
   double? _entregaLatitude, _entregaLongitude;
   int _freteVersao = 0;
   int? _tempoEstimadoMinutos;
-  String? _checkoutIdempotencyKey;
+  final _tentativasCheckout = CheckoutTentativaService();
+  Map<String, dynamic>? _tentativaPendente;
+  String? _erroTentativa;
+  bool _consultandoTentativa = true;
+
+  Future<void> _consultarTentativa() async {
+    final uid = context.read<AuthService>().usuarioId;
+    if (uid == null) return;
+    try {
+      final tentativa = await _tentativasCheckout.carregar(uid);
+      if (!mounted || context.read<AuthService>().usuarioId != uid) return;
+      setState(() {
+        _tentativaPendente = tentativa;
+        _erroTentativa = null;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _erroTentativa = 'Não foi possível conferir a tentativa anterior. Tente novamente antes de criar um pedido.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _consultandoTentativa = false);
+    }
+  }
+
+  Future<void> _recuperarTentativa() async {
+    if (_isSubmitting || _tentativaPendente == null) return;
+    final auth = context.read<AuthService>();
+    final uid = auth.usuarioId;
+    if (uid == null) return;
+    final pagamento = (_tentativaPendente!['payload'] as Map)['formaPagamento'];
+    setState(() => _isSubmitting = true);
+    try {
+      final resposta = await _tentativasCheckout.recuperar(uid);
+      if (!mounted || auth.usuarioId != uid) return;
+      await LocalCacheService.salvarPedidoAtivo(uid, resposta.pedidoId);
+      if (!mounted || auth.usuarioId != uid) return;
+      await context.read<CartProvider>().consumirPedidoRecuperado(
+        resposta.pedidoId,
+        {
+          ...Map<String, dynamic>.from(_tentativaPendente!['payload'] as Map),
+          '_origemCarrinho': _tentativaPendente!['carrinho'],
+        },
+      );
+      await _tentativasCheckout.concluir(uid);
+      if (!mounted || auth.usuarioId != uid) return;
+      context.go(
+        pagamento == 'DINHEIRO'
+            ? '/rastreio?pedidoId=${Uri.encodeQueryComponent(resposta.pedidoId)}'
+            : '/pagamento?pedidoId=${Uri.encodeQueryComponent(resposta.pedidoId)}',
+      );
+    } catch (e) {
+      if (mounted && auth.usuarioId == uid) {
+        context.showError(e.toString().replaceFirst('Exception: ', ''));
+      }
+      if (mounted && auth.usuarioId == uid) await _consultarTentativa();
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _consultarTentativa();
       _carregarDadosIniciais();
     });
   }
 
   Future<void> _carregarDadosIniciais() async {
+    await context.read<EnderecoProvider>().buscarEnderecos();
+    if (!mounted) return;
     await _verificarNumeroEndereco();
     if (!mounted) return;
 
@@ -78,7 +143,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final cartProvider = context.read<CartProvider>();
     if (cartProvider.lojaId.isEmpty) return;
     final versao = ++_freteVersao;
-    setState(() { _freteConfirmado = false; _entregaLatitude = null; _entregaLongitude = null; });
+    setState(() {
+      _freteConfirmado = false;
+      _entregaLatitude = null;
+      _entregaLongitude = null;
+    });
 
     try {
       double latitude;
@@ -96,9 +165,22 @@ class _CheckoutPageState extends State<CheckoutPage> {
           endereco.cep,
         ].where((v) => v.trim().isNotEmpty).join(', ');
         final locais = await locationFromAddress(enderecoCompleto);
-        if (locais.isEmpty) throw StateError('Endereço não encontrado no mapa.');
+        if (locais.length != 1) {
+          throw StateError(
+            'Não foi possível identificar um único local. Revise rua, número, cidade e CEP do endereço.',
+          );
+        }
         latitude = locais.first.latitude;
         longitude = locais.first.longitude;
+      }
+      if (!latitude.isFinite ||
+          !longitude.isFinite ||
+          latitude.abs() > 90 ||
+          longitude.abs() > 180 ||
+          (latitude == 0 && longitude == 0)) {
+        throw StateError(
+          'O serviço de endereço não retornou coordenadas válidas. Revise o endereço.',
+        );
       }
       final resposta = await LojaRepository().calcularFrete(
         cartProvider.lojaId,
@@ -116,32 +198,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
     } catch (e) {
       debugPrint('Não foi possível recalcular o frete: $e');
       if (!mounted || versao != _freteVersao) return;
-      final loja = await LojaRepository().buscarLoja(cartProvider.lojaId);
-      if (loja != null && mounted && versao == _freteVersao) {
-        setState(() {
-          _taxaFrete = loja.dadosOperacionais?.taxaEntregaBase ?? 0.0;
-          _tempoEstimadoMinutos = loja.dadosOperacionais?.tempoEntregaMax;
-        });
-      }
+      context.showError(
+        'Não foi possível confirmar o endereço e o frete: ${e.toString().replaceFirst('Bad state: ', '')}',
+      );
+      // Não apresenta a taxa base como se fosse um frete calculado.
+      setState(() {
+        _taxaFrete = 0;
+        _tempoEstimadoMinutos = null;
+      });
     }
   }
 
   Future<void> _verificarNumeroEndereco() async {
     if (!mounted) return;
+    setState(() => _isLoading = false);
     final enderecoProvider = context.read<EnderecoProvider>();
     final EnderecoModel? enderecoisPadrao = enderecoProvider.enderecos.isEmpty
         ? null
         : enderecoProvider.enderecos.firstWhere(
             (e) => e.isPadrao,
-            orElse: () => EnderecoModel(
-              id: '',
-              bairro: '',
-              cep: '',
-              cidade: '',
-              estado: '',
-              numero: '',
-              rua: '',
-            ),
+            orElse: () => enderecoProvider.enderecos.first,
           );
     if (enderecoisPadrao != null &&
         enderecoisPadrao.id.isNotEmpty &&
@@ -154,83 +230,130 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Future<void> _pedirNumeroEndereco(EnderecoModel endereco) async {
     final TextEditingController numeroController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    final provider = context.read<EnderecoProvider>();
+    bool salvando = false;
+    String? erro;
     await showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(24.r)),
-        backgroundColor: Colors.white,
-        title: Row(
-          children: [
-            Icon(Icons.home, color: const Color(0xFFFF6961), size: 28.r),
-            SizedBox(width: 12.w),
-            Text(
-              'Número da casa',
-              style: TextStyle(
-                  fontSize: 20.sp,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF5D201C)),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (ctx, atualizar) => PopScope(
+          canPop: !salvando,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(24.r),
             ),
-          ],
-        ),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Para completar seu endereço, informe o número da casa.',
-                style:
-                    TextStyle(fontSize: 14.sp, color: const Color(0xFF5D201C)),
-              ),
-              SizedBox(height: 16.h),
-              TextFormField(
-                controller: numeroController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(
-                  hintText: 'Número (ex: 123, S/N)',
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12.r)),
-                  contentPadding:
-                      EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
+            backgroundColor: Colors.white,
+            title: Row(
+              children: [
+                Icon(Icons.home, color: const Color(0xFFFF6961), size: 28.r),
+                SizedBox(width: 12.w),
+                Expanded(
+                  child: Text(
+                    'Número da casa',
+                    style: TextStyle(
+                      fontSize: 20.sp,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF5D201C),
+                    ),
+                  ),
                 ),
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Campo obrigatório'
-                    : null,
+              ],
+            ),
+            content: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Para completar seu endereço, informe o número da casa.',
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: const Color(0xFF5D201C),
+                    ),
+                  ),
+                  SizedBox(height: 16.h),
+                  if (erro != null)
+                    Text(erro!, style: const TextStyle(color: Colors.red)),
+                  TextFormField(
+                    enabled: !salvando,
+                    controller: numeroController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      hintText: 'Número (ex: 123, S/N)',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12.r),
+                      ),
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: 16.w,
+                        vertical: 12.h,
+                      ),
+                    ),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Campo obrigatório'
+                        : null,
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: salvando ? null : () => Navigator.pop(dialogContext),
+                child: Text(
+                  'Cancelar',
+                  style: TextStyle(color: Colors.grey.shade600),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: salvando
+                    ? null
+                    : () async {
+                        if (salvando || !formKey.currentState!.validate()) {
+                          return;
+                        }
+                        atualizar(() {
+                          salvando = true;
+                          erro = null;
+                        });
+                        try {
+                          await provider.atualizarEndereco(
+                            endereco.id,
+                            endereco.copyWith(
+                              numero: numeroController.text.trim(),
+                            ),
+                          );
+                          if (!mounted || !dialogContext.mounted) return;
+                          Navigator.pop(dialogContext);
+                          if (provider.erro != null) {
+                            context.showInfo(provider.erro!);
+                          }
+                        } catch (_) {
+                          if (ctx.mounted) {
+                            atualizar(
+                              () => erro = 'Não foi possível salvar o número. Tente novamente.',
+                            );
+                          }
+                        } finally {
+                          if (ctx.mounted) {
+                            atualizar(() => salvando = false);
+                          }
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFFE645C),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(50.r),
+                  ),
+                ),
+                child: Text(salvando ? 'Salvando...' : 'Salvar'),
               ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child:
-                Text('Cancelar', style: TextStyle(color: Colors.grey.shade600)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (formKey.currentState!.validate()) {
-                final numero = numeroController.text.trim();
-                final enderecoAtualizado = endereco.copyWith(numero: numero);
-
-                await context.read<EnderecoProvider>().atualizarEndereco(
-                    enderecoAtualizado.id, enderecoAtualizado);
-
-                if (!mounted) return;
-                Navigator.pop(context);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFFE645C),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(50.r)),
-            ),
-            child: const Text('Salvar'),
-          ),
-        ],
       ),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    numeroController.dispose();
   }
 
   @override
@@ -259,13 +382,23 @@ class _CheckoutPageState extends State<CheckoutPage> {
     final subtotal = cartProvider.valorTotal;
     final frete = _taxaFrete;
 
-    final desconto = _subtotalValidado == subtotal ? (_cupom?.descontoAplicado ?? 0) : 0.0;
+    final desconto = _subtotalValidado == subtotal
+        ? (_cupom?.descontoAplicado ?? 0)
+        : 0.0;
     final total = subtotal + frete - desconto;
     final tempoEntrega = _tempoEstimadoMinutos == null
         ? 'Tempo calculado no fechamento'
         : 'Até $_tempoEstimadoMinutos min';
     final podeFinalizar =
-        enderecoisPadrao != null && enderecoisPadrao.numero.isNotEmpty;
+        !_consultandoTentativa &&
+        _tentativaPendente == null &&
+        _erroTentativa == null &&
+        !enderecoProvider.isLoading &&
+        enderecoProvider.erro == null &&
+        cartProvider.itens.isNotEmpty &&
+        !cartProvider.itens.values.any((item) => item.esgotado) &&
+        enderecoisPadrao != null &&
+        enderecoisPadrao.numero.isNotEmpty;
 
     return Scaffold(
       backgroundColor: const Color(0xFFFFE7E5),
@@ -273,8 +406,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
         backgroundColor: const Color(0xFFFFE7E5),
         elevation: 0,
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new,
-              color: const Color(0xFF5D201C), size: 20.r),
+          icon: Icon(
+            Icons.arrow_back_ios_new,
+            color: const Color(0xFF5D201C),
+            size: 20.r,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
@@ -293,6 +429,33 @@ class _CheckoutPageState extends State<CheckoutPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (_erroTentativa != null)
+              BannerErroInline(
+                mensagem: _erroTentativa!,
+                aoTentarNovamente: _consultarTentativa,
+              ),
+            if (_tentativaPendente != null) ...[
+              const Text(
+                'Há uma tentativa anterior sem confirmação. Verifique o resultado antes de criar outro pedido.',
+              ),
+              TextButton(
+                onPressed: _isSubmitting ? null : _recuperarTentativa,
+                child: Text(
+                  _isSubmitting
+                      ? 'Verificando...'
+                      : 'Verificar tentativa anterior',
+                ),
+              ),
+            ],
+            if (enderecoProvider.erro != null)
+              BannerErroInline(
+                mensagem: enderecoProvider.erro!,
+                aoTentarNovamente: _carregarDadosIniciais,
+              ),
+            if (cartProvider.itens.values.any((item) => item.esgotado))
+              const Text(
+                'Remova os produtos esgotados do carrinho para finalizar.',
+              ),
             _buildSectionTitle('Endereço de entrega'),
             SizedBox(height: 8.h),
             Container(
@@ -307,8 +470,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       color: const Color(0xFFFF6961).withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.location_on_outlined,
-                        color: const Color(0xFFFF6961), size: 20.r),
+                    child: Icon(
+                      Icons.location_on_outlined,
+                      color: const Color(0xFFFF6961),
+                      size: 20.r,
+                    ),
                   ),
                   SizedBox(width: 16.w),
                   Expanded(
@@ -318,6 +484,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         Text(
                           enderecoisPadrao != null
                               ? '${enderecoisPadrao.rua}, ${enderecoisPadrao.numero}'
+                              : enderecoProvider.isLoading
+                              ? 'Consultando endereços...'
+                              : enderecoProvider.erro != null
+                              ? 'Endereços indisponíveis'
                               : 'Nenhum endereço selecionado',
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
@@ -330,7 +500,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           Text(
                             '${enderecoisPadrao.bairro} - ${enderecoisPadrao.cidade}/${enderecoisPadrao.estado}',
                             style: TextStyle(
-                                color: Colors.grey.shade600, fontSize: 12.sp),
+                              color: Colors.grey.shade600,
+                              fontSize: 12.sp,
+                            ),
                           ),
                         ],
                       ],
@@ -341,8 +513,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     child: Text(
                       'Alterar',
                       style: TextStyle(
-                          color: const Color(0xFFFF6961),
-                          fontWeight: FontWeight.w600),
+                        color: const Color(0xFFFF6961),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ],
@@ -373,9 +546,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     Text(
                       'CPF para pagamento PIX',
                       style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14.sp,
-                          color: const Color(0xFF5D201C)),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14.sp,
+                        color: const Color(0xFF5D201C),
+                      ),
                     ),
                     SizedBox(height: 8.h),
                     TextField(
@@ -384,9 +558,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       decoration: InputDecoration(
                         hintText: 'Digite seu CPF (obrigatório)',
                         hintStyle: TextStyle(
-                            color: Colors.grey.shade400, fontSize: 14.sp),
-                        prefixIcon: Icon(Icons.person,
-                            size: 20.r, color: Colors.grey.shade600),
+                          color: Colors.grey.shade400,
+                          fontSize: 14.sp,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.person,
+                          size: 20.r,
+                          color: Colors.grey.shade600,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12.r),
                           borderSide: BorderSide.none,
@@ -410,9 +589,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     Text(
                       'Precisa de troco?',
                       style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14.sp,
-                          color: const Color(0xFF5D201C)),
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14.sp,
+                        color: const Color(0xFF5D201C),
+                      ),
                     ),
                     SizedBox(height: 8.h),
                     TextField(
@@ -421,9 +601,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       decoration: InputDecoration(
                         hintText: 'Valor para troco (ex: 50,00)',
                         hintStyle: TextStyle(
-                            color: Colors.grey.shade400, fontSize: 14.sp),
-                        prefixIcon: Icon(Icons.money,
-                            size: 20.r, color: Colors.grey.shade600),
+                          color: Colors.grey.shade400,
+                          fontSize: 14.sp,
+                        ),
+                        prefixIcon: Icon(
+                          Icons.money,
+                          size: 20.r,
+                          color: Colors.grey.shade600,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(12.r),
                           borderSide: BorderSide.none,
@@ -501,8 +686,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             _cupom == null
                                 ? 'Veja seus cupons e economize neste pedido'
                                 : (_subtotalValidado == subtotal
-                                    ? 'Desconto de ${currencyFormat.format(desconto)} aplicado'
-                                    : 'Carrinho alterado. Selecione o cupom novamente.'),
+                                      ? 'Desconto de ${currencyFormat.format(desconto)} aplicado'
+                                      : 'Carrinho alterado. Selecione o cupom novamente.'),
                             style: TextStyle(
                               fontSize: 12.sp,
                               color: const Color(0xFF5D201C)
@@ -523,9 +708,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         onPressed: _isSubmitting
                             ? null
                             : () => setState(() {
-                                  _cupom = null;
-                                  _subtotalValidado = null;
-                                }),
+                                _cupom = null;
+                                _subtotalValidado = null;
+                              }),
                         icon: const Icon(
                           Icons.close_rounded,
                           color: Color(0xFFFF6961),
@@ -543,47 +728,59 @@ class _CheckoutPageState extends State<CheckoutPage> {
               decoration: _cardDecoration(),
               child: Column(
                 children: [
-                  ...cartProvider.itens.values.map((item) => Padding(
-                        padding: EdgeInsets.only(bottom: 12.h),
-                        child: Row(
-                          children: [
-                            Text(
-                              '${item.quantidade}x',
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 14.sp),
+                  ...cartProvider.itens.values.map(
+                    (item) => Padding(
+                      padding: EdgeInsets.only(bottom: 12.h),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${item.quantidade}x',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14.sp,
                             ),
-                            SizedBox(width: 12.w),
-                            Expanded(
-                              child: Text(
-                                item.nome,
-                                style: TextStyle(
-                                    fontSize: 14.sp, color: Colors.black87),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                          ),
+                          SizedBox(width: 12.w),
+                          Expanded(
+                            child: Text(
+                              item.nome,
+                              style: TextStyle(
+                                fontSize: 14.sp,
+                                color: Colors.black87,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                            Text(
-                              currencyFormat
-                                  .format(item.preco * item.quantidade),
-                              style: TextStyle(
-                                  fontWeight: FontWeight.w600, fontSize: 14.sp),
+                          ),
+                          Text(
+                            currencyFormat.format(item.preco * item.quantidade),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14.sp,
                             ),
-                          ],
-                        ),
-                      )),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   if (cartProvider.observacao.isNotEmpty) ...[
                     Divider(height: 24.h, color: Colors.grey.shade200),
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.note_outlined,
-                            size: 18.r, color: Colors.grey.shade600),
+                        Icon(
+                          Icons.note_outlined,
+                          size: 18.r,
+                          color: Colors.grey.shade600,
+                        ),
                         SizedBox(width: 8.w),
                         Expanded(
                           child: Text(
                             'Observações: ${cartProvider.observacao}',
                             style: TextStyle(
-                                fontSize: 13.sp, color: Colors.grey.shade700),
+                              fontSize: 13.sp,
+                              color: Colors.grey.shade700,
+                            ),
                           ),
                         ),
                       ],
@@ -594,11 +791,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Subtotal',
-                            style: TextStyle(
-                                color: Colors.grey.shade700, fontSize: 14.sp)),
-                        Text(currencyFormat.format(subtotal),
-                            style: TextStyle(fontSize: 14.sp)),
+                        Text(
+                          'Subtotal',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontSize: 14.sp,
+                          ),
+                        ),
+                        Text(
+                          currencyFormat.format(subtotal),
+                          style: TextStyle(fontSize: 14.sp),
+                        ),
                       ],
                     ),
                   ),
@@ -618,9 +821,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(_freteConfirmado ? 'Frete confirmado' : 'Frete estimado',
-                            style: TextStyle(
-                                color: Colors.grey.shade700, fontSize: 14.sp)),
+                        Text(
+                          _freteConfirmado
+                              ? 'Frete confirmado'
+                              : 'Frete estimado',
+                          style: TextStyle(
+                            color: Colors.grey.shade700,
+                            fontSize: 14.sp,
+                          ),
+                        ),
                         Text(
                           currencyFormat.format(frete),
                           style: TextStyle(
@@ -634,8 +843,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   SizedBox(height: 12.h),
                   if (!_freteConfirmado)
                     TextButton(
-                      onPressed: enderecoisPadrao == null ? null : () => _recalcularFrete(enderecoisPadrao),
-                      child: const Text('Frete ainda não confirmado para este endereço. Tentar novamente'),
+                      onPressed: enderecoisPadrao == null
+                          ? null
+                          : () => _recalcularFrete(enderecoisPadrao),
+                      child: const Text(
+                        'Frete ainda não confirmado para este endereço. Tentar novamente',
+                      ),
                     ),
                   MergeSemantics(
                     child: Row(
@@ -644,9 +857,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         Text(
                           'Total',
                           style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16.sp,
-                              color: const Color(0xFF5D201C)),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16.sp,
+                            color: const Color(0xFF5D201C),
+                          ),
                         ),
                         Semantics(
                           key: E2EKeys.checkoutTotal,
@@ -654,9 +868,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           child: Text(
                             currencyFormat.format(total),
                             style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 18.sp,
-                                color: const Color(0xFFFF6961)),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 18.sp,
+                              color: const Color(0xFFFF6961),
+                            ),
                           ),
                         ),
                       ],
@@ -673,15 +888,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
               decoration: _cardDecoration(),
               child: Row(
                 children: [
-                  Icon(Icons.timer_outlined,
-                      color: const Color(0xFFFF6961), size: 24.r),
+                  Icon(
+                    Icons.timer_outlined,
+                    color: const Color(0xFFFF6961),
+                    size: 24.r,
+                  ),
                   SizedBox(width: 12.w),
-                  Text(
-                    tempoEntrega,
-                    style: TextStyle(
+                  Expanded(
+                    child: Text(
+                      tempoEntrega,
+                      style: TextStyle(
                         fontSize: 14.sp,
                         fontWeight: FontWeight.w500,
-                        color: const Color(0xFF5D201C)),
+                        color: const Color(0xFF5D201C),
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -745,27 +966,34 @@ class _CheckoutPageState extends State<CheckoutPage> {
           padding: EdgeInsets.symmetric(vertical: 12.h),
           child: Row(
             children: [
-              Icon(icon,
-                  size: 24.r,
-                  color: isSelected
-                      ? const Color(0xFFFF6961)
-                      : Colors.grey.shade500),
+              Icon(
+                icon,
+                size: 24.r,
+                color: isSelected
+                    ? const Color(0xFFFF6961)
+                    : Colors.grey.shade500,
+              ),
               SizedBox(width: 16.w),
               Expanded(
                 child: Text(
                   title,
                   style: TextStyle(
                     fontSize: 15.sp,
-                    fontWeight:
-                        isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color:
-                        isSelected ? const Color(0xFFFF6961) : Colors.black87,
+                    fontWeight: isSelected
+                        ? FontWeight.w600
+                        : FontWeight.normal,
+                    color: isSelected
+                        ? const Color(0xFFFF6961)
+                        : Colors.black87,
                   ),
                 ),
               ),
               if (isSelected)
-                Icon(Icons.check_circle,
-                    color: const Color(0xFFFF6961), size: 20.r),
+                Icon(
+                  Icons.check_circle,
+                  color: const Color(0xFFFF6961),
+                  size: 20.r,
+                ),
             ],
           ),
         ),
@@ -788,11 +1016,18 @@ class _CheckoutPageState extends State<CheckoutPage> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => _AddressSelectionSheet(enderecos: enderecos),
     );
-    await enderecoProvider.buscarEnderecos();
+    if (!mounted || !context.mounted) return;
+    await context.read<EnderecoProvider>().buscarEnderecos();
+    if (!mounted) return;
+    await _verificarNumeroEndereco();
     if (!mounted || !context.mounted) return;
     if (enderecoProvider.enderecos.isEmpty) {
       _freteVersao++;
-      setState(() { _freteConfirmado = false; _entregaLatitude = null; _entregaLongitude = null; });
+      setState(() {
+        _freteConfirmado = false;
+        _entregaLatitude = null;
+        _entregaLongitude = null;
+      });
       _mostrarDialogEnderecoVazio(context);
       return;
     }
@@ -805,17 +1040,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   void _mostrarDialogEnderecoVazio(BuildContext context) {
+    final enderecos = context.read<EnderecoProvider>();
+    if (enderecos.isLoading || enderecos.erro != null) {
+      context.showInfo(enderecos.erro ?? 'Aguarde a consulta dos endereços.');
+      return;
+    }
     showDialog(
       context: context,
       barrierDismissible: true,
       builder: (_) => AlertDialog(
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(24.r)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24.r),
+        ),
         backgroundColor: Colors.white,
         title: Row(
           children: [
-            Icon(Icons.location_off_outlined,
-                color: const Color(0xFFFF6961), size: 28.r),
+            Icon(
+              Icons.location_off_outlined,
+              color: const Color(0xFFFF6961),
+              size: 28.r,
+            ),
             SizedBox(width: 12.w),
             Text(
               'Sem endereço',
@@ -837,19 +1081,24 @@ class _CheckoutPageState extends State<CheckoutPage> {
             child: Text(
               'Cancelar',
               style: TextStyle(
-                  color: Colors.grey.shade600, fontWeight: FontWeight.w600),
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              context.push('/enderecos-salvos');
+              await context.push('/enderecos-salvos');
+              if (!mounted) return;
+              await _carregarDadosIniciais();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFFE645C),
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(50.r)),
+                borderRadius: BorderRadius.circular(50.r),
+              ),
             ),
             child: const Text('Adicionar endereço'),
           ),
@@ -871,10 +1120,34 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   Future<void> _confirmarPedido(
-      BuildContext context, double total, CartProvider cartProvider) async {
-    if (_isSubmitting) return;
-    if (!_freteConfirmado || _entregaLatitude == null || _entregaLongitude == null) {
-      context.showError('Confirme o frete para este endereço antes de finalizar.');
+    BuildContext context,
+    double total,
+    CartProvider cartProvider,
+  ) async {
+    if (_isSubmitting ||
+        _consultandoTentativa ||
+        _tentativaPendente != null ||
+        _erroTentativa != null) {
+      return;
+    }
+    final enderecos = context.read<EnderecoProvider>();
+    if (enderecos.isLoading || enderecos.erro != null) {
+      context.showError('Atualize os endereços antes de finalizar.');
+      return;
+    }
+    if (cartProvider.itens.isEmpty ||
+        cartProvider.itens.values.any((item) => item.esgotado)) {
+      context.showError(
+        'Remova os produtos esgotados do carrinho antes de finalizar.',
+      );
+      return;
+    }
+    if (!_freteConfirmado ||
+        _entregaLatitude == null ||
+        _entregaLongitude == null) {
+      context.showError(
+        'Confirme o frete para este endereço antes de finalizar.',
+      );
       return;
     }
     setState(() => _isSubmitting = true);
@@ -915,13 +1188,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     if (_cupom != null) {
       try {
-        final validado = await CupomRepository().validarCupom(_cupom!.id, cartProvider.valorTotal);
+        final validado = await CupomRepository().validarCupom(
+          _cupom!.id,
+          cartProvider.valorTotal,
+        );
         if (!context.mounted) return;
         setState(() {
           _cupom = validado;
           _subtotalValidado = cartProvider.valorTotal;
         });
-        total = cartProvider.valorTotal + _taxaFrete - validado.descontoAplicado;
+        total =
+            cartProvider.valorTotal + _taxaFrete - validado.descontoAplicado;
       } catch (e) {
         if (!context.mounted) return;
         setState(() => _isSubmitting = false);
@@ -955,78 +1232,59 @@ class _CheckoutPageState extends State<CheckoutPage> {
           .toList(),
     );
 
-    // O POST também aplica essa regra sob lock; esta consulta orienta o usuário
-    // antes da tentativa e não serve como autorização para criar outro pedido.
-    try {
-      final ativo = await PedidoRepository().buscarPedidoAtivo();
-      if (!context.mounted) return;
-      if (ativo != null) {
-        setState(() => _isSubmitting = false);
-        _mostrarAvisoPedidoAtivo(ativo.id);
-        return;
-      }
-    } catch (_) { /* O POST ainda garante a regra no servidor. */ }
-
     final navigator = Navigator.of(context, rootNavigator: true);
+    bool loadingAberto = false;
+    void fecharLoading() {
+      if (loadingAberto && navigator.mounted) {
+        navigator.pop();
+        loadingAberto = false;
+      }
+    }
 
     try {
+      loadingAberto = true;
       showDialog(
         context: context,
         barrierDismissible: false,
-        builder: (dialogContext) => const LoadingNhac(
-          telaCheia: false,
-          tamanho: 100,
+        builder: (dialogContext) => const PopScope(
+          canPop: false,
+          child: LoadingNhac(telaCheia: false, tamanho: 100),
         ),
       );
 
-      _checkoutIdempotencyKey ??= const Uuid().v4();
-      final respostaPedido = await PedidoRepository().finalizarPedido(
-        pedido,
-        idempotencyKey: _checkoutIdempotencyKey!,
-      );
+      // Persist the exact unit identifiers before creating an uncertain attempt.
+      await cartProvider.persistirSnapshot();
+      final respostaPedido = await _tentativasCheckout.enviar(uid, pedido);
+      if (authService.usuarioId != uid) {
+        fecharLoading();
+        return;
+      }
       final idGerado = respostaPedido.pedidoId;
       try {
         await LocalCacheService.salvarPedidoAtivo(uid, idGerado);
       } catch (_) {
         // O pedido foi criado; uma falha do cache não pode repetir o checkout.
       }
-      navigator.pop(); // Close loading
+      fecharLoading();
 
       if (!context.mounted) return;
+      await cartProvider.consumirPedidoRecuperado(idGerado, {
+        ...pedido.toMap(),
+        '_origemCarrinho': pedido.origemCarrinho,
+      });
       if (_formaPagamento == 'Cartão de crédito' || _formaPagamento == 'PIX') {
-        await cartProvider.esvaziarCarrinho();
-        if (!context.mounted) return;
-        _checkoutIdempotencyKey = null;
+        await _tentativasCheckout.concluir(uid);
+        if (!context.mounted || authService.usuarioId != uid) return;
         context.go('/pagamento?pedidoId=$idGerado');
       } else {
         // Dinheiro
-        _exibirSucessoEVoltar(idGerado.toString(), cartProvider);
+        await _exibirSucessoEVoltar(idGerado.toString(), cartProvider);
+        await _tentativasCheckout.concluir(uid);
       }
     } on CustomCheckoutException catch (e) {
-      // Resposta de negócio é definitiva; a próxima tentativa pode gerar uma
-      // nova chave (por exemplo, após um conflito 409 de payload alterado).
-      _checkoutIdempotencyKey = null;
-      navigator.pop(); // Close loading
+      fecharLoading();
       if (!context.mounted) return;
       setState(() => _isSubmitting = false);
-
-      if (e.code == 'PEDIDO_ATIVO' || e.pedidoAtivoId != null) {
-        final id = e.pedidoAtivoId;
-        if (id != null && id.isNotEmpty) {
-          _mostrarAvisoPedidoAtivo(id);
-          return;
-        }
-        try {
-          final ativo = await PedidoRepository().buscarPedidoAtivo();
-          if (ativo != null && context.mounted) {
-            _mostrarAvisoPedidoAtivo(ativo.id);
-            return;
-          }
-        } catch (_) {}
-        if (!context.mounted) return;
-        context.showError('Finalize seu pedido atual antes de fazer outro.');
-        return;
-      }
 
       if (e.produtoId != null) {
         cartProvider.marcarItemComoEsgotado(e.produtoId!);
@@ -1035,10 +1293,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
       showDialog(
         context: context,
         builder: (dialogContext) => AlertDialog(
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-          title: Text(e.title,
-              style: const TextStyle(fontWeight: FontWeight.bold)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16.r),
+          ),
+          title: Text(
+            e.title,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1046,10 +1307,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
               Text(e.message),
               if (e.suggestions != null && e.suggestions!.isNotEmpty) ...[
                 SizedBox(height: 16.h),
-                const Text('Sugestões:',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                const Text(
+                  'Sugestões:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
                 ...e.suggestions!.map((s) => Text('• $s')),
-              ]
+              ],
             ],
           ),
           actions: [
@@ -1061,238 +1324,49 @@ class _CheckoutPageState extends State<CheckoutPage> {
         ),
       );
     } catch (e) {
-      navigator.pop(); // Close loading
+      fecharLoading();
       if (!context.mounted) return;
       setState(() => _isSubmitting = false);
       context.showError(e.toString().replaceAll('Exception: ', ''));
     } finally {
+      if (mounted && authService.usuarioId == uid) await _consultarTentativa();
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
-  void _mostrarAvisoPedidoAtivo(String pedidoId) {
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-        title: const Text('Pedido em andamento', style: TextStyle(fontWeight: FontWeight.bold)),
-        content: const Text('Finalize seu pedido atual antes de fazer outro.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Fechar'),
-          ),
-          FilledButton(
-            key: const Key('botao-ver-pedido-atual'),
-            onPressed: () {
-              Navigator.pop(dialogContext);
-              context.go('/rastreio?pedidoId=$pedidoId');
-            },
-            child: const Text('Ver pedido atual'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _exibirSucessoEVoltar(String idGerado, CartProvider cartProvider) {
-    _checkoutIdempotencyKey = null;
-
+  Future<void> _exibirSucessoEVoltar(
+    String idGerado,
+    CartProvider cartProvider,
+  ) async {
     final itens = cartProvider.itens.values.toList();
     final subtotal = cartProvider.valorTotal;
-    final total = subtotal + _taxaFrete;
-    final now = DateTime.now();
-    final dataFormatada = DateFormat("EEEE - d MMM. yyyy - HH:mm", "pt_BR").format(now);
+    final desconto = _subtotalValidado == subtotal
+        ? (_cupom?.descontoAplicado ?? 0).toDouble()
+        : 0.0;
+    // Snapshot local: usado só se a API não devolver o pedido a tempo.
+    final dadosLocais = NotaFiscalDados(
+      pedidoId: idGerado,
+      lojaNome: '',
+      data: DateTime.now(),
+      itens: itens
+          .map(
+            (i) => NotaFiscalItem(
+              nome: i.nome,
+              preco: i.preco,
+              quantidade: i.quantidade,
+            ),
+          )
+          .toList(),
+      taxaFrete: _taxaFrete,
+      desconto: desconto,
+      total: subtotal + _taxaFrete - desconto,
+    );
 
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      barrierColor: Colors.black.withValues(alpha: 0.5),
-      builder: (dialogContext) => Dialog(
-        key: E2EKeys.checkoutSuccess,
-        backgroundColor: Colors.transparent,
-        insetPadding: EdgeInsets.symmetric(horizontal: 20.w),
-        elevation: 0,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: double.infinity,
-                decoration: const BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage('assets/nota-fiscal.png'),
-                    fit: BoxFit.fill,
-                  ),
-                ),
-                padding: EdgeInsets.only(
-                  top: 35.h,
-                  bottom: 35.h,
-                  left: 24.w,
-                  right: 24.w,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Image.asset('assets/nhac-preto-branco.png', height: 60.h),
-                    SizedBox(height: 8.h),
-                    FutureBuilder(
-                      future: LojaRepository().buscarLoja(cartProvider.lojaId),
-                      builder: (context, snapshot) {
-                        final nome = snapshot.data?.nome ?? 'Nhac Delivery';
-                        return Text(
-                          nome,
-                          style: TextStyle(
-                            fontSize: 16.sp,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF0C2444),
-                          ),
-                        );
-                      }
-                    ),
-                    SizedBox(height: 4.h),
-                    Text(
-                      dataFormatada,
-                      style: TextStyle(
-                        fontSize: 12.sp,
-                        fontWeight: FontWeight.bold,
-                        color: const Color(0xFF0C2444),
-                      ),
-                    ),
-                    SizedBox(height: 24.h),
-                    ...itens.map((item) => Padding(
-                          padding: EdgeInsets.only(bottom: 8.h),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                flex: 3,
-                                child: Text(
-                                  item.nome,
-                                  style: TextStyle(
-                                    fontSize: 14.sp,
-                                    fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF0C2444),
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  '${currencyFormat.format(item.preco)} x ${item.quantidade}',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 12.sp,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                flex: 2,
-                                child: Text(
-                                  currencyFormat.format(item.preco * item.quantidade),
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(
-                                    fontSize: 14.sp,
-                                    fontWeight: FontWeight.bold,
-                                    color: const Color(0xFF0C2444),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )),
-                    SizedBox(height: 16.h),
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        return Flex(
-                          direction: Axis.horizontal,
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          mainAxisSize: MainAxisSize.max,
-                          children: List.generate(
-                            (constraints.constrainWidth() / 8).floor(),
-                            (index) => SizedBox(
-                              width: 4,
-                              height: 2,
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(color: const Color(0xFF0C2444)),
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    SizedBox(height: 16.h),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Total',
-                          style: TextStyle(
-                            fontSize: 20.sp,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF0C2444),
-                          ),
-                        ),
-                        Text(
-                          currencyFormat.format(total),
-                          style: TextStyle(
-                            fontSize: 20.sp,
-                            fontWeight: FontWeight.w900,
-                            color: const Color(0xFF0C2444),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 24.h),
-                    Row(
-                      children: [
-                        SizedBox(
-                          height: 30.h,
-                          width: 80.w,
-                          child: Semantics(
-                            key: E2EKeys.checkoutSuccessOrderId,
-                            value: idGerado,
-                            child: BarcodeWidget(
-                              barcode: Barcode.code128(),
-                              data: idGerado.length > 8 ? idGerado.substring(0, 8) : idGerado,
-                              drawText: false,
-                              color: const Color(0xFF0C2444),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Text(
-                            'Volte sempre!',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 14.sp,
-                              fontWeight: FontWeight.bold,
-                              color: const Color(0xFF0C2444),
-                            ),
-                          ),
-                        ),
-                        SizedBox(width: 80.w), 
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: 20.h),
-              BotaoLargoNhac(
-                key: E2EKeys.checkoutSuccessContinue,
-                texto: 'OK',
-                onPressed: () {
-                  cartProvider.esvaziarCarrinho();
-                  Navigator.of(dialogContext).pop();
-                  if (context.mounted) context.go('/rastreio?pedidoId=$idGerado');
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
+    await mostrarNotaFiscalEVerPedido(
+      context,
+      pedidoId: idGerado,
+      dadosLocais: dadosLocais,
+      aoConcluir: () async {},
     );
   }
 }
@@ -1316,8 +1390,9 @@ class _AddressSelectionSheet extends StatelessWidget {
             width: 40.w,
             height: 4.h,
             decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2.r)),
+              color: Colors.grey.shade300,
+              borderRadius: BorderRadius.circular(2.r),
+            ),
           ),
           SizedBox(height: 24.h),
           Padding(
@@ -1327,16 +1402,18 @@ class _AddressSelectionSheet extends StatelessWidget {
               child: Text(
                 'Selecione o endereço de entrega',
                 style: TextStyle(
-                    fontSize: 20.sp,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF5D201C)),
+                  fontSize: 20.sp,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF5D201C),
+                ),
               ),
             ),
           ),
           SizedBox(height: 16.h),
           ConstrainedBox(
             constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.5),
+              maxHeight: MediaQuery.of(context).size.height * 0.5,
+            ),
             child: ListView.separated(
               shrinkWrap: true,
               padding: EdgeInsets.symmetric(horizontal: 24.w),
@@ -1344,46 +1421,57 @@ class _AddressSelectionSheet extends StatelessWidget {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final endereco = enderecos[index];
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  onTap: () async {
-                    await context
-                        .read<EnderecoProvider>()
-                        .definirComoPadrao(endereco.id);
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                  leading: Container(
-                    padding: EdgeInsets.all(8.w),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF6961).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
+                return Material(
+                  type: MaterialType.transparency,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    onTap: () async {
+                      if (!await selecionarEnderecoPadrao(
+                        context,
+                        endereco.id,
+                      )) {
+                        return;
+                      }
+                      if (context.mounted) Navigator.pop(context);
+                    },
+                    leading: Container(
+                      padding: EdgeInsets.all(8.w),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFF6961).withValues(alpha: 0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        endereco.bairro.toLowerCase().contains('trabalho') ||
+                                (endereco.complemento ?? '')
+                                    .toLowerCase()
+                                    .contains('trabalho')
+                            ? Icons.work_outline
+                            : Icons.home_outlined,
+                        color: const Color(0xFFFF6961),
+                        size: 20.r,
+                      ),
                     ),
-                    child: Icon(
-                      endereco.bairro.toLowerCase().contains('trabalho') ||
-                              (endereco.complemento ?? '')
-                                  .toLowerCase()
-                                  .contains('trabalho')
-                          ? Icons.work_outline
-                          : Icons.home_outlined,
-                      color: const Color(0xFFFF6961),
-                      size: 20.r,
+                    title: Text(
+                      '${endereco.rua}, ${endereco.numero}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15.sp,
+                      ),
                     ),
+                    subtitle: Text(
+                      '${endereco.bairro}${(endereco.complemento?.isNotEmpty ?? false) ? ' - ${endereco.complemento}' : ''}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13.sp),
+                    ),
+                    trailing: endereco.isPadrao
+                        ? Icon(
+                            Icons.check_circle,
+                            color: const Color(0xFFFF6961),
+                            size: 22.r,
+                          )
+                        : null,
                   ),
-                  title: Text(
-                    '${endereco.rua}, ${endereco.numero}',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 15.sp),
-                  ),
-                  subtitle: Text(
-                    '${endereco.bairro}${(endereco.complemento?.isNotEmpty ?? false) ? ' - ${endereco.complemento}' : ''}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13.sp),
-                  ),
-                  trailing: endereco.isPadrao
-                      ? Icon(Icons.check_circle,
-                          color: const Color(0xFFFF6961), size: 22.r)
-                      : null,
                 );
               },
             ),
@@ -1405,16 +1493,21 @@ class _AddressSelectionSheet extends StatelessWidget {
                     Container(
                       padding: EdgeInsets.all(8.w),
                       decoration: BoxDecoration(
-                          color: Colors.grey.shade100, shape: BoxShape.circle),
+                        color: Colors.grey.shade100,
+                        shape: BoxShape.circle,
+                      ),
                       child: Icon(Icons.add, color: Colors.grey, size: 20.r),
                     ),
                     SizedBox(width: 16.w),
-                    Text(
-                      'Adicionar novo endereço',
-                      style: TextStyle(
+                    Expanded(
+                      child: Text(
+                        'Adicionar novo endereço',
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
                           fontSize: 15.sp,
-                          color: Colors.grey),
+                          color: Colors.grey,
+                        ),
+                      ),
                     ),
                   ],
                 ),

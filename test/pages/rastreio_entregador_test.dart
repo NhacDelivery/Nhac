@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:nhac/components/estado_com_retry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -16,9 +17,13 @@ import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/services/pedido_status_socket_service.dart';
 
 class MockPedidoRepository extends Mock implements PedidoRepository {}
+
 class MockLojaRepository extends Mock implements LojaRepository {}
+
 class MockEntregaRepository extends Mock implements EntregaRepository {}
-class MockPedidoStatusSocketService extends Mock implements PedidoStatusSocketService {}
+
+class MockPedidoStatusSocketService extends Mock
+    implements PedidoStatusSocketService {}
 
 void main() {
   late MockPedidoRepository mockPedidoRepository;
@@ -37,6 +42,7 @@ void main() {
     mockEntregaRepository = MockEntregaRepository();
     mockSocket = MockPedidoStatusSocketService();
 
+    when(() => mockSocket.conectado).thenAnswer((_) => const Stream.empty());
     when(() => mockSocket.status).thenAnswer((_) => const Stream.empty());
     when(() => mockSocket.conectar(any())).thenAnswer((_) async {});
     when(() => mockSocket.dispose()).thenReturn(null);
@@ -47,9 +53,12 @@ void main() {
       categoria: 'Pizzaria',
       imagemUrl: '',
     );
-    when(() => mockLojaRepository.buscarLoja(any())).thenAnswer((_) async => loja);
-    when(() => mockEntregaRepository.buscarRota(any())).thenThrow(Exception('sem rota'));
-    when(() => mockEntregaRepository.buscarLocalizacaoEntregador(any())).thenAnswer((_) async => null);
+    when(() => mockLojaRepository.buscarLoja(any()))
+        .thenAnswer((_) async => loja);
+    when(() => mockEntregaRepository.buscarRota(any()))
+        .thenThrow(Exception('sem rota'));
+    when(() => mockEntregaRepository.buscarLocalizacaoEntregador(any()))
+        .thenAnswer((_) async => null);
   });
 
   final endereco = EnderecoModel(
@@ -122,50 +131,60 @@ void main() {
       totalAvaliacoes: 12,
     );
 
-    testWidgets('Preparando com entregador: exibe aceitou sua entrega e dados do entregador', (tester) async {
+    testWidgets(
+        'Preparando com entregador: exibe aceitou sua entrega e dados do entregador',
+        (tester) async {
       setupScreen(tester);
       final pedido = criarPedido(
         status: StatusPedido.preparando,
         entregador: entregador,
       );
-      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100')).thenAnswer((_) async => pedido);
+      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100'))
+          .thenAnswer((_) async => pedido);
 
       await tester.pumpWidget(createWidgetUnderTest('ped-100'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Carlos S. aceitou sua entrega'), findsOneWidget);
-      expect(find.byKey(const Key('cartao-entregador-rastreio')), findsOneWidget);
+      expect(
+          find.byKey(const Key('cartao-entregador-rastreio')), findsOneWidget);
       expect(find.text('Carlos S.'), findsOneWidget);
       expect(find.textContaining('CG 160'), findsOneWidget);
       expect(find.textContaining('ABC1D23'), findsOneWidget);
       expect(find.text('4.8 (12)'), findsOneWidget);
     });
 
-    testWidgets('Saiu para entrega com entregador: exibe está a caminho', (tester) async {
+    testWidgets('Saiu para entrega com entregador: exibe está a caminho',
+        (tester) async {
       setupScreen(tester);
       final pedido = criarPedido(
         status: StatusPedido.saiuEntrega,
         codigoEntrega: '1234',
         entregador: entregador,
       );
-      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100')).thenAnswer((_) async => pedido);
+      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100'))
+          .thenAnswer((_) async => pedido);
 
       await tester.pumpWidget(createWidgetUnderTest('ped-100'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Carlos S. está a caminho'), findsOneWidget);
-      expect(find.byKey(const Key('cartao-entregador-rastreio')), findsOneWidget);
+      expect(
+          find.byKey(const Key('cartao-entregador-rastreio')), findsOneWidget);
     });
 
-    testWidgets('Sem entregador: mantém status padrão e não exibe cartão de entregador', (tester) async {
+    testWidgets(
+        'Sem entregador: mantém status padrão e não exibe cartão de entregador',
+        (tester) async {
       setupScreen(tester);
       final pedido = criarPedido(
         status: StatusPedido.preparando,
         entregador: null,
       );
-      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100')).thenAnswer((_) async => pedido);
+      when(() => mockPedidoRepository.buscarPedidoPorId('ped-100'))
+          .thenAnswer((_) async => pedido);
 
       await tester.pumpWidget(createWidgetUnderTest('ped-100'));
       await tester.pump();
@@ -175,5 +194,61 @@ void main() {
       expect(find.text('Em preparo'), findsOneWidget);
       expect(find.byKey(const Key('cartao-entregador-rastreio')), findsNothing);
     });
+  });
+  testWidgets('falha da loja preserva pedido e oferece nova tentativa',
+      (tester) async {
+    setupScreen(tester);
+    when(() => mockPedidoRepository.buscarPedidoPorId('pedido-loja-falha'))
+        .thenAnswer((_) async => criarPedido(status: StatusPedido.preparando));
+    when(() => mockLojaRepository.buscarLoja(any()))
+        .thenThrow(Exception('offline'));
+    await tester.pumpWidget(createWidgetUnderTest('pedido-loja-falha'));
+    await tester.pumpAndSettle();
+    expect(find.text('Pedido não encontrado.'), findsNothing);
+    final retry =
+        find.text('Não foi possível consultar a loja. Tentar novamente');
+    await tester.ensureVisible(retry);
+    expect(retry, findsOneWidget);
+    when(() => mockLojaRepository.buscarLoja(any())).thenAnswer((_) async =>
+        LojasModel(
+            id: 'loja1',
+            nome: 'Loja recuperada',
+            categoria: 'Pizzaria',
+            imagemUrl: ''));
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    expect(find.text('Loja recuperada'), findsOneWidget);
+    expect(retry, findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('falha posterior mantém pedido visível com aviso e retry',
+      (tester) async {
+    setupScreen(tester);
+    final pedido = criarPedido(status: StatusPedido.preparando);
+    when(() => mockPedidoRepository.buscarPedidoPorId('stale-pedido'))
+        .thenAnswer((_) async => pedido);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(createWidgetUnderTest('stale-pedido'));
+    await tester.pumpAndSettle();
+    when(() => mockPedidoRepository.buscarPedidoPorId('stale-pedido'))
+        .thenThrow(Exception('offline'));
+    await tester.pump(const Duration(seconds: 31));
+    await tester.pumpAndSettle();
+    final aviso = find.text(
+        'Não foi possível atualizar o pedido. Exibindo a última informação recebida.');
+    await tester.ensureVisible(aviso);
+    expect(aviso, findsOneWidget);
+    expect(find.text('Pedido não encontrado.'), findsNothing);
+    when(() => mockPedidoRepository.buscarPedidoPorId('stale-pedido'))
+        .thenAnswer((_) async => pedido);
+    final retry = find.descendant(
+        of: find.ancestor(of: aviso, matching: find.byType(BannerErroInline)),
+        matching: find.byType(TextButton));
+    await tester.ensureVisible(retry);
+    await tester.tap(retry);
+    await tester.pumpAndSettle();
+    expect(aviso, findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
   });
 }

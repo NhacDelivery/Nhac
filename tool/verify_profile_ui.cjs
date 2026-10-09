@@ -1,0 +1,55 @@
+const { chromium } = require('playwright');
+const fs = require('node:fs');
+const shotDir = process.env.NHAC_UX_SHOTS || '/tmp/nhac-ux-ui';
+fs.mkdirSync(shotDir, {recursive: true});
+let browser;
+(async () => {
+ browser = await chromium.launch({headless:true,args:['--no-sandbox']});
+ const page = await browser.newPage({viewport:{width:390,height:844}});
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('requestfailed',r=>errors.push(r.url()+':'+r.failure().errorText));
+ await page.route('**/assets/.env',route=>route.fulfill({contentType:'text/plain',body:'API_BASE_URL=http://127.0.0.1:8089/api/v1\nE2E_MODE=true\nGOOGLE_API_KEY=\nSTRIPE_PUBLISHABLE_KEY=\nSENTRY_DSN=\n'}));
+ let statsFail=true; let statsCalls=0;
+ await page.route('**/usuarios/*/estatisticas', async route=>{
+   statsCalls++;
+   await route.fulfill({status:statsFail?503:200,contentType:'application/json',body:JSON.stringify(statsFail?{message:'Falha simulada'}:{totalPedidos:7,lojasFavoritadas:3,cuponsResgatados:2})});
+ });
+ await page.route('**/i.pravatar.cc/**',r=>r.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a4CYAAAAASUVORK5CYII=','base64')}));
+ await page.goto('http://localhost:3000');
+ await page.waitForTimeout(10000);
+ await page.locator('flt-semantics-placeholder').evaluate(el=>el.click()).catch(()=>{});
+ await page.waitForTimeout(500);
+ console.log('WELCOME',await page.locator('body').innerText());
+ await page.screenshot({path:shotDir+'/ux-welcome.png'});
+ await page.getByText('Começar',{exact:true}).click();
+ await page.waitForTimeout(1500);
+ await page.locator('input').fill('e2e.cliente@nhac.local');
+ await page.getByRole('button',{name:'Continuar',exact:true}).click();
+ await page.waitForTimeout(1800);
+ await page.locator('input').fill('NhacE2E#123');
+ await page.getByRole('button',{name:'Continuar',exact:true}).click({timeout:5000});
+ await page.waitForTimeout(3500);
+ await page.screenshot({path:shotDir+'/home.png'});
+
+
+ await page.mouse.click(345,810);
+ await page.getByText('Estatísticas indisponíveis. Tentar novamente',{exact:true}).waitFor();
+ await page.screenshot({path:shotDir+'/profile-failure.png'});
+ statsFail=false;
+ await page.getByText('Estatísticas indisponíveis. Tentar novamente',{exact:true}).click();
+ await page.getByText('7 Pedidos',{exact:true}).waitFor();
+ await page.screenshot({path:shotDir+'/profile-mobile.png'});
+ if(await page.getByText('Meus pedidos',{exact:true}).count()) throw Error('Opção duplicada presente');
+ console.log('PROFILE',await page.locator('body').innerText());
+ console.log(JSON.stringify({statsCalls,statsErrorRecovered:true}));
+ await page.mouse.click(80,245);
+ await page.waitForTimeout(1000);
+ await page.getByText('Meus Pedidos',{exact:true}).waitFor();
+ console.log('ORDER_CARD',page.url());
+ await page.mouse.click(28,55); await page.waitForTimeout(1000);
+ await page.keyboard.press('Tab');
+ await page.setViewportSize({width:1280,height:900});
+ await page.waitForTimeout(600);
+ await page.screenshot({path:shotDir+'/profile-desktop.png'});
+ console.log(JSON.stringify({errors}));
+ await browser.close();
+})().catch(async e=>{console.error(e);if(browser)await browser.close();process.exitCode=1;});

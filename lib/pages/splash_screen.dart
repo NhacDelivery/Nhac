@@ -20,25 +20,37 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
 
-    
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 2400), 
+      duration: const Duration(milliseconds: 2400),
       vsync: this,
     );
 
-    
     _animationController.forward().then((_) {
-      
       Future.delayed(const Duration(seconds: 1), () async {
         final email = await LocalCacheService.carregarEmailVerificacao();
         if (!mounted) return;
+        if (pendingFeedPath != null) {
+          context.go(pendingFeedPath!);
+          return;
+        }
+        final produto = GoRouterState.of(context)
+            .uri
+            .queryParameters['produto'];
+        if (produto != null && produto.startsWith('/produto/')) {
+          context.go(produto);
+          return;
+        }
         final pedidoPendente = PushNotificationService.pendingPedidoId;
         if (authServiceRoteador.isAuthenticated && pedidoPendente != null) {
           PushNotificationService.pendingPedidoId = null;
-          context.go('/rastreio?pedidoId=${Uri.encodeQueryComponent(pedidoPendente)}');
+          context.go(
+            '/rastreio?pedidoId=${Uri.encodeQueryComponent(pedidoPendente)}',
+          );
           return;
         }
-        if (!authServiceRoteador.isAuthenticated && email != null && email.isNotEmpty) {
+        if (!authServiceRoteador.isAuthenticated &&
+            email != null &&
+            email.isNotEmpty) {
           context.go('/cadastro/verificar-email', extra: email);
         } else {
           context.go('/home-page');
@@ -62,9 +74,7 @@ class _SplashScreenState extends State<SplashScreen>
           'assets/animations/nhac-intro.json',
           controller: _animationController,
           onLoaded: (composition) {
-            
-            _animationController.duration =
-                composition.duration * 0.4; 
+            _animationController.duration = composition.duration * 0.4;
           },
         ),
       ),

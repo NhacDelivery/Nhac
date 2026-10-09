@@ -1,0 +1,30 @@
+diff --git a/src/pages/chat/PaginaChat.tsx b/src/pages/chat/PaginaChat.tsx
+index 5db72ae..ab53e2d 100644
+--- a/src/pages/chat/PaginaChat.tsx
++++ b/src/pages/chat/PaginaChat.tsx
+@@ -171,7 +171,7 @@ const PaginaChat = () => {
+                         key={msg.id}
+                         className={`${estilos.mensagemWrapper} ${msg.remetenteTipo === 'LOJA' ? estilos.minhaMensagem : estilos.mensagemCliente}`}
+                       >
+-                        <div className={estilos.balao}>{msg.conteudo}</div>
++                        <div className={estilos.balao}>{renderizarReferencia(msg.conteudo)}</div>
+                         <span className={estilos.hora}>{formatarHora(msg.enviadaEm)}</span>
+                       </div>
+                     ))
+@@ -211,4 +211,16 @@ const PaginaChat = () => {
+   );
+ };
+ 
++function renderizarReferencia(conteudo: string) {
++  const produto = /^Produto: ([^\n]+)\nID: ([^\n]+)\nPreço: ([^\n]+)(?:\nImagem: ([^\n]+))?(?:\n\n([\s\S]*))?$/.exec(conteudo);
++  if (!produto) return conteudo;
++  return <div>
++    <div style={{ display: 'flex', gap: 12, padding: 12, background: '#fff', borderRadius: 12, color: '#5D201C' }}>
++      {produto[4]?.startsWith('https://') && <img src={produto[4]} alt={produto[1]} style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 8 }} />}
++      <div><strong>{produto[1]}</strong><div>{produto[3]}</div></div>
++    </div>
++    {produto[5] && <div style={{ marginTop: 8, whiteSpace: 'pre-wrap' }}>{produto[5]}</div>}
++  </div>;
++}
++
+ export default PaginaChat;

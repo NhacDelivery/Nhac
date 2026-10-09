@@ -20,13 +20,17 @@ class HomeOrderTrackingCard extends StatefulWidget {
   const HomeOrderTrackingCard({
     super.key,
     this.isActive = true,
+    this.initialPedido,
     this.pedidoRepository,
     this.socketService,
+    this.onPedidoChanged,
   });
 
   final bool isActive;
+  final PedidoModel? initialPedido;
   final PedidoRepository? pedidoRepository;
   final PedidoStatusSocketService? socketService;
+  final ValueChanged<PedidoModel>? onPedidoChanged;
 
   @override
   State<HomeOrderTrackingCard> createState() => _HomeOrderTrackingCardState();
@@ -36,6 +40,9 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     with SingleTickerProviderStateMixin, RouteAware, WidgetsBindingObserver {
   PedidoModel? _activePedido;
   bool _loading = true;
+  // Só mostra o loading do cartão quando já se sabe que há um pedido ativo
+  // (salvo neste aparelho). Na descoberta inicial nada aparece.
+  bool _pedidoConhecido = false;
   String? _error;
   String? _usuarioId;
   String? _socketPedidoId;
@@ -51,7 +58,11 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   ConnectivityService? _connectivity;
   bool _wasOnline = true;
   bool _refreshing = false;
-  bool _refreshPending = false;
+  bool _eventPending = false;
+  Timer? _eventTimer;
+  bool _visible = true;
+  bool _foreground = true;
+  bool get _active => widget.isActive && _visible && _foreground;
   int _generation = 0;
   late AnimationController _pulseController;
 
@@ -66,7 +77,13 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     )..repeat(reverse: true);
     _usuarioId = context.read<AuthService>().usuarioId;
     _statusSubscription = _socket.status.listen((novoStatus) async {
+      if (!mounted || !_active) return;
       final pedido = _activePedido;
+      if (pedido != null && pedido.status != novoStatus) {
+        _generation++;
+        _eventPending = _refreshing;
+        _repository.invalidarPedido(pedido.id);
+      }
       if (pedido != null && _usuarioId != null && pedido.status != novoStatus) {
         await NotificacaoHistoricoService.registrarStatus(
           _usuarioId!,
@@ -74,10 +91,12 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
           novoStatus,
         );
       }
-      if (novoStatus == StatusPedido.entregue && _activePedido != null) {
+      if (widget.initialPedido == null &&
+          novoStatus == StatusPedido.entregue &&
+          _activePedido != null) {
         final pedidoId = _activePedido!.id;
         final visto = await LocalCacheService.isPedidoEntregueVisto(pedidoId);
-        if (!visto && mounted) {
+        if (!visto && mounted && _active) {
           context.push('/pedido-entregue?pedidoId=$pedidoId');
         }
       }
@@ -88,13 +107,20 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       if (connected) _loadActiveOrder();
     });
     _fallbackTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (widget.isActive && _activePedido != null && !_socketConectado) _loadActiveOrder();
+      if (widget.initialPedido == null &&
+          _active &&
+          _activePedido != null &&
+          !_socketConectado) _loadActiveOrder();
     });
     _connectivity = context.read<ConnectivityService>();
     _wasOnline = _connectivity!.isOnline;
     _connectivity!.addListener(_onConnectivityChanged);
     WidgetsBinding.instance.addObserver(this);
-    _restaurarEAtualizar();
+    if (widget.initialPedido != null) {
+      _showOrder(widget.initialPedido!, persistir: false);
+    } else {
+      _restaurarEAtualizar();
+    }
   }
 
   @override
@@ -107,15 +133,43 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   @override
   void didUpdateWidget(covariant HomeOrderTrackingCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isActive && !oldWidget.isActive) _loadActiveOrder();
+    if (widget.initialPedido != null &&
+        widget.initialPedido != oldWidget.initialPedido) {
+      _showOrder(widget.initialPedido!, persistir: false);
+    }
+    if (!_active) {
+      _socketPedidoId = null;
+      _socket.desconectar();
+    } else if (!oldWidget.isActive) {
+      if (_activePedido != null) _showOrder(_activePedido!, persistir: false);
+      if (widget.initialPedido == null) _loadActiveOrder();
+    }
   }
 
   @override
-  void didPopNext() => _loadActiveOrder();
+  void didPushNext() {
+    _visible = false;
+    _socketPedidoId = null;
+    _socket.desconectar();
+  }
+
+  @override
+  void didPopNext() {
+    _visible = true;
+    if (_activePedido != null) _showOrder(_activePedido!, persistir: false);
+    if (widget.initialPedido == null) _loadActiveOrder();
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && widget.isActive) _loadActiveOrder();
+    _foreground = state == AppLifecycleState.resumed;
+    if (_active) {
+      if (_activePedido != null) _showOrder(_activePedido!, persistir: false);
+      if (widget.initialPedido == null) _loadActiveOrder();
+    } else {
+      _socketPedidoId = null;
+      _socket.desconectar();
+    }
   }
 
   void _onConnectivityChanged() {
@@ -127,8 +181,17 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   Future<void> _restaurarEAtualizar() async {
     final usuarioId = _usuarioId;
     if (usuarioId != null) {
-      final snapshot = await LocalCacheService.carregarSnapshotPedido(usuarioId);
-      if (mounted && snapshot != null && _usuarioId == usuarioId) _showOrder(snapshot, persistir: false);
+      final snapshot = await LocalCacheService.carregarSnapshotPedido(
+        usuarioId,
+      );
+      if (mounted && snapshot != null && _usuarioId == usuarioId) {
+        _showOrder(snapshot, persistir: false);
+      } else if (mounted && _usuarioId == usuarioId) {
+        final salvo = await LocalCacheService.carregarPedidoAtivo(usuarioId);
+        if (mounted && _usuarioId == usuarioId && salvo != null) {
+          setState(() => _pedidoConhecido = true);
+        }
+      }
     }
     if (mounted) _loadActiveOrder();
   }
@@ -142,16 +205,14 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     _statusSubscription?.cancel();
     _connectionSubscription?.cancel();
     _fallbackTimer?.cancel();
+    _eventTimer?.cancel();
     _socket.dispose();
     _pulseController.dispose();
     super.dispose();
   }
 
   Future<void> _loadActiveOrder() async {
-    if (_refreshing) {
-      _refreshPending = true;
-      return;
-    }
+    if (_refreshing || !_active || !mounted) return;
     final usuarioId = context.read<AuthService>().usuarioId;
     if (usuarioId == null) return;
     if (_usuarioId != usuarioId) {
@@ -162,10 +223,19 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     }
     final generation = _generation;
     _refreshing = true;
-    if (mounted) setState(() { _error = null; _loading = _activePedido == null; });
+    if (mounted)
+      setState(() {
+        _error = null;
+        _loading = _activePedido == null;
+      });
     try {
-      final full = await _repository.buscarPedidoAtivo();
-      if (!mounted || generation != _generation) return;
+      final full = widget.initialPedido == null
+          ? await _repository.buscarPedidoAtivo()
+          : await _repository.buscarPedidoPorId(widget.initialPedido!.id);
+      if (!mounted ||
+          !_active ||
+          generation != _generation ||
+          context.read<AuthService>().usuarioId != usuarioId) return;
       final anterior = _activePedido;
       if (full != null &&
           (!full.status.terminal ||
@@ -190,44 +260,65 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
           }
         } catch (_) {}
       }
-      if (!mounted || generation != _generation) return;
+      if (!mounted ||
+          !_active ||
+          generation != _generation ||
+          context.read<AuthService>().usuarioId != usuarioId) return;
+      if (full != null) widget.onPedidoChanged?.call(full);
       if (full != null && !full.status.terminal) {
         _showOrder(full);
-        await LocalCacheService.salvarPedidoAtivo(usuarioId, full.id);
+        if (widget.initialPedido == null)
+          await LocalCacheService.salvarPedidoAtivo(usuarioId, full.id);
       } else {
-        if (full?.status == StatusPedido.entregue) {
+        if (widget.initialPedido == null &&
+            full?.status == StatusPedido.entregue) {
           final visto = await LocalCacheService.isPedidoEntregueVisto(full!.id);
-          if (!visto && mounted) {
+          if (!visto && mounted && _active) {
             context.push('/pedido-entregue?pedidoId=${full.id}');
           }
         }
-        setState(() { _activePedido = null; _loading = false; });
-        await LocalCacheService.removerPedidoAtivo(usuarioId);
-        await LocalCacheService.removerSnapshotPedido(usuarioId);
+        setState(() {
+          _activePedido = null;
+          _loading = false;
+        });
+        if (widget.initialPedido == null) {
+          await LocalCacheService.removerPedidoAtivo(usuarioId);
+          await LocalCacheService.removerSnapshotPedido(usuarioId);
+        }
         _socketPedidoId = null;
         await _socket.desconectar();
       }
     } catch (_) {
       if (mounted && generation == _generation) {
-        setState(() { _loading = false; _error = 'Não foi possível atualizar seu pedido.'; });
+        setState(() {
+          _loading = false;
+          _error = 'Não foi possível atualizar seu pedido.';
+        });
       }
     } finally {
       _refreshing = false;
-      if (_refreshPending && mounted) {
-        _refreshPending = false;
-        _loadActiveOrder();
+      if (_eventPending && mounted && _active) {
+        _eventPending = false;
+        _eventTimer?.cancel();
+        _eventTimer =
+            Timer(const Duration(milliseconds: 300), _loadActiveOrder);
       }
     }
   }
 
   void _showOrder(PedidoModel pedido, {bool persistir = true}) {
-    setState(() { _activePedido = pedido; _loading = false; _error = null; });
+    setState(() {
+      _activePedido = pedido;
+      _loading = false;
+      _error = null;
+    });
     final usuarioId = _usuarioId;
-    if (usuarioId != null && persistir) LocalCacheService.salvarSnapshotPedido(usuarioId, pedido);
-    if (_socketPedidoId != pedido.id) {
+    if (usuarioId != null && persistir && widget.initialPedido == null)
+      LocalCacheService.salvarSnapshotPedido(usuarioId, pedido);
+    if (_active && _socketPedidoId != pedido.id) {
       _socketPedidoId = pedido.id;
       _socket.desconectar().then((_) {
-        if (!mounted || _socketPedidoId != pedido.id) return;
+        if (!mounted || !_active || _socketPedidoId != pedido.id) return;
         _socket.conectar(pedido.id);
       });
     }
@@ -278,20 +369,48 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
   @override
   Widget build(BuildContext context) {
     if (_activePedido == null) {
-      if (!_loading && _error == null) return const SizedBox.shrink();
+      if (!(_loading && _pedidoConhecido) && _error == null) {
+        return const SizedBox.shrink();
+      }
       return Padding(
         padding: EdgeInsets.symmetric(horizontal: 20.w),
-        child: Card(child: Padding(
-          padding: EdgeInsets.all(16.w),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Seu pedido', style: TextStyle(fontSize: 16.sp, fontWeight: FontWeight.bold)),
-            if (_loading) const LinearProgressIndicator(),
-            if (_error != null) ...[
-              Text(_error!),
-              TextButton(onPressed: _loadActiveOrder, child: const Text('Tentar novamente')),
-            ],
-          ]),
-        )),
+        child: Card(
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20.r),
+          ),
+          child: Padding(
+            padding: EdgeInsets.all(16.w),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Seu pedido',
+                  style: TextStyle(
+                    fontSize: 16.sp,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (_loading)
+                  const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFFFF6961),
+                      ),
+                    ),
+                  ),
+                if (_error != null) ...[
+                  Text(_error!),
+                  TextButton(
+                    onPressed: _loadActiveOrder,
+                    child: const Text('Tentar novamente'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -305,214 +424,236 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
 
     final pagamentoPendente = pedido.status == StatusPedido.pendente &&
         (pedido.formaPagamento.toUpperCase() == 'PIX' ||
-         pedido.formaPagamento.toUpperCase() == 'CARTAO' ||
-         pedido.formaPagamento.toUpperCase() == 'STRIPE' ||
-         pedido.formaPagamento.toUpperCase() == 'GOOGLE_PAY');
+            pedido.formaPagamento.toUpperCase() == 'CARTAO' ||
+            pedido.formaPagamento.toUpperCase() == 'STRIPE' ||
+            pedido.formaPagamento.toUpperCase() == 'GOOGLE_PAY');
     return Semantics(
       button: true,
-      label: pagamentoPendente ? 'Continuar pagamento do pedido' : 'Acompanhar pedido',
+      label: pagamentoPendente
+          ? 'Continuar pagamento do pedido'
+          : 'Acompanhar pedido',
       child: GestureDetector(
-      onTap: () => context.push(pagamentoPendente
-          ? '/pagamento?pedidoId=${pedido.id}'
-          : '/rastreio?pedidoId=${pedido.id}'),
-      child: Container(
-        margin: EdgeInsets.symmetric(horizontal: 20.w),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20.r),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
+        onTap: () => context.push(
+          pagamentoPendente
+              ? '/pagamento?pedidoId=${pedido.id}'
+              : '/rastreio?pedidoId=${pedido.id}',
         ),
-        child: Padding(
-          padding: EdgeInsets.all(16.w),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (_error != null) ...[
-                Row(children: [
-                  Expanded(child: Text(_error!, style: const TextStyle(color: Colors.red))),
-                  TextButton(onPressed: _loadActiveOrder, child: const Text('Tentar novamente')),
-                ]),
-              ],
-              if (pagamentoPendente)
-                Text('Toque para continuar o pagamento',
-                    style: TextStyle(color: const Color(0xFF5D201C), fontSize: 13.sp)),
-              // ── Header row: icon + status + arrow ──
-              Row(
-                children: [
-                  // Animated pulse icon
-                  AnimatedBuilder(
-                    animation: _pulseController,
-                    builder: (context, child) {
-                      return Container(
-                        width: 42.w,
-                        height: 42.w,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFE7E5).withValues(
-                              alpha: 0.5 + _pulseController.value * 0.5),
-                          borderRadius: BorderRadius.circular(12.r),
-                        ),
-                        child: Icon(
-                          _statusIcon(pedido.status),
-                          color: const Color(0xFFFE645C),
-                          size: 22.r,
-                        ),
-                      );
-                    },
-                  ),
-                  SizedBox(width: 12.w),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          _statusTexto(pedido),
-                          style: TextStyle(
-                            color: const Color(0xFF5D201C),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15.sp,
-                          ),
-                        ),
-                        SizedBox(height: 2.h),
-                        Text(
-                          _estimativa(pedido.status),
-                          style: TextStyle(
-                            color: Colors.grey.shade600,
-                            fontSize: 12.sp,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    width: 32.w,
-                    height: 32.w,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(10.r),
-                    ),
-                    child: Icon(
-                      Icons.arrow_forward_ios_rounded,
-                      color: Colors.grey.shade400,
-                      size: 14.r,
-                    ),
-                  ),
-                ],
-              ),
-
-              SizedBox(height: 14.h),
-
-              // Product thumbnail and name
-              Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8.r),
-                    child: imageUrl.isNotEmpty
-                        ? CachedNetworkImage(
-                            imageUrl: imageUrl,
-                            width: 48.w,
-                            height: 48.w,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              width: 48.w,
-                              height: 48.w,
-                              color: const Color(0xFFFFE7E5),
-                              child: Icon(
-                                Icons.fastfood_rounded,
-                                color: const Color(0xFFFE645C),
-                                size: 20.r,
-                              ),
-                            ),
-                            errorWidget: (context, url, error) => Container(
-                              width: 48.w,
-                              height: 48.w,
-                              color: const Color(0xFFFFE7E5),
-                              child: Icon(
-                                Icons.fastfood_rounded,
-                                color: const Color(0xFFFE645C),
-                                size: 20.r,
-                              ),
-                            ),
-                          )
-                        : Container(
-                            width: 48.w,
-                            height: 48.w,
-                            color: const Color(0xFFFFE7E5),
-                            child: Icon(
-                              Icons.fastfood_rounded,
-                              color: const Color(0xFFFE645C),
-                              size: 20.r,
-                            ),
-                          ),
-                  ),
-                  SizedBox(width: 10.w),
-                  Expanded(
-                    child: Text(
-                      pedido.itens.isNotEmpty
-                          ? pedido.itens.first.nome
-                          : pedido.lojaNome,
-                      style: TextStyle(
-                        color: const Color(0xFF5D201C),
-                        fontSize: 13.sp,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-
-              if (pedido.entregador != null) ...[
-                SizedBox(height: 10.h),
-                _buildEntregadorCard(pedido.entregador!),
-              ],
-
-              SizedBox(height: 14.h),
-
-              // ── Progress bar ──
-              Column(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6.r),
-                    child: TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 800),
-                      tween: Tween(begin: 0, end: progress),
-                      curve: Curves.easeOutCubic,
-                      builder: (context, value, _) {
-                        return LinearProgressIndicator(
-                          value: value,
-                          minHeight: 6.h,
-                          backgroundColor: Colors.grey.shade200,
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                              Color(0xFFFE645C)),
-                        );
-                      },
-                    ),
-                  ),
-                  SizedBox(height: 8.h),
-                  // ── Stage labels ──
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _buildStageLabel('Pago', stage >= 1),
-                      _buildStageLabel('Preparo', stage >= 2),
-                      _buildStageLabel('A caminho', stage >= 3),
-                      _buildStageLabel('Entregue', stage >= 4),
-                    ],
-                  ),
-                ],
+        child: Container(
+          margin: EdgeInsets.symmetric(horizontal: 20.w),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(20.r),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
               ),
             ],
           ),
+          child: Padding(
+            padding: EdgeInsets.all(16.w),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_error != null) ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _loadActiveOrder,
+                        child: const Text('Tentar novamente'),
+                      ),
+                    ],
+                  ),
+                ],
+                if (pagamentoPendente)
+                  Text(
+                    'Toque para continuar o pagamento',
+                    style: TextStyle(
+                      color: const Color(0xFF5D201C),
+                      fontSize: 13.sp,
+                    ),
+                  ),
+                // ── Header row: icon + status + arrow ──
+                Row(
+                  children: [
+                    // Animated pulse icon
+                    AnimatedBuilder(
+                      animation: _pulseController,
+                      builder: (context, child) {
+                        return Container(
+                          width: 42.w,
+                          height: 42.w,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFFE7E5).withValues(
+                              alpha: 0.5 + _pulseController.value * 0.5,
+                            ),
+                            borderRadius: BorderRadius.circular(12.r),
+                          ),
+                          child: Icon(
+                            _statusIcon(pedido.status),
+                            color: const Color(0xFFFE645C),
+                            size: 22.r,
+                          ),
+                        );
+                      },
+                    ),
+                    SizedBox(width: 12.w),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _statusTexto(pedido),
+                            style: TextStyle(
+                              color: const Color(0xFF5D201C),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15.sp,
+                            ),
+                          ),
+                          SizedBox(height: 2.h),
+                          Text(
+                            _estimativa(pedido.status),
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 12.sp,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 32.w,
+                      height: 32.w,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade100,
+                        borderRadius: BorderRadius.circular(10.r),
+                      ),
+                      child: Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: Colors.grey.shade400,
+                        size: 14.r,
+                      ),
+                    ),
+                  ],
+                ),
+
+                SizedBox(height: 14.h),
+
+                // Product thumbnail and name
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8.r),
+                      child: imageUrl.isNotEmpty
+                          ? CachedNetworkImage(
+                              imageUrl: imageUrl,
+                              width: 48.w,
+                              height: 48.w,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                width: 48.w,
+                                height: 48.w,
+                                color: const Color(0xFFFFE7E5),
+                                child: Icon(
+                                  Icons.fastfood_rounded,
+                                  color: const Color(0xFFFE645C),
+                                  size: 20.r,
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                width: 48.w,
+                                height: 48.w,
+                                color: const Color(0xFFFFE7E5),
+                                child: Icon(
+                                  Icons.fastfood_rounded,
+                                  color: const Color(0xFFFE645C),
+                                  size: 20.r,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              width: 48.w,
+                              height: 48.w,
+                              color: const Color(0xFFFFE7E5),
+                              child: Icon(
+                                Icons.fastfood_rounded,
+                                color: const Color(0xFFFE645C),
+                                size: 20.r,
+                              ),
+                            ),
+                    ),
+                    SizedBox(width: 10.w),
+                    Expanded(
+                      child: Text(
+                        pedido.itens.isNotEmpty
+                            ? pedido.itens.first.nome
+                            : pedido.lojaNome,
+                        style: TextStyle(
+                          color: const Color(0xFF5D201C),
+                          fontSize: 13.sp,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+
+                if (pedido.entregador != null) ...[
+                  SizedBox(height: 10.h),
+                  _buildEntregadorCard(pedido.entregador!),
+                ],
+
+                SizedBox(height: 14.h),
+
+                // ── Progress bar ──
+                Column(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(6.r),
+                      child: TweenAnimationBuilder<double>(
+                        duration: const Duration(milliseconds: 800),
+                        tween: Tween(begin: 0, end: progress),
+                        curve: Curves.easeOutCubic,
+                        builder: (context, value, _) {
+                          return LinearProgressIndicator(
+                            value: value,
+                            minHeight: 6.h,
+                            backgroundColor: Colors.grey.shade200,
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              Color(0xFFFE645C),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    SizedBox(height: 8.h),
+                    // ── Stage labels ──
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        _buildStageLabel('Pago', stage >= 1),
+                        _buildStageLabel('Preparo', stage >= 2),
+                        _buildStageLabel('A caminho', stage >= 3),
+                        _buildStageLabel('Entregue', stage >= 4),
+                      ],
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
       ),
-    ));
+    );
   }
 
   Widget _buildStageLabel(String label, bool active) {
@@ -540,11 +681,13 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
 
   Widget _buildEntregadorCard(EntregadorPedidoModel entregador) {
     final infoVeiculo = [
-      if (entregador.modeloVeiculo != null && entregador.modeloVeiculo!.isNotEmpty)
+      if (entregador.modeloVeiculo != null &&
+          entregador.modeloVeiculo!.isNotEmpty)
         entregador.modeloVeiculo,
       if (entregador.corVeiculo != null && entregador.corVeiculo!.isNotEmpty)
         entregador.corVeiculo,
-      if (entregador.placaVeiculo != null && entregador.placaVeiculo!.isNotEmpty)
+      if (entregador.placaVeiculo != null &&
+          entregador.placaVeiculo!.isNotEmpty)
         '(${entregador.placaVeiculo})',
     ].join(' · ');
 
@@ -574,23 +717,32 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
                       width: 36.r,
                       height: 36.r,
                       color: const Color(0xFFFFE7E5),
-                      child: Icon(Icons.two_wheeler,
-                          color: const Color(0xFFFE645C), size: 18.r),
+                      child: Icon(
+                        Icons.two_wheeler,
+                        color: const Color(0xFFFE645C),
+                        size: 18.r,
+                      ),
                     ),
                     errorWidget: (context, url, error) => Container(
                       width: 36.r,
                       height: 36.r,
                       color: const Color(0xFFFFE7E5),
-                      child: Icon(Icons.two_wheeler,
-                          color: const Color(0xFFFE645C), size: 18.r),
+                      child: Icon(
+                        Icons.two_wheeler,
+                        color: const Color(0xFFFE645C),
+                        size: 18.r,
+                      ),
                     ),
                   )
                 : Container(
                     width: 36.r,
                     height: 36.r,
                     color: const Color(0xFFFFE7E5),
-                    child: Icon(Icons.two_wheeler,
-                        color: const Color(0xFFFE645C), size: 18.r),
+                    child: Icon(
+                      Icons.two_wheeler,
+                      color: const Color(0xFFFE645C),
+                      size: 18.r,
+                    ),
                   ),
           ),
           SizedBox(width: 10.w),
@@ -614,8 +766,11 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
                     ),
                     if (temAvaliacao) ...[
                       SizedBox(width: 4.w),
-                      Icon(Icons.star_rounded,
-                          color: Colors.amber.shade700, size: 15.sp),
+                      Icon(
+                        Icons.star_rounded,
+                        color: Colors.amber.shade700,
+                        size: 15.sp,
+                      ),
                       SizedBox(width: 2.w),
                       Text(
                         '${entregador.avaliacaoMedia?.toStringAsFixed(1) ?? "5.0"} (${entregador.totalAvaliacoes})',

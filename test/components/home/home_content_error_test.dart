@@ -35,6 +35,8 @@ void main() {
     when(() => produtos.buscarPromocoes()).thenAnswer((_) async => throw ServerException());
     when(() => auth.usuarioId).thenReturn(null);
     when(() => enderecos.enderecos).thenReturn([]);
+    when(() => enderecos.erro).thenReturn(null);
+    when(() => enderecos.isLoading).thenReturn(false);
     when(() => connectivity.isOnline).thenReturn(true);
     tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3;

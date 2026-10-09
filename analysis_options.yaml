@@ -11,6 +11,10 @@ analyzer:
   errors:
     prefer_final_fields: ignore
   exclude:
+    - backend-work/**
+    - merchant-work/**
+    - test/.request_baseline/**
+    - test/.request_benchmark_test.dart
     - build/**
     - android/**
     - ios/**

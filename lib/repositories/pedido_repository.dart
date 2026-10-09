@@ -1,5 +1,5 @@
+import 'package:nhac/services/shared_get.dart';
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/models/pedido/avaliacao_entregador_model.dart';
 import 'package:nhac/models/pedido/criar_pedido_request.dart';
@@ -14,11 +14,33 @@ class PedidoRepository {
 
   PedidoRepository({Dio? dio}) : _dio = dio ?? ApiClient().dio;
 
+  void invalidarPedido(String pedidoId) {
+    final client = SharedGet.forClient(_dio);
+    client.invalidatePath('/pedidos/$pedidoId');
+    client.invalidatePath('/pedidos/ativos');
+    client.invalidatePath('/pedidos/ativo');
+  }
+
+  Future<List<PedidoModel>> buscarPedidosAtivos() async {
+    try {
+      final response =
+          await SharedGet.forClient(_dio).get(_dio, '/pedidos/ativos');
+      return (response.data as List)
+          .map((item) =>
+              PedidoModel.fromMap(Map<String, dynamic>.from(item as Map)))
+          .toList();
+    } on DioException catch (e) {
+      throw mapException(e);
+    }
+  }
+
   Future<PedidoModel?> buscarPedidoAtivo() async {
     try {
-      final response = await _dio.get('/pedidos/ativo');
+      final response =
+          await SharedGet.forClient(_dio).get(_dio, '/pedidos/ativo');
       if (response.statusCode == 204 || response.data == null) return null;
-      return PedidoModel.fromMap(Map<String, dynamic>.from(response.data as Map));
+      return PedidoModel.fromMap(
+          Map<String, dynamic>.from(response.data as Map));
     } on DioException catch (e) {
       throw mapException(e);
     }
@@ -26,7 +48,8 @@ class PedidoRepository {
 
   Future<PagamentoPendenteModel> buscarPagamento(String pedidoId) async {
     try {
-      final response = await _dio.get('/pedidos/$pedidoId/pagamento');
+      final response = await SharedGet.forClient(_dio)
+          .get(_dio, '/pedidos/$pedidoId/pagamento');
       return PagamentoPendenteModel.fromMap(
           Map<String, dynamic>.from(response.data as Map));
     } on DioException catch (e) {
@@ -45,11 +68,18 @@ class PedidoRepository {
   Future<PedidoCriadoResponse> finalizarPedido(
     CriarPedidoRequest pedido, {
     required String idempotencyKey,
+  }) =>
+      recuperarTentativaCheckout(pedido.toMap(),
+          idempotencyKey: idempotencyKey);
+
+  Future<PedidoCriadoResponse> recuperarTentativaCheckout(
+    Map<String, dynamic> payload, {
+    required String idempotencyKey,
   }) async {
     try {
       final response = await _dio.post(
         '/pedidos',
-        data: pedido.toMap(),
+        data: payload,
         options: Options(headers: {'Idempotency-Key': idempotencyKey}),
       );
 
@@ -62,12 +92,21 @@ class PedidoRepository {
       throw Exception('Falha ao criar o pedido. Tente novamente.');
     } on DioException catch (e) {
       final data = e.response?.data;
+      if (data is Map &&
+          (data['errorCode'] ?? data['error']) == 'PAGAMENTO_INDISPONIVEL' &&
+          data['details'] is Map &&
+          data['details']['pedidoId'] != null) {
+        // Reserva confirmada: abrir a recuperação, sem gerar outro checkout.
+        return PedidoCriadoResponse.fromMap(
+            {'pedidoId': data['details']['pedidoId'].toString()},
+            replay: true);
+      }
       if ((e.response?.statusCode == 400 ||
               e.response?.statusCode == 409 ||
               e.response?.statusCode == 422) &&
           data is Map) {
         final message = data['message']?.toString() ?? '';
-        final code = data['error']?.toString();
+        final code = (data['errorCode'] ?? data['error'])?.toString();
         final title = data['title']?.toString() ??
             (code == 'IDEMPOTENCIA_CONFLITO'
                 ? 'Checkout alterado'
@@ -96,7 +135,8 @@ class PedidoRepository {
 
   Future<PedidoModel> buscarPedidoPorId(String pedidoId) async {
     try {
-      final response = await _dio.get('/pedidos/$pedidoId');
+      final response =
+          await SharedGet.forClient(_dio).get(_dio, '/pedidos/$pedidoId');
       return PedidoModel.fromMap(
         Map<String, dynamic>.from(response.data as Map),
       );
@@ -114,23 +154,25 @@ class PedidoRepository {
   }
 
   Future<Map<String, dynamic>> buscarEstatisticas(String usuarioId) async {
+    SharedGet.forClient(_dio)
+        .invalidatePath('/usuarios/$usuarioId/estatisticas');
     try {
-      final response = await _dio.get('/usuarios/$usuarioId/estatisticas');
-      if (response.statusCode == 200 && response.data != null) {
-        return Map<String, dynamic>.from(response.data as Map);
+      final response = await SharedGet.forClient(_dio)
+          .get(_dio, '/usuarios/$usuarioId/estatisticas');
+      if (response.statusCode != 200 || response.data is! Map) {
+        throw StateError('Estatísticas indisponíveis');
       }
-      return {
-        'totalPedidos': 0,
-        'lojasFavoritadas': 0,
-        'cuponsResgatados': 0,
-      };
+      final dados = Map<String, dynamic>.from(response.data as Map);
+      for (final campo in [
+        'totalPedidos',
+        'lojasFavoritadas',
+        'cuponsResgatados'
+      ]) {
+        if (dados[campo] is! num) throw StateError('Estatísticas incompletas');
+      }
+      return dados;
     } on DioException catch (e) {
-      debugPrint('Erro ao buscar estatísticas: ${e.message ?? ''}');
-      return {
-        'totalPedidos': 0,
-        'lojasFavoritadas': 0,
-        'cuponsResgatados': 0,
-      };
+      throw mapException(e);
     }
   }
 
@@ -139,7 +181,8 @@ class PedidoRepository {
     int size = 10,
   }) async {
     try {
-      final response = await _dio.get(
+      final response = await SharedGet.forClient(_dio).get(
+        _dio,
         '/pedidos',
         queryParameters: {
           'page': page,
@@ -179,9 +222,11 @@ class PedidoRepository {
     }
   }
 
-  Future<AvaliacaoEntregadorModel?> buscarAvaliacaoEntregador(String pedidoId) async {
+  Future<AvaliacaoEntregadorModel?> buscarAvaliacaoEntregador(
+      String pedidoId) async {
     try {
-      final response = await _dio.get('/pedidos/$pedidoId/avaliacao-entregador');
+      final response = await SharedGet.forClient(_dio)
+          .get(_dio, '/pedidos/$pedidoId/avaliacao-entregador');
       if (response.statusCode == 200 && response.data != null) {
         return AvaliacaoEntregadorModel.fromMap(
           Map<String, dynamic>.from(response.data as Map),

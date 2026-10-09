@@ -1,3 +1,5 @@
+import 'package:nhac/repositories/avaliacao_repository.dart';
+import 'package:nhac/pages/avaliar_produto_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
@@ -37,12 +39,34 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
   bool _loading = true;
   String? _erro;
   bool _entregadorAvaliado = false;
+  Map<String, Map<String, dynamic>> _avaliacoesProdutos = {};
+  bool _avaliacoesConferidas = false;
+  String? _erroAvaliacoes;
+  Future<void> _conferirAvaliacoes() async {
+    try {
+      final data = await AvaliacaoRepository().minhasDados(widget.pedidoId);
+      if (mounted)
+        setState(() {
+          _avaliacoesProdutos = {
+            for (final a in data) a['produtoId'] as String: a,
+          };
+          _avaliacoesConferidas = true;
+          _erroAvaliacoes = null;
+        });
+    } catch (_) {
+      if (mounted)
+        setState(
+          () => _erroAvaliacoes = 'Não foi possível conferir as avaliações.',
+        );
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _repository = widget.pedidoRepository ?? PedidoRepository();
     _inicializarTela();
+    _conferirAvaliacoes();
   }
 
   Future<void> _inicializarTela() async {
@@ -89,9 +113,12 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
       bool avaliado = pedido.entregadorAvaliado;
 
       if (pedido.status == StatusPedido.entregue &&
-          !avaliado && pedido.entregador != null) {
+          !avaliado &&
+          pedido.entregador != null) {
         try {
-          final avaliacao = await _repository.buscarAvaliacaoEntregador(widget.pedidoId);
+          final avaliacao = await _repository.buscarAvaliacaoEntregador(
+            widget.pedidoId,
+          );
           if (avaliacao != null) {
             avaliado = true;
           }
@@ -134,11 +161,7 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(
-          child: LoadingNhac(telaCheia: false),
-        ),
-      );
+      return const Scaffold(body: Center(child: LoadingNhac(telaCheia: false)));
     }
 
     if (_erro != null || _pedido == null) {
@@ -149,13 +172,19 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.error_outline_rounded,
-                    color: Colors.red.shade400, size: 56.sp),
+                Icon(
+                  Icons.error_outline_rounded,
+                  color: Colors.red.shade400,
+                  size: 56.sp,
+                ),
                 SizedBox(height: 16.h),
                 Text(
                   _erro ?? 'Pedido não encontrado.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 15.sp, color: const Color(0xFF5D201C)),
+                  style: TextStyle(
+                    fontSize: 15.sp,
+                    color: const Color(0xFF5D201C),
+                  ),
                 ),
                 SizedBox(height: 20.h),
                 ElevatedButton(
@@ -219,8 +248,8 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                     entregue
                         ? Icons.check_circle_rounded
                         : cancelado
-                            ? Icons.cancel_outlined
-                            : Icons.receipt_long_rounded,
+                        ? Icons.cancel_outlined
+                        : Icons.receipt_long_rounded,
                     color: entregue
                         ? Colors.green.shade600
                         : const Color(0xFFFF6961),
@@ -243,13 +272,10 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                 entregue
                     ? 'Esperamos que você aproveite sua refeição.'
                     : cancelado
-                        ? 'Este pedido foi finalizado e não será entregue.'
-                        : 'Confira o resumo do seu pedido.',
+                    ? 'Este pedido foi finalizado e não será entregue.'
+                    : 'Confira o resumo do seu pedido.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14.sp,
-                  color: Colors.grey.shade600,
-                ),
+                style: TextStyle(fontSize: 14.sp, color: Colors.grey.shade600),
               ),
               SizedBox(height: 24.h),
 
@@ -382,38 +408,76 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                         ),
                       )
                     else
-                      ...pedido.itens.map((item) => Padding(
-                            padding: EdgeInsets.only(bottom: 8.h),
-                            child: Row(
-                              children: [
-                                Text(
-                                  '${item.quantidade}x',
+                      ...pedido.itens.map(
+                        (item) => Padding(
+                          padding: EdgeInsets.only(bottom: 8.h),
+                          child: Row(
+                            children: [
+                              Text(
+                                '${item.quantidade}x',
+                                style: TextStyle(
+                                  fontSize: 13.sp,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFFFF6961),
+                                ),
+                              ),
+                              SizedBox(width: 8.w),
+                              Expanded(
+                                child: Text(
+                                  item.adicionais.isEmpty
+                                      ? item.nome
+                                      : item.nome +
+                                            '\n' +
+                                            item.adicionais.join(' • '),
                                   style: TextStyle(
                                     fontSize: 13.sp,
-                                    fontWeight: FontWeight.bold,
-                                    color: const Color(0xFFFF6961),
+                                    color: Colors.grey.shade800,
                                   ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                SizedBox(width: 8.w),
-                                Expanded(
-                                  child: Text(
-                                    item.nome,
-                                    style: TextStyle(
-                                      fontSize: 13.sp,
-                                      color: Colors.grey.shade800,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          )),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
               SizedBox(height: 16.h),
 
+              if (entregue) ...[
+                for (final item in {
+                  for (final item in pedido.itens) item.produtoId: item,
+                }.values)
+                  TextButton.icon(
+                    icon: const Icon(Icons.rate_review_outlined),
+                    label: Text(
+                      _avaliacoesProdutos.containsKey(item.produtoId)
+                          ? 'Ver avaliação de ${item.nome}'
+                          : 'Avaliar ${item.nome}',
+                    ),
+                    onPressed: !_avaliacoesConferidas
+                        ? null
+                        : () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => AvaliarProdutoPage(
+                                  produtoId: item.produtoId,
+                                  pedidoId: pedido.id,
+                                  nome: item.nome,
+                                ),
+                              ),
+                            );
+                            await _conferirAvaliacoes();
+                          },
+                  ),
+                if (_erroAvaliacoes != null)
+                  TextButton(
+                    onPressed: _conferirAvaliacoes,
+                    child: Text('$_erroAvaliacoes Tentar novamente'),
+                  ),
+              ],
               // Card do Entregador (se houver)
               if (entregador != null) ...[
                 _buildEntregadorCard(entregador),
@@ -429,8 +493,11 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                   child: ElevatedButton.icon(
                     key: const Key('botao-avaliar-entregador'),
                     onPressed: _abrirAvaliacao,
-                    icon: Icon(Icons.star_rounded,
-                        color: Colors.amber.shade300, size: 22.sp),
+                    icon: Icon(
+                      Icons.star_rounded,
+                      color: Colors.amber.shade300,
+                      size: 22.sp,
+                    ),
                     label: Text(
                       'Avaliar entregador',
                       style: TextStyle(
@@ -459,7 +526,10 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                   onPressed: () => context.go('/home-page'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF5D201C),
-                    side: const BorderSide(color: Color(0xFF5D201C), width: 1.5),
+                    side: const BorderSide(
+                      color: Color(0xFF5D201C),
+                      width: 1.5,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(50.r),
                     ),
@@ -482,11 +552,13 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
 
   Widget _buildEntregadorCard(EntregadorPedidoModel entregador) {
     final infoVeiculo = [
-      if (entregador.modeloVeiculo != null && entregador.modeloVeiculo!.isNotEmpty)
+      if (entregador.modeloVeiculo != null &&
+          entregador.modeloVeiculo!.isNotEmpty)
         entregador.modeloVeiculo,
       if (entregador.corVeiculo != null && entregador.corVeiculo!.isNotEmpty)
         entregador.corVeiculo,
-      if (entregador.placaVeiculo != null && entregador.placaVeiculo!.isNotEmpty)
+      if (entregador.placaVeiculo != null &&
+          entregador.placaVeiculo!.isNotEmpty)
         '(${entregador.placaVeiculo})',
     ].join(' · ');
 
@@ -513,7 +585,8 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
             children: [
               ClipRRect(
                 borderRadius: BorderRadius.circular(22.r),
-                child: entregador.fotoUrl != null && entregador.fotoUrl!.isNotEmpty
+                child:
+                    entregador.fotoUrl != null && entregador.fotoUrl!.isNotEmpty
                     ? CachedNetworkImage(
                         imageUrl: entregador.fotoUrl!,
                         width: 44.r,
@@ -523,23 +596,32 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                           width: 44.r,
                           height: 44.r,
                           color: const Color(0xFFFFE7E5),
-                          child: Icon(Icons.two_wheeler,
-                              color: const Color(0xFFFF6961), size: 22.r),
+                          child: Icon(
+                            Icons.two_wheeler,
+                            color: const Color(0xFFFF6961),
+                            size: 22.r,
+                          ),
                         ),
                         errorWidget: (context, url, error) => Container(
                           width: 44.r,
                           height: 44.r,
                           color: const Color(0xFFFFE7E5),
-                          child: Icon(Icons.two_wheeler,
-                              color: const Color(0xFFFF6961), size: 22.r),
+                          child: Icon(
+                            Icons.two_wheeler,
+                            color: const Color(0xFFFF6961),
+                            size: 22.r,
+                          ),
                         ),
                       )
                     : Container(
                         width: 44.r,
                         height: 44.r,
                         color: const Color(0xFFFFE7E5),
-                        child: Icon(Icons.two_wheeler,
-                            color: const Color(0xFFFF6961), size: 22.r),
+                        child: Icon(
+                          Icons.two_wheeler,
+                          color: const Color(0xFFFF6961),
+                          size: 22.r,
+                        ),
                       ),
               ),
               SizedBox(width: 12.w),
@@ -583,8 +665,11 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.star_rounded,
-                        color: Colors.amber.shade700, size: 16.sp),
+                    Icon(
+                      Icons.star_rounded,
+                      color: Colors.amber.shade700,
+                      size: 16.sp,
+                    ),
                     SizedBox(width: 2.w),
                     Text(
                       '${entregador.avaliacaoMedia?.toStringAsFixed(1) ?? "5.0"} (${entregador.totalAvaliacoes})',
@@ -610,8 +695,11 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.check_circle_rounded,
-                      color: Colors.green.shade700, size: 14.sp),
+                  Icon(
+                    Icons.check_circle_rounded,
+                    color: Colors.green.shade700,
+                    size: 14.sp,
+                  ),
                   SizedBox(width: 4.w),
                   Text(
                     'Entregador já avaliado',

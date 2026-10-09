@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nhac/models/usuario/carrinho_model.dart';
@@ -15,15 +16,26 @@ class CartRepository {
   final String? usuarioId;
   CartRepository({this.usuarioId});
 
-  String get _cartKey => usuarioId == null
-      ? '@nhac_cart_items'
-      : '@nhac_cart_items:$usuarioId';
+  String get _cartKey =>
+      usuarioId == null ? '@nhac_cart_items' : '@nhac_cart_items:$usuarioId';
 
-  Future<void> salvarCarrinhoLocal(List<CartItemModel> itens) {
-    final jsonString = json.encode(itens.map((i) => i.toMap()).toList());
+  Future<void> salvarCarrinhoLocal(
+    List<CartItemModel> itens, {
+    String observacao = '',
+  }) {
+    final jsonString = json.encode({
+      'itens': itens.map((i) => i.toMap()).toList(),
+      'observacao': itens.isEmpty ? '' : observacao,
+    });
     return _gravar(() async {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_cartKey, jsonString);
+      final previous = prefs.getString(_cartKey);
+      final current = previous == null ? null : jsonDecode(previous);
+      final payload = jsonDecode(jsonString) as Map<String, dynamic>;
+      if (current is Map)
+        payload['pedidosConsumidos'] = current['pedidosConsumidos'] ?? [];
+      if (!await prefs.setString(_cartKey, jsonEncode(payload)))
+        throw StateError('Não foi possível salvar o carrinho.');
     });
   }
 
@@ -34,7 +46,10 @@ class CartRepository {
       final String? jsonString = prefs.getString(_cartKey);
 
       if (jsonString != null && jsonString.isNotEmpty) {
-        final List<dynamic> decodedList = json.decode(jsonString);
+        final decoded = json.decode(jsonString);
+        final List<dynamic> decodedList = decoded is List
+            ? decoded
+            : decoded['itens'];
         return decodedList.map((map) => CartItemModel.fromMap(map)).toList();
       }
       return [];
@@ -44,8 +59,71 @@ class CartRepository {
     }
   }
 
+  Future<String> carregarObservacaoLocal() async {
+    await _gravacoesPendentes;
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_cartKey);
+    if (raw == null) return '';
+    try {
+      final decoded = json.decode(raw);
+      return decoded is Map ? (decoded['observacao'] as String? ?? '') : '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// O recibo e a subtração são persistidos na mesma gravação. Replays não
+  /// removem outra vez unidades adicionadas após a recuperação original.
+  Future<void> consumirPedido(String pedidoId, Map<String, dynamic> pedido) =>
+      _gravar(() async {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString(_cartKey);
+        final decoded = raw == null
+            ? <String, dynamic>{'itens': []}
+            : jsonDecode(raw);
+        final payload = decoded is List
+            ? <String, dynamic>{'itens': decoded}
+            : Map<String, dynamic>.from(decoded as Map);
+        final consumed = List<String>.from(
+          payload['pedidosConsumidos'] as List? ?? [],
+        );
+        if (consumed.contains(pedidoId)) return;
+        final origem = Set<String>.from(
+          pedido['_origemCarrinho'] as List? ?? [],
+        );
+        final items = (payload['itens'] as List)
+            .map(
+              (item) =>
+                  CartItemModel.fromMap(Map<String, dynamic>.from(item as Map)),
+            )
+            .toList();
+        for (final item in items) {
+          if (item.lojaId != pedido['lojaId']) continue;
+          item.unidades.removeWhere(origem.contains);
+          item.quantidade = item.unidades.length;
+        }
+        items.removeWhere((item) => item.quantidade <= 0);
+        payload['itens'] = items.map((item) => item.toMap()).toList();
+        payload['pedidosConsumidos'] = [...consumed, pedidoId];
+        if (items.isEmpty) payload['observacao'] = '';
+        if (!await prefs.setString(_cartKey, jsonEncode(payload)))
+          throw StateError('Não foi possível atualizar o carrinho.');
+      });
+
   Future<void> limparCarrinho() => _gravar(() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_cartKey);
+    final raw = prefs.getString(_cartKey);
+    final previous = raw == null ? null : jsonDecode(raw);
+    if (!await prefs.setString(
+      _cartKey,
+      jsonEncode({
+        'itens': [],
+        'observacao': '',
+        'pedidosConsumidos': previous is Map
+            ? previous['pedidosConsumidos'] ?? []
+            : [],
+      }),
+    ))
+      throw StateError('Não foi possível limpar o carrinho.');
   });
 }

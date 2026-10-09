@@ -9,6 +9,13 @@ class PontoCoordenadaModel {
     this.atualizadaEm,
   });
 
+  bool get isValido =>
+      latitude.isFinite &&
+      longitude.isFinite &&
+      latitude.abs() <= 90 &&
+      longitude.abs() <= 180 &&
+      !(latitude == 0 && longitude == 0);
+
   factory PontoCoordenadaModel.fromMap(Map<String, dynamic> map) {
     return PontoCoordenadaModel(
       latitude:
@@ -54,9 +61,11 @@ class RotaEntregaModel {
       duracaoEstimadaMinutos:
           int.tryParse(map['duracaoEstimadaMinutos']?.toString() ?? '0') ?? 0,
       waypoints: (map['waypoints'] as List? ?? const [])
-          .map((p) => PontoCoordenadaModel.fromMap(
-                Map<String, dynamic>.from(p as Map),
-              ))
+          .map(
+            (p) => PontoCoordenadaModel.fromMap(
+              Map<String, dynamic>.from(p as Map),
+            ),
+          )
           .toList(),
     );
   }

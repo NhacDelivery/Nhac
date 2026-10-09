@@ -1,5 +1,7 @@
 ---
 version: alpha
+name: Nhac
+description: Aplicativo de delivery com identidade coral e interfaces móveis em português.
 colors:
   primary: "#FF6961"
   background: "#FFE7E5"
@@ -43,8 +45,21 @@ Retain the rounded cards, chips, and sheets already used throughout the app.
 
 ## Components
 
-Use existing shared buttons, loading indicator, product cards, and `context.showError`/`showSuccess` feedback. The map, Pix state, and chat preserve user input during network delays.
+The store keeps loaded cards in place while fetching another page; the load-more control lives in the list footer. Tracking publishes order details before waiting for route geometry. Use existing shared buttons, loading indicator, product cards, and `context.showError`/`showSuccess` feedback. The map, Pix state, and chat preserve user input during network delays.
 
 ## Do's and Don'ts
 
 Show confirmed freight as confirmed; label an estimate and block finalization until it is confirmed. Show promotions only when a real product discount exists. Do not show inert navigation or placeholder commerce actions.
+
+## Feed integrado
+
+
+Preservar SafeArea, listas com slivers e a barra inferior dos detalhes. Paginação
+é explícita, com “Carregar mais”. O campo de comentário deve continuar alcançável
+com o teclado aberto; verificação em dispositivo ainda necessária.
+
+
+Publicações, comentários e contagens vêm da API. Não preencher falhas com conteúdo fictício.
+
+Ações do feed usam botões, contagens confirmadas e hashtags separadas. Salvos reutiliza
+cartões; avaliações individuais reutilizam NhacFilterChip e o upload existente.
