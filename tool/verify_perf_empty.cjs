@@ -1,3 +1,5 @@
+const fixturePassword = process.env.E2E_PASSWORD;
+if (!fixturePassword || fixturePassword.length < 12) throw new Error('Defina E2E_PASSWORD temporária do backend isolado.');
 const { chromium } = require('playwright');
 require('fs').mkdirSync('/tmp/nhac-perf-ui', {recursive:true});
 (async () => {
@@ -15,7 +17,7 @@ require('fs').mkdirSync('/tmp/nhac-perf-ui', {recursive:true});
  await page.mouse.click(195,789);
  await page.waitForTimeout(1800);
  await page.mouse.click(100,160);
- await page.keyboard.type('NhacE2E#123',{delay:20});
+ await page.keyboard.type(fixturePassword,{delay:20});
  await page.getByRole('button',{name:'Continuar',exact:true}).click({timeout:5000});
  await page.waitForTimeout(3500);
  await page.screenshot({path:'/tmp/nhac-perf-ui/home.png'});

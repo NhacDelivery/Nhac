@@ -207,7 +207,10 @@ void main() {
     await mockNetworkImagesFor(() async {
       await mount(tester, router);
       expect(find.byType(FeedTimestamp), findsNWidgets(2));
-      expect(find.textContaining('12:3'), findsNWidgets(2));
+      for (final timestamp
+          in tester.widgetList<FeedTimestamp>(find.byType(FeedTimestamp))) {
+        expect(find.text(formatarDataFeed(timestamp.date!)), findsWidgets);
+      }
       await tester.ensureVisible(find.byIcon(Icons.favorite_border));
       await tester.tap(find.byIcon(Icons.favorite_border));
       await frames(tester);

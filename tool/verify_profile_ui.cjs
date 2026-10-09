@@ -1,3 +1,5 @@
+const fixturePassword = process.env.E2E_PASSWORD;
+if (!fixturePassword || fixturePassword.length < 12) throw new Error('Defina E2E_PASSWORD temporária do backend isolado.');
 const { chromium } = require('playwright');
 const fs = require('node:fs');
 const shotDir = process.env.NHAC_UX_SHOTS || '/tmp/nhac-ux-ui';
@@ -25,7 +27,7 @@ let browser;
  await page.locator('input').fill('e2e.cliente@nhac.local');
  await page.getByRole('button',{name:'Continuar',exact:true}).click();
  await page.waitForTimeout(1800);
- await page.locator('input').fill('NhacE2E#123');
+ await page.locator('input').fill(fixturePassword);
  await page.getByRole('button',{name:'Continuar',exact:true}).click({timeout:5000});
  await page.waitForTimeout(3500);
  await page.screenshot({path:shotDir+'/home.png'});

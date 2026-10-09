@@ -61,6 +61,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   int _postRequestId = 0;
   bool _openingStore = false;
   String? _commentError;
+  bool _falhouMaisComentarios = false;
 
   final _tentativas = const FeedTentativaService();
   bool? _seguindo;
@@ -128,6 +129,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
 
   Future<void> _carregarComentarios({bool mais = false}) async {
     if (mais && _loadingComments) return;
+    _falhouMaisComentarios = mais;
     _comentariosConfirmados.clear();
     final requestId = ++_commentRequestId;
     setState(() {
@@ -507,8 +509,9 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
       if (loja == null) {
         throw StateError('Loja não encontrada');
       }
-      await Navigator.of(context)
-          .push(MaterialPageRoute<void>(builder: (_) => LojaPage(loja: loja)));
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => LojaPage(loja: loja)));
     } catch (e) {
       if (mounted) ErrorUIHelper.handle(context, e);
     } finally {
@@ -758,7 +761,11 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                           children: [
                             Text(_commentError!, textAlign: TextAlign.center),
                             TextButton(
-                              onPressed: () => _carregarComentarios(),
+                              onPressed: _loadingComments
+                                  ? null
+                                  : () => _carregarComentarios(
+                                      mais: _falhouMaisComentarios,
+                                    ),
                               child: const Text('Tentar novamente'),
                             ),
                           ],
@@ -893,12 +900,13 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                                     border: InputBorder.none,
                                   ),
                                   maxLength: 2000,
-                                  buildCounter: (
-                                    _, {
-                                    required currentLength,
-                                    required isFocused,
-                                    maxLength,
-                                  }) => null,
+                                  buildCounter:
+                                      (
+                                        _, {
+                                        required currentLength,
+                                        required isFocused,
+                                        maxLength,
+                                      }) => null,
                                   onSubmitted: (_) => _enviarComentario(),
                                 ),
                               ),

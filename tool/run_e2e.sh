@@ -11,6 +11,8 @@ BACKEND_DIR="${BACKEND_DIR:-$(cd "$APP_DIR/../backend-nhac" && pwd)}"
 BACKEND_JAR="${BACKEND_JAR:-$BACKEND_DIR/target/backend_nhac-0.0.1-SNAPSHOT.jar}"
 BACKEND_JAVA_HOME="${BACKEND_JAVA_HOME:-${JAVA_HOME:-}}"
 FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
+export E2E_PASSWORD="${E2E_PASSWORD:-$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')}"
+export E2E_DB_PASSWORD="${E2E_DB_PASSWORD:-$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')}"
 DEVICE_ID="${E2E_DEVICE_ID:-emulator-5554}"
 APP_ID="${E2E_APP_ID:-com.feentzs.nhac}"
 REPEAT="${E2E_REPEAT:-1}"
@@ -112,8 +114,8 @@ if [[ "${E2E_DB_MANAGED:-false}" != "true" ]]; then
     --name "$DB_CONTAINER" --publish "${DB_PORT}:3306" \
     --env MARIADB_DATABASE=nhac_e2e \
     --env MARIADB_USER=nhac_e2e \
-    --env MARIADB_PASSWORD=nhac_e2e \
-    --env MARIADB_ROOT_PASSWORD=nhac_e2e_root \
+    --env "MARIADB_PASSWORD=$E2E_DB_PASSWORD" \
+    --env MARIADB_RANDOM_ROOT_PASSWORD=true \
     --health-cmd='healthcheck.sh --connect --innodb_initialized' \
     --health-interval=2s --health-timeout=2s --health-retries=30 \
     mariadb:11.4 >/dev/null
@@ -138,7 +140,7 @@ start_backend() {
   (
     cd "$BACKEND_DIR"
     export E2E_DB_URL="jdbc:mariadb://127.0.0.1:${DB_PORT}/nhac_e2e?serverTimezone=UTC&rewriteBatchedStatements=true"
-    export E2E_DB_USER=nhac_e2e E2E_DB_PASSWORD=nhac_e2e SERVER_PORT="$BACKEND_PORT"
+    export E2E_DB_USER=nhac_e2e SERVER_PORT="$BACKEND_PORT"
     exec "$BACKEND_JAVA_HOME/bin/java" -XX:TieredStopAtLevel=1 -jar "$BACKEND_JAR" --spring.profiles.active=e2e
   ) >"$backend_log" 2>&1 &
   BACKEND_PID=$!
@@ -162,7 +164,7 @@ declare -A passed=([login]=0 [order_cash]=0)
 declare -A failed=([login]=0 [order_cash]=0)
 declare -A retried=([login]=0 [order_cash]=0)
 declare -A elapsed=([login]=0 [order_cash]=0)
-DEFINES=(--dart-define=RUN_E2E=true)
+DEFINES=(--dart-define=RUN_E2E=true --dart-define="E2E_PASSWORD=$E2E_PASSWORD")
 tests=()
 [[ "$ONLY" == all || "$ONLY" == login ]] && tests+=(login)
 [[ "$ONLY" == all || "$ONLY" == order_cash ]] && tests+=(order_cash)

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:nhac/repositories/produto_repository.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nhac/components/product_card.dart';
@@ -9,29 +10,34 @@ import 'package:provider/provider.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:network_image_mock/network_image_mock.dart';
 
+class CardProdutoRepository extends Mock implements ProdutoRepository {}
+
 class MockCartProvider extends Mock implements CartProvider {}
+
 class MockAuthService extends Mock implements AuthService {}
 
 void main() {
   late MockCartProvider mockCart;
   late MockAuthService mockAuth;
+  late CardProdutoRepository repository;
 
   setUp(() {
     mockCart = MockCartProvider();
+    repository = CardProdutoRepository();
     mockAuth = MockAuthService();
-    when(() => mockAuth.usuarioId).thenReturn(null); 
+    when(() => mockAuth.usuarioId).thenReturn(null);
   });
 
   Widget createWidgetUnderTest() {
     final produto = ProdutosModel(
-        id: 'p1', 
-        nome: 'Nhac Burger', 
-        preco: 35.90, 
+        id: 'p1',
+        nome: 'Nhac Burger',
+        preco: 35.90,
         imagemUrl: 'http://example.com/image.png',
-        categoriaMenu: 'Lanches'
-    );
+        categoriaMenu: 'Lanches');
+    when(() => repository.buscarPorId('p1')).thenAnswer((_) async => produto);
     return ScreenUtilInit(
-      designSize: const Size(1000, 1000), 
+      designSize: const Size(1000, 1000),
       minTextAdapt: true,
       builder: (context, child) => MultiProvider(
         providers: [
@@ -46,6 +52,7 @@ void main() {
                 height: 500,
                 child: ProductCard(
                   produto: produto,
+                  repository: repository,
                 ),
               ),
             ),
@@ -55,7 +62,8 @@ void main() {
     );
   }
 
-  testWidgets('Deve exibir corretamente os dados do ProductCard', (tester) async {
+  testWidgets('Deve exibir corretamente os dados do ProductCard',
+      (tester) async {
     await mockNetworkImagesFor(() async {
       await tester.pumpWidget(createWidgetUnderTest());
       await tester.pump();
@@ -67,7 +75,9 @@ void main() {
     });
   });
 
-  testWidgets('Deve chamar adicionarItemComQuantidade ao clicar no botão de adicionar', (tester) async {
+  testWidgets(
+      'Deve chamar adicionarItemComQuantidade ao clicar no botão de adicionar',
+      (tester) async {
     when(() => mockCart.adicionarItemComQuantidade(
           idProduto: any(named: 'idProduto'),
           nome: any(named: 'nome'),

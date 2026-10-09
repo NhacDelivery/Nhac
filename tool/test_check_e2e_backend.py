@@ -1,3 +1,6 @@
+import os
+import secrets
+from unittest.mock import patch
 import json
 import threading
 import unittest
@@ -9,6 +12,9 @@ from check_e2e_backend import check_backend
 
 class ContractTest(unittest.TestCase):
     def setUp(self):
+        env = patch.dict(os.environ, {"E2E_PASSWORD": secrets.token_urlsafe(24)})
+        env.start()
+        self.addCleanup(env.stop)
         self.responses = {
             "/produtos/cards": (200, {"content": [{"id": "e2e-produto-001"}]}),
             "/produtos/cards/promocoes": (200, {"content": []}),

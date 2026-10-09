@@ -8,7 +8,7 @@ abstract final class E2EConfig {
   );
 
   static const String email = 'e2e.cliente@nhac.local';
-  static const String password = 'NhacE2E#123';
+  static const String password = String.fromEnvironment('E2E_PASSWORD');
   static const String storeId = 'e2e-loja-001';
   static const String productId = 'e2e-produto-001';
 
@@ -18,5 +18,7 @@ abstract final class E2EConfig {
     }
     await dotenv.load(fileName: '.env');
     AppConstants.validateE2EConfiguration();
+    if (password.length < 12)
+      throw StateError('E2E_PASSWORD temporária é obrigatória.');
   }
 }

@@ -16,8 +16,9 @@ class _HomeCategoryChipsState extends State<HomeCategoryChips> {
     builder: (_, snapshot) {
       if (snapshot.hasError)
         return TextButton.icon(
-          onPressed: () =>
-              setState(() => _future = ProdutoRepository().buscarCategorias()),
+          onPressed: () => setState(() {
+            _future = ProdutoRepository().buscarCategorias();
+          }),
           icon: const Icon(Icons.refresh),
           label: const Text('Tentar carregar categorias'),
         );

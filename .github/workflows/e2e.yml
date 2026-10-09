@@ -33,8 +33,8 @@ jobs:
         env:
           MARIADB_DATABASE: nhac_e2e
           MARIADB_USER: nhac_e2e
-          MARIADB_PASSWORD: nhac_e2e
-          MARIADB_ROOT_PASSWORD: nhac_e2e_root
+          MARIADB_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}-nhac-db
+          MARIADB_RANDOM_ROOT_PASSWORD: 'true'
         ports:
           - 3307:3306
         options: >-
@@ -54,7 +54,7 @@ jobs:
         with:
           repository: NhacDelivery/backend-nhac
           # Feed + checkout contracts: cards, active orders and payment recovery.
-          ref: b3b4e8e4a890bc08d64cd6c90ebd1838d9d1bc75
+          ref: feature/chat-clientes-20261008
           path: backend-nhac
 
       - name: Testar verificação dos contratos E2E
@@ -143,6 +143,7 @@ jobs:
         uses: ReactiveCircus/android-emulator-runner@v2
         env:
           RUN_E2E: 'true'
+          E2E_DB_PASSWORD: ${{ github.run_id }}-${{ github.run_attempt }}-nhac-db
           E2E_DB_MANAGED: 'true'
           E2E_REPEAT: ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && '3' || '1' }}
           E2E_DB_CONTAINER: ${{ job.services.mariadb.id }}
