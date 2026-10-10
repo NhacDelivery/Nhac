@@ -18,17 +18,33 @@ class ConversaPessoaResumo {
   });
 
   factory ConversaPessoaResumo.fromMap(Map<String, dynamic> map) {
+    final interlocutor = map['interlocutor'] is Map
+        ? Map<String, dynamic>.from(map['interlocutor'] as Map)
+        : const <String, dynamic>{};
     return ConversaPessoaResumo(
       id: map['id']?.toString() ?? map['conversaId']?.toString() ?? '',
       pessoaId:
-          map['pessoaId']?.toString() ?? map['usuarioId']?.toString() ?? '',
+          interlocutor['id']?.toString() ??
+          map['pessoaId']?.toString() ??
+          map['usuarioId']?.toString() ??
+          '',
       pessoaNome:
-          map['pessoaNome']?.toString() ?? map['nome']?.toString() ?? 'Usuário',
-      ultimaMensagem: map['ultimaMensagem']?.toString() ?? '',
+          interlocutor['nome']?.toString() ??
+          map['pessoaNome']?.toString() ??
+          map['nome']?.toString() ??
+          'Usuário',
+      ultimaMensagem:
+          map['ultimaMensagemPreview']?.toString() ??
+          map['ultimaMensagem']?.toString() ??
+          '',
       ultimaMensagemData:
-          DateTime.tryParse(map['ultimaMensagemData']?.toString() ?? '') ??
+          DateTime.tryParse(
+            (map['ultimaMensagemEm'] ?? map['ultimaMensagemData'])
+                    ?.toString() ??
+                '',
+          )?.toLocal() ??
           DateTime.now(),
-      mensagensNaoLidas: safeInt(map['mensagensNaoLidas']),
+      mensagensNaoLidas: safeInt(map['naoLidas'] ?? map['mensagensNaoLidas']),
     );
   }
 }
