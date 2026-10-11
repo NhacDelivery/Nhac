@@ -1,3 +1,4 @@
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -251,7 +252,7 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
                 ),
               ],
               if (_carregando)
-                const Center(child: CircularProgressIndicator(color: _coral)),
+                const Center(child: LoadingNhac(telaCheia: false, tamanho: 40)),
               if (_temMais && !_carregando && _pedidos.isNotEmpty)
                 TextButton(
                   onPressed: _carregar,

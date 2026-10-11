@@ -1,3 +1,4 @@
+import 'package:nhac/components/loading_nhac.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -212,7 +213,7 @@ class HomeOrdersState extends State<HomeOrders>
           child: SizedBox(
               width: 20,
               height: 20,
-              child: CircularProgressIndicator(color: Color(0xFFFF6961))),
+              child: LoadingNhac(telaCheia: false, tamanho: 40)),
         ),
       if (_orders.isNotEmpty)
         Padding(

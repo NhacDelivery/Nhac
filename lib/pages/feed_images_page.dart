@@ -1,3 +1,4 @@
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -39,7 +40,8 @@ class _FeedImagesPageState extends State<FeedImagesPage> {
           child: CachedNetworkImage(
             imageUrl: widget.imagens[i],
             fit: BoxFit.contain,
-            placeholder: (_, __) => const CircularProgressIndicator(),
+            placeholder: (_, __) =>
+                const LoadingNhac(telaCheia: false, tamanho: 40),
             errorWidget: (_, __, ___) => const Text(
               'Não foi possível carregar a foto.',
               style: TextStyle(color: Colors.white),

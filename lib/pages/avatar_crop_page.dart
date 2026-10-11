@@ -1,3 +1,5 @@
+import 'package:nhac/components/loading_nhac.dart';
+
 import 'dart:math' as math;
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -101,7 +103,7 @@ class _AvatarCropPageState extends State<AvatarCropPage> {
             Expanded(
               child: Center(
                 child: _error == null
-                    ? const CircularProgressIndicator()
+                    ? const LoadingNhac(telaCheia: false, tamanho: 40)
                     : Text(_error!),
               ),
             )

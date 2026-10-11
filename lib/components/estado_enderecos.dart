@@ -16,9 +16,29 @@ class EstadoEnderecos extends StatelessWidget {
       );
     }
     if (provider.isLoading) {
-      return const Padding(
-        padding: EdgeInsets.all(8),
-        child: Text('Atualizando endereços...'),
+      return Container(
+        margin: const EdgeInsets.only(top: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Row(
+          children: [
+            LoadingNhac(telaCheia: false, tamanho: 32),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Atualizando endereço…',
+                style: TextStyle(
+                  color: Color(0xFF5D201C),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
       );
     }
     return const SizedBox.shrink();

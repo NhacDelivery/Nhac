@@ -1,3 +1,5 @@
+import 'package:nhac/components/loading_nhac.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -74,7 +76,7 @@ class _NotificacoesPageState extends State<NotificacoesPage>
       builder: (context, snapshot) {
         if (!snapshot.hasData && !snapshot.hasError) {
           return const Center(
-            child: CircularProgressIndicator(color: Color(0xFFFF6961)),
+            child: LoadingNhac(telaCheia: false, tamanho: 40),
           );
         }
         final avisos = snapshot.data ?? [];

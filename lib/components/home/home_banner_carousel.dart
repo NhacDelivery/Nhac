@@ -1,3 +1,4 @@
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/repositories/produto_repository.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:shimmer/shimmer.dart';
@@ -94,7 +95,7 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
     if (_loading)
       return const SizedBox(
         height: 32,
-        child: Center(child: CircularProgressIndicator()),
+        child: Center(child: LoadingNhac(telaCheia: false, tamanho: 40)),
       );
     if (_erro != null)
       return TextButton.icon(

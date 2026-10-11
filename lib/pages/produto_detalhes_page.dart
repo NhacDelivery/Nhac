@@ -79,7 +79,7 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   Widget _opcoesAdicionais() => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_carregandoAdicionais) const LinearProgressIndicator(),
+          if (_carregandoAdicionais) const LoadingNhac(telaCheia: false, tamanho: 40),
           if (_erroAdicionais != null)
             TextButton.icon(
               onPressed: _carregarAdicionais,

@@ -1,3 +1,4 @@
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/utils/request_outcome.dart';
 import 'package:nhac/components/nhac_confirm_dialog.dart';
@@ -593,7 +594,7 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
                         ? const SizedBox(
                             width: 22,
                             height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: LoadingNhac(telaCheia: false, tamanho: 22),
                           )
                         : Text(
                             _pendente == null

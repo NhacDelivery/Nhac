@@ -1,3 +1,4 @@
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/components/nhac_confirm_dialog.dart';
 import 'package:nhac/utils/request_outcome.dart';
 import 'package:nhac/pages/feed_images_page.dart';
@@ -509,9 +510,8 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
       if (loja == null) {
         throw StateError('Loja não encontrada');
       }
-      await Navigator.of(
-        context,
-      ).push(MaterialPageRoute<void>(builder: (_) => LojaPage(loja: loja)));
+      await Navigator.of(context)
+          .push(MaterialPageRoute<void>(builder: (_) => LojaPage(loja: loja)));
     } catch (e) {
       if (mounted) ErrorUIHelper.handle(context, e);
     } finally {
@@ -753,7 +753,9 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                     // ── Comments List ──────────────────────────
                     if (_loadingComments)
                       const SliverToBoxAdapter(
-                        child: Center(child: CircularProgressIndicator()),
+                        child: Center(
+                          child: LoadingNhac(telaCheia: false, tamanho: 40),
+                        ),
                       ),
                     if (_commentError != null)
                       SliverToBoxAdapter(
@@ -900,13 +902,12 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                                     border: InputBorder.none,
                                   ),
                                   maxLength: 2000,
-                                  buildCounter:
-                                      (
-                                        _, {
-                                        required currentLength,
-                                        required isFocused,
-                                        maxLength,
-                                      }) => null,
+                                  buildCounter: (
+                                    _, {
+                                    required currentLength,
+                                    required isFocused,
+                                    maxLength,
+                                  }) => null,
                                   onSubmitted: (_) => _enviarComentario(),
                                 ),
                               ),
@@ -1115,8 +1116,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                     height: 1.4,
                   ),
                 ),
-                Wrap(
-                  spacing: 8,
+                Row(
                   children: [
                     TextButton.icon(
                       onPressed: _curtindoComentarios.contains(comment.id)
@@ -1130,22 +1130,37 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                       ),
                       label: Text('${comment.curtidas}'),
                       style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        minimumSize: const Size(0, 40),
                         foregroundColor: comment.curtido
                             ? const Color(0xFFFF6961)
                             : const Color(0xFF666666),
                       ),
                     ),
+                    SizedBox(width: 4.w),
+                    Flexible(
+                      child: TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: const Color(0xFF666666),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          minimumSize: const Size(0, 40),
+                        ),
+                        onPressed:
+                            _sending || _commentPending || _restoringComment
+                            ? null
+                            : () => _responder(comment),
+                        child: const Text('Responder'),
+                      ),
+                    ),
                     IconButton(
                       tooltip: 'Denunciar comentário',
+                      constraints: const BoxConstraints(
+                        minWidth: 40,
+                        minHeight: 40,
+                      ),
+                      padding: const EdgeInsets.all(4),
                       onPressed: () => _denunciar(comentario: comment),
                       icon: const Icon(Icons.flag_outlined, size: 18),
-                    ),
-                    TextButton(
-                      onPressed:
-                          _sending || _commentPending || _restoringComment
-                          ? null
-                          : () => _responder(comment),
-                      child: const Text('Responder'),
                     ),
                   ],
                 ),
