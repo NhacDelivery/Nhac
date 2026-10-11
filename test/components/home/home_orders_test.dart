@@ -1,3 +1,4 @@
+import 'package:nhac/components/loading_nhac.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -110,10 +111,10 @@ void main() {
     await tester.pumpWidget(page());
     await flush(tester);
     expect(find.text('Seu pedido'), findsNothing);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(LoadingNhac), findsNothing);
     response.complete([]);
     await flush(tester);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(LoadingNhac), findsNothing);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -171,7 +172,7 @@ void main() {
     final operation = key.currentState!.refresh();
     await tester.pump();
     expect(find.byKey(const ValueKey('p1')), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    expect(find.byType(LoadingNhac), findsOneWidget);
     response.completeError(Exception('Servidor indisponível'));
     await operation;
     await tester.pump();

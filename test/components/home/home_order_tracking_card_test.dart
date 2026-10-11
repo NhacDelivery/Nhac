@@ -1,3 +1,4 @@
+import 'package:nhac/components/loading_nhac.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -190,7 +191,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Seu pedido'), findsNothing);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(LoadingNhac), findsNothing);
 
       resposta.complete(null);
       await tester.pump();
@@ -209,13 +210,13 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
 
       expect(find.text('Seu pedido'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(LoadingNhac), findsOneWidget);
 
       resposta.complete(criarPedido(status: StatusPedido.preparando));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(LoadingNhac), findsNothing);
       expect(find.text('Em preparo'), findsOneWidget);
     });
 
@@ -231,7 +232,7 @@ void main() {
 
       expect(find.text('Não foi possível atualizar seu pedido.'), findsOneWidget);
       expect(find.text('Tentar novamente'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(LoadingNhac), findsNothing);
     });
   });
 }
