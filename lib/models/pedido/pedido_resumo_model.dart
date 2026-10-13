@@ -6,6 +6,7 @@ class PedidoResumoModel {
   final String lojaNome;
   final double valorTotal;
   final StatusPedido status;
+  final String? formaPagamento;
   final DateTime? criadoEm;
 
   const PedidoResumoModel({
@@ -14,8 +15,11 @@ class PedidoResumoModel {
     required this.lojaNome,
     required this.valorTotal,
     required this.status,
+    this.formaPagamento,
     this.criadoEm,
   });
+
+  String get statusTexto => status.labelParaPagamento(formaPagamento);
 
   factory PedidoResumoModel.fromMap(Map<String, dynamic> map) {
     return PedidoResumoModel(
@@ -25,6 +29,7 @@ class PedidoResumoModel {
       valorTotal:
           num.tryParse(map['valorTotal']?.toString() ?? '0')?.toDouble() ?? 0,
       status: StatusPedido.fromApi(map['status']?.toString()),
+      formaPagamento: map['formaPagamento']?.toString(),
       criadoEm: DateTime.tryParse(map['criadoEm']?.toString() ?? ''),
     );
   }

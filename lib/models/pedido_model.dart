@@ -41,6 +41,7 @@ class PedidoModel {
   });
 
   String get statusApi => status.apiValue;
+  String get statusTexto => status.labelParaPagamento(formaPagamento);
 
   /// Converte para Map para persistência ou cache.
   /// IMPORTANTE: `codigoEntrega` nunca é incluído aqui para não ser salvo em disco.
@@ -81,9 +82,10 @@ class PedidoModel {
         Map<String, dynamic>.from(map['enderecoEntrega'] ?? const {}),
       ),
       itens: (map['itens'] as List? ?? const [])
-          .map((item) => ItemPedidoModel.fromMap(
-                Map<String, dynamic>.from(item as Map),
-              ))
+          .map(
+            (item) =>
+                ItemPedidoModel.fromMap(Map<String, dynamic>.from(item as Map)),
+          )
           .toList(),
       status: StatusPedido.fromApi(map['status']?.toString()),
       criadoEm: DateTime.tryParse(map['criadoEm']?.toString() ?? ''),

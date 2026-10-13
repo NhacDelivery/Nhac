@@ -21,9 +21,13 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MockAuthService extends Mock implements AuthService {}
+
 class MockConnectivityService extends Mock implements ConnectivityService {}
+
 class MockPedidoRepository extends Mock implements PedidoRepository {}
-class MockPedidoStatusSocketService extends Mock implements PedidoStatusSocketService {}
+
+class MockPedidoStatusSocketService extends Mock
+    implements PedidoStatusSocketService {}
 
 void main() {
   late MockAuthService mockAuthService;
@@ -48,8 +52,12 @@ void main() {
     when(() => mockConnectivityService.addListener(any())).thenReturn(null);
     when(() => mockConnectivityService.removeListener(any())).thenReturn(null);
 
-    when(() => mockSocketService.status).thenAnswer((_) => const Stream.empty());
-    when(() => mockSocketService.conectado).thenAnswer((_) => const Stream.empty());
+    when(
+      () => mockSocketService.status,
+    ).thenAnswer((_) => const Stream.empty());
+    when(
+      () => mockSocketService.conectado,
+    ).thenAnswer((_) => const Stream.empty());
     when(() => mockSocketService.conectar(any())).thenAnswer((_) async {});
     when(() => mockSocketService.desconectar()).thenAnswer((_) async {});
     when(() => mockSocketService.dispose()).thenReturn(null);
@@ -68,6 +76,7 @@ void main() {
 
   PedidoModel criarPedido({
     required StatusPedido status,
+    String formaPagamento = 'PIX',
     EntregadorPedidoModel? entregador,
   }) {
     return PedidoModel(
@@ -77,7 +86,7 @@ void main() {
       lojaNome: 'Pizzaria Top',
       valorTotal: 65.0,
       taxaFrete: 5.0,
-      formaPagamento: 'PIX',
+      formaPagamento: formaPagamento,
       enderecoEntrega: endereco,
       itens: const [
         ItemPedidoModel(
@@ -98,7 +107,9 @@ void main() {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider<AuthService>.value(value: mockAuthService),
-        ChangeNotifierProvider<ConnectivityService>.value(value: mockConnectivityService),
+        ChangeNotifierProvider<ConnectivityService>.value(
+          value: mockConnectivityService,
+        ),
       ],
       child: ScreenUtilInit(
         designSize: const Size(390, 844),
@@ -116,6 +127,26 @@ void main() {
     );
   }
 
+  testWidgets('dinheiro mostra confirmação da loja e pagamento na entrega', (
+    tester,
+  ) async {
+    final pedido = criarPedido(
+      status: StatusPedido.pendente,
+      formaPagamento: 'DINHEIRO',
+    );
+    when(
+      () => mockPedidoRepository.buscarPedidoAtivo(),
+    ).thenAnswer((_) async => pedido);
+    await tester.pumpWidget(createWidgetUnderTest());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Aguardando confirmação da loja'), findsOneWidget);
+    expect(find.text('Pagamento na entrega'), findsOneWidget);
+    expect(find.text('Aguardando pagamento'), findsNothing);
+    expect(find.text('Continuar pagamento'), findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   const entregador = EntregadorPedidoModel(
     nome: 'Carlos S.',
     fotoUrl: null,
@@ -128,109 +159,139 @@ void main() {
   );
 
   group('F3 - HomeOrderTrackingCard entregador', () {
-    testWidgets('Preparando com entregador: exibe Carlos S. aceitou sua entrega e dados do entregador', (tester) async {
-      final pedido = criarPedido(
-        status: StatusPedido.preparando,
-        entregador: entregador,
-      );
-      when(() => mockPedidoRepository.buscarPedidoAtivo()).thenAnswer((_) async => pedido);
+    testWidgets(
+      'Preparando com entregador: exibe Carlos S. aceitou sua entrega e dados do entregador',
+      (tester) async {
+        final pedido = criarPedido(
+          status: StatusPedido.preparando,
+          entregador: entregador,
+        );
+        when(
+          () => mockPedidoRepository.buscarPedidoAtivo(),
+        ).thenAnswer((_) async => pedido);
 
-      await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+        await tester.pumpWidget(createWidgetUnderTest());
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Carlos S. aceitou sua entrega'), findsOneWidget);
-      expect(find.byKey(const Key('cartao-entregador-home')), findsOneWidget);
-      expect(find.text('Carlos S.'), findsOneWidget);
-      expect(find.textContaining('CG 160'), findsOneWidget);
-      expect(find.textContaining('ABC1D23'), findsOneWidget);
-      expect(find.text('4.8 (12)'), findsOneWidget);
-    });
+        expect(find.text('Carlos S. aceitou sua entrega'), findsOneWidget);
+        expect(find.byKey(const Key('cartao-entregador-home')), findsOneWidget);
+        expect(find.text('Carlos S.'), findsOneWidget);
+        expect(find.textContaining('CG 160'), findsOneWidget);
+        expect(find.textContaining('ABC1D23'), findsOneWidget);
+        expect(find.text('4.8 (12)'), findsOneWidget);
+      },
+    );
 
-    testWidgets('Saiu para entrega com entregador: exibe Carlos S. está a caminho', (tester) async {
-      final pedido = criarPedido(
-        status: StatusPedido.saiuEntrega,
-        entregador: entregador,
-      );
-      when(() => mockPedidoRepository.buscarPedidoAtivo()).thenAnswer((_) async => pedido);
+    testWidgets(
+      'Saiu para entrega com entregador: exibe Carlos S. está a caminho',
+      (tester) async {
+        final pedido = criarPedido(
+          status: StatusPedido.saiuEntrega,
+          entregador: entregador,
+        );
+        when(
+          () => mockPedidoRepository.buscarPedidoAtivo(),
+        ).thenAnswer((_) async => pedido);
 
-      await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+        await tester.pumpWidget(createWidgetUnderTest());
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Carlos S. está a caminho'), findsOneWidget);
-      expect(find.byKey(const Key('cartao-entregador-home')), findsOneWidget);
-    });
+        expect(find.text('Carlos S. está a caminho'), findsOneWidget);
+        expect(find.byKey(const Key('cartao-entregador-home')), findsOneWidget);
+      },
+    );
 
-    testWidgets('Sem entregador: mantém status padrão e não exibe cartão de entregador', (tester) async {
-      final pedido = criarPedido(
-        status: StatusPedido.preparando,
-        entregador: null,
-      );
-      when(() => mockPedidoRepository.buscarPedidoAtivo()).thenAnswer((_) async => pedido);
+    testWidgets(
+      'Sem entregador: mantém status padrão e não exibe cartão de entregador',
+      (tester) async {
+        final pedido = criarPedido(
+          status: StatusPedido.preparando,
+          entregador: null,
+        );
+        when(
+          () => mockPedidoRepository.buscarPedidoAtivo(),
+        ).thenAnswer((_) async => pedido);
 
-      await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+        await tester.pumpWidget(createWidgetUnderTest());
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Carlos S. aceitou sua entrega'), findsNothing);
-      expect(find.text('Em preparo'), findsOneWidget);
-      expect(find.byKey(const Key('cartao-entregador-home')), findsNothing);
-    });
+        expect(find.text('Carlos S. aceitou sua entrega'), findsNothing);
+        expect(find.text('Em preparo'), findsOneWidget);
+        expect(find.byKey(const Key('cartao-entregador-home')), findsNothing);
+      },
+    );
   });
 
   group('A4 - loading do cartão Seu pedido', () {
-    testWidgets('descoberta sem pedido conhecido não mostra cartão nem loading',
-        (tester) async {
-      final resposta = Completer<PedidoModel?>();
-      when(() => mockPedidoRepository.buscarPedidoAtivo())
-          .thenAnswer((_) => resposta.future);
+    testWidgets(
+      'descoberta sem pedido conhecido não mostra cartão nem loading',
+      (tester) async {
+        final resposta = Completer<PedidoModel?>();
+        when(
+          () => mockPedidoRepository.buscarPedidoAtivo(),
+        ).thenAnswer((_) => resposta.future);
+
+        await tester.pumpWidget(createWidgetUnderTest());
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(find.text('Seu pedido'), findsNothing);
+        expect(find.byType(LoadingNhac), findsNothing);
+
+        resposta.complete(null);
+        await tester.pump();
+        expect(find.text('Seu pedido'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'pedido ativo salvo no aparelho mostra o loading até carregar',
+      (tester) async {
+        SharedPreferences.setMockInitialValues({
+          'pedido_ativo_user123': 'ped-home-1',
+        });
+        final resposta = Completer<PedidoModel?>();
+        when(
+          () => mockPedidoRepository.buscarPedidoAtivo(),
+        ).thenAnswer((_) => resposta.future);
+
+        await tester.pumpWidget(createWidgetUnderTest());
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(find.text('Seu pedido'), findsOneWidget);
+        expect(find.byType(LoadingNhac), findsOneWidget);
+
+        resposta.complete(criarPedido(status: StatusPedido.preparando));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(find.byType(LoadingNhac), findsNothing);
+        expect(find.text('Em preparo'), findsOneWidget);
+      },
+    );
+
+    testWidgets('falha ao carregar mostra erro com tentar novamente', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        'pedido_ativo_user123': 'ped-home-1',
+      });
+      when(
+        () => mockPedidoRepository.buscarPedidoAtivo(),
+      ).thenAnswer((_) async => throw Exception('falha'));
 
       await tester.pumpWidget(createWidgetUnderTest());
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
 
-      expect(find.text('Seu pedido'), findsNothing);
-      expect(find.byType(LoadingNhac), findsNothing);
-
-      resposta.complete(null);
-      await tester.pump();
-      expect(find.text('Seu pedido'), findsNothing);
-    });
-
-    testWidgets('pedido ativo salvo no aparelho mostra o loading até carregar',
-        (tester) async {
-      SharedPreferences.setMockInitialValues({'pedido_ativo_user123': 'ped-home-1'});
-      final resposta = Completer<PedidoModel?>();
-      when(() => mockPedidoRepository.buscarPedidoAtivo())
-          .thenAnswer((_) => resposta.future);
-
-      await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      expect(find.text('Seu pedido'), findsOneWidget);
-      expect(find.byType(LoadingNhac), findsOneWidget);
-
-      resposta.complete(criarPedido(status: StatusPedido.preparando));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      expect(find.byType(LoadingNhac), findsNothing);
-      expect(find.text('Em preparo'), findsOneWidget);
-    });
-
-    testWidgets('falha ao carregar mostra erro com tentar novamente',
-        (tester) async {
-      SharedPreferences.setMockInitialValues({'pedido_ativo_user123': 'ped-home-1'});
-      when(() => mockPedidoRepository.buscarPedidoAtivo())
-          .thenAnswer((_) async => throw Exception('falha'));
-
-      await tester.pumpWidget(createWidgetUnderTest());
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      expect(find.text('Não foi possível atualizar seu pedido.'), findsOneWidget);
+      expect(
+        find.text('Não foi possível atualizar seu pedido.'),
+        findsOneWidget,
+      );
       expect(find.text('Tentar novamente'), findsOneWidget);
       expect(find.byType(LoadingNhac), findsNothing);
     });

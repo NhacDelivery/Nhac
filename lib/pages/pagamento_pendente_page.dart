@@ -13,14 +13,20 @@ import 'package:nhac/repositories/pedido_repository.dart';
 /// Recupera sempre a cobrança existente; nenhuma credencial fica no dispositivo.
 class PagamentoPendentePage extends StatefulWidget {
   final String pedidoId;
-  const PagamentoPendentePage({super.key, required this.pedidoId});
+  final PedidoRepository? repository;
+  const PagamentoPendentePage({
+    super.key,
+    required this.pedidoId,
+    this.repository,
+  });
 
   @override
   State<PagamentoPendentePage> createState() => _PagamentoPendentePageState();
 }
 
 class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
-  final PedidoRepository _repository = PedidoRepository();
+  late final PedidoRepository _repository =
+      widget.repository ?? PedidoRepository();
   PagamentoPendenteModel? _pagamento;
   String? _erro;
   bool _carregando = true;
@@ -33,11 +39,17 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
   }
 
   Future<void> _carregar() async {
-    setState(() { _carregando = true; _erro = null; });
+    setState(() {
+      _carregando = true;
+      _erro = null;
+    });
     try {
       final pagamento = await _repository.buscarPagamento(widget.pedidoId);
       if (!mounted) return;
-      setState(() { _pagamento = pagamento; _carregando = false; });
+      setState(() {
+        _pagamento = pagamento;
+        _carregando = false;
+      });
     } catch (e) {
       try {
         final pedido = await _repository.buscarPedidoPorId(widget.pedidoId);
@@ -50,12 +62,14 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
           await mostrarNotaFiscalEVerPedido(context, pedidoId: widget.pedidoId);
           return;
         }
-      } catch (_) { /* A tela oferece nova tentativa. */ }
+      } catch (_) {
+        /* A tela oferece nova tentativa. */
+      }
       if (mounted) {
         setState(() {
           _carregando = false;
           _erro = e is AppException && e.code == 'PAGAMENTO_INDISPONIVEL'
-              ? 'O prazo para pagar terminou. Acompanhe a atualização do pedido.'
+              ? e.message
               : 'Não foi possível recuperar este pagamento. Verifique a conexão e tente novamente.';
         });
       }
@@ -96,7 +110,8 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
     } catch (_) {
       if (mounted) {
         context.showError(
-            'Pagamento não confirmado. Você pode tentar novamente neste pedido até o prazo terminar.');
+          'Pagamento não confirmado. Você pode tentar novamente neste pedido até o prazo terminar.',
+        );
       }
     } finally {
       if (mounted) setState(() => _abrindoStripe = false);
@@ -108,16 +123,27 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
     if (_carregando || _erro != null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Pagamento do pedido')),
-        body: Center(child: _carregando
-            ? const LoadingNhac(telaCheia: false)
-            : Padding(padding: const EdgeInsets.all(24), child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(_erro!, textAlign: TextAlign.center),
-                  TextButton(onPressed: _carregar, child: const Text('Tentar novamente')),
-                  TextButton(onPressed: () => context.go('/home-page'), child: const Text('Voltar ao início')),
-                ],
-              ))),
+        body: Center(
+          child: _carregando
+              ? const LoadingNhac(telaCheia: false)
+              : Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_erro!, textAlign: TextAlign.center),
+                      TextButton(
+                        onPressed: _carregar,
+                        child: const Text('Tentar novamente'),
+                      ),
+                      TextButton(
+                        onPressed: () => context.go('/home-page'),
+                        child: const Text('Voltar ao início'),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
       );
     }
     final pagamento = _pagamento!;
@@ -133,26 +159,39 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
     }
     return Scaffold(
       appBar: AppBar(title: const Text('Pagamento com cartão')),
-      body: Center(child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.credit_card, color: Color(0xFFFF6961), size: 56),
-          const SizedBox(height: 16),
-          const Text('Seu pedido está aguardando pagamento.', textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          if (pagamento.expiraEm != null)
-            Text('Pague até ${TimeOfDay.fromDateTime(pagamento.expiraEm!.toLocal()).format(context)}'),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _abrindoStripe ? null : _pagarCartao,
-            child: Text(_abrindoStripe ? 'Abrindo pagamento...' : 'Pagar com cartão'),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.credit_card, color: Color(0xFFFF6961), size: 56),
+              const SizedBox(height: 16),
+              const Text(
+                'Seu pedido está aguardando pagamento.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              if (pagamento.expiraEm != null)
+                Text(
+                  'Pague até ${TimeOfDay.fromDateTime(pagamento.expiraEm!.toLocal()).format(context)}',
+                ),
+              const SizedBox(height: 24),
+              FilledButton(
+                onPressed: _abrindoStripe ? null : _pagarCartao,
+                child: Text(
+                  _abrindoStripe ? 'Abrindo pagamento...' : 'Pagar com cartão',
+                ),
+              ),
+              TextButton(
+                onPressed: () =>
+                    context.go('/rastreio?pedidoId=${widget.pedidoId}'),
+                child: const Text('Acompanhar pedido'),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () => context.go('/rastreio?pedidoId=${widget.pedidoId}'),
-            child: const Text('Acompanhar pedido'),
-          ),
-        ]),
-      )),
+        ),
+      ),
     );
   }
 }

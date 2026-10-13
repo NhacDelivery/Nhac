@@ -111,7 +111,8 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       if (widget.initialPedido == null &&
           _active &&
           _activePedido != null &&
-          !_socketConectado) _loadActiveOrder();
+          !_socketConectado)
+        _loadActiveOrder();
     });
     _connectivity = context.read<ConnectivityService>();
     _wasOnline = _connectivity!.isOnline;
@@ -236,7 +237,8 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       if (!mounted ||
           !_active ||
           generation != _generation ||
-          context.read<AuthService>().usuarioId != usuarioId) return;
+          context.read<AuthService>().usuarioId != usuarioId)
+        return;
       final anterior = _activePedido;
       if (full != null &&
           (!full.status.terminal ||
@@ -264,7 +266,8 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       if (!mounted ||
           !_active ||
           generation != _generation ||
-          context.read<AuthService>().usuarioId != usuarioId) return;
+          context.read<AuthService>().usuarioId != usuarioId)
+        return;
       if (full != null) widget.onPedidoChanged?.call(full);
       if (full != null && !full.status.terminal) {
         _showOrder(full);
@@ -301,8 +304,10 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       if (_eventPending && mounted && _active) {
         _eventPending = false;
         _eventTimer?.cancel();
-        _eventTimer =
-            Timer(const Duration(milliseconds: 300), _loadActiveOrder);
+        _eventTimer = Timer(
+          const Duration(milliseconds: 300),
+          _loadActiveOrder,
+        );
       }
     }
   }
@@ -327,19 +332,24 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     _tempoLojaPedidoId = pedido.id;
     _tempoLojaMin = null;
     _tempoLojaMax = null;
-    LojaRepository().buscarLoja(pedido.lojaId).then((loja) {
-      if (!mounted || _activePedido?.id != pedido.id) return;
-      setState(() {
-        _tempoLojaMin = loja?.dadosOperacionais?.tempoEntregaMin;
-        _tempoLojaMax = loja?.dadosOperacionais?.tempoEntregaMax;
-      });
-    }).catchError((_) {});
+    LojaRepository()
+        .buscarLoja(pedido.lojaId)
+        .then((loja) {
+          if (!mounted || _activePedido?.id != pedido.id) return;
+          setState(() {
+            _tempoLojaMin = loja?.dadosOperacionais?.tempoEntregaMin;
+            _tempoLojaMax = loja?.dadosOperacionais?.tempoEntregaMax;
+          });
+        })
+        .catchError((_) {});
   }
 
-  String _estimativa(StatusPedido status) {
-    switch (status) {
+  String _estimativa(PedidoModel pedido) {
+    switch (pedido.status) {
       case StatusPedido.pendente:
-        return 'Aguardando pagamento';
+        return pedido.formaPagamento.toUpperCase() == 'DINHEIRO'
+            ? 'Pagamento na entrega'
+            : 'Aguardando pagamento';
       case StatusPedido.pago:
       case StatusPedido.preparando:
       case StatusPedido.saiuEntrega:
@@ -418,10 +428,12 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     const totalStages = 4;
     final progress = stage / totalStages;
 
-    final imageUrl =
-        pedido.itens.isNotEmpty ? pedido.itens.first.imagemUrl : '';
+    final imageUrl = pedido.itens.isNotEmpty
+        ? pedido.itens.first.imagemUrl
+        : '';
 
-    final pagamentoPendente = pedido.status == StatusPedido.pendente &&
+    final pagamentoPendente =
+        pedido.status == StatusPedido.pendente &&
         (pedido.formaPagamento.toUpperCase() == 'PIX' ||
             pedido.formaPagamento.toUpperCase() == 'CARTAO' ||
             pedido.formaPagamento.toUpperCase() == 'STRIPE' ||
@@ -518,7 +530,7 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
                           ),
                           SizedBox(height: 2.h),
                           Text(
-                            _estimativa(pedido.status),
+                            _estimativa(pedido),
                             style: TextStyle(
                               color: Colors.grey.shade600,
                               fontSize: 12.sp,
@@ -675,7 +687,7 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
         return '${pedido.entregador!.nome} está a caminho';
       }
     }
-    return pedido.status.label;
+    return pedido.statusTexto;
   }
 
   Widget _buildEntregadorCard(EntregadorPedidoModel entregador) {

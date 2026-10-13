@@ -9,41 +9,44 @@ import 'package:nhac/models/pedido/item_pedido_model.dart';
 import 'package:nhac/models/pedido/status_pedido.dart';
 import 'package:nhac/models/pedido_model.dart';
 import 'package:nhac/models/usuario/endereco_model.dart';
+import 'package:nhac/models/usuario/carrinho_model.dart';
+import 'package:nhac/controllers/cart_provider.dart';
+import 'package:nhac/repositories/cart_repository.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PedidoRepositoryMock extends Mock implements PedidoRepository {}
 
 PedidoModel pedido({double total = 53, double frete = 5}) => PedidoModel(
-      id: 'abcd1234-ffff',
-      usuarioId: 'u1',
-      lojaId: 'loja',
-      lojaNome: 'Pizzaria Top',
-      valorTotal: total,
-      taxaFrete: frete,
-      formaPagamento: 'PIX',
-      enderecoEntrega: EnderecoModel(
-        id: 'e1',
-        rua: 'Rua A',
-        numero: '1',
-        bairro: 'Centro',
-        cidade: 'São Paulo',
-        estado: 'SP',
-        cep: '01000-000',
-        isPadrao: true,
-      ),
-      itens: const [
-        ItemPedidoModel(
-          id: 'i1',
-          produtoId: 'p1',
-          nome: 'Pizza',
-          imagemUrl: '',
-          preco: 24,
-          quantidade: 2,
-        ),
-      ],
-      status: StatusPedido.pago,
-    );
+  id: 'abcd1234-ffff',
+  usuarioId: 'u1',
+  lojaId: 'loja',
+  lojaNome: 'Pizzaria Top',
+  valorTotal: total,
+  taxaFrete: frete,
+  formaPagamento: 'PIX',
+  enderecoEntrega: EnderecoModel(
+    id: 'e1',
+    rua: 'Rua A',
+    numero: '1',
+    bairro: 'Centro',
+    cidade: 'São Paulo',
+    estado: 'SP',
+    cep: '01000-000',
+    isPadrao: true,
+  ),
+  itens: const [
+    ItemPedidoModel(
+      id: 'i1',
+      produtoId: 'p1',
+      nome: 'Pizza',
+      imagemUrl: '',
+      preco: 24,
+      quantidade: 2,
+    ),
+  ],
+  status: StatusPedido.pago,
+);
 
 void main() {
   setUpAll(() => initializeDateFormatting('pt_BR'));
@@ -116,17 +119,23 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    testWidgets('mostra a nota e só abre o pedido depois de "Ver pedido"',
-        (tester) async {
-      when(() => repository.buscarPedidoPorId('abcd1234-ffff'))
-          .thenAnswer((_) async => pedido(total: 43));
+    testWidgets('mostra a nota e só abre o pedido depois de "Ver pedido"', (
+      tester,
+    ) async {
+      when(
+        () => repository.buscarPedidoPorId('abcd1234-ffff'),
+      ).thenAnswer((_) async => pedido(total: 43));
       preparar(tester);
-      await tester.pumpWidget(app((c) => mostrarNotaFiscalEVerPedido(
+      await tester.pumpWidget(
+        app(
+          (c) => mostrarNotaFiscalEVerPedido(
             c,
             pedidoId: 'abcd1234-ffff',
             repository: repository,
             aoConcluir: () => concluiu++,
-          )));
+          ),
+        ),
+      );
       await chamar(tester);
       expect(find.text('Pizzaria Top'), findsOneWidget);
       expect(find.text('Desconto do cupom'), findsOneWidget);
@@ -140,17 +149,23 @@ void main() {
       expect(destinos, ['/rastreio?pedidoId=abcd1234-ffff']);
     });
 
-    testWidgets('na segunda vez vai direto ao pedido, sem repetir a nota',
-        (tester) async {
-      SharedPreferences.setMockInitialValues(
-          {'nota_fiscal_exibida_abcd1234-ffff': true});
+    testWidgets('na segunda vez vai direto ao pedido, sem repetir a nota', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues({
+        'nota_fiscal_exibida_abcd1234-ffff': true,
+      });
       preparar(tester);
-      await tester.pumpWidget(app((c) => mostrarNotaFiscalEVerPedido(
+      await tester.pumpWidget(
+        app(
+          (c) => mostrarNotaFiscalEVerPedido(
             c,
             pedidoId: 'abcd1234-ffff',
             repository: repository,
             aoConcluir: () => concluiu++,
-          )));
+          ),
+        ),
+      );
       await chamar(tester);
       await tester.pumpAndSettle();
       expect(find.text('Ver pedido'), findsNothing);
@@ -159,40 +174,74 @@ void main() {
     });
 
     testWidgets('API fora do ar usa o snapshot local', (tester) async {
-      when(() => repository.buscarPedidoPorId(any()))
-          .thenAnswer((_) async => throw Exception('offline'));
-      final local = NotaFiscalDados(
+      when(
+        () => repository.buscarPedidoPorId(any()),
+      ).thenAnswer((_) async => throw Exception('offline'));
+      final carrinhoRepository = CartRepository(usuarioId: 'u1');
+      final item = CartItemModel(
+        produtoId: 'p1',
+        nome: 'Pizza',
+        imagemUrl: '',
+        preco: 24,
+        lojaId: 'loja',
+        quantidade: 2,
+      );
+      await carrinhoRepository.salvarCarrinhoLocal([item]);
+      final carrinho = CartProvider(repository: carrinhoRepository);
+      addTearDown(carrinho.dispose);
+      await carrinho.carregarCarrinhoLocal();
+      final local = NotaFiscalDados.fromCarrinho(
         pedidoId: 'abcd1234-ffff',
-        lojaNome: '',
-        data: DateTime(2026, 10, 2, 12),
-        itens: const [NotaFiscalItem(nome: 'Pizza', preco: 24, quantidade: 2)],
+        itens: carrinho.itens.values,
         taxaFrete: 5,
         desconto: 0,
-        total: 53,
       );
+      await carrinho.consumirPedidoRecuperado('abcd1234-ffff', {
+        'lojaId': 'loja',
+        '_origemCarrinho': item.unidades,
+        'itens': [
+          {'produtoId': 'p1', 'quantidade': 2},
+        ],
+      });
+      expect(carrinho.itens, isEmpty);
+      expect(carrinho.valorTotal, 0);
+      expect(local.itens.single.quantidade, 2);
+      expect(local.total, 53);
       preparar(tester);
-      await tester.pumpWidget(app((c) => mostrarNotaFiscalEVerPedido(
+      await tester.pumpWidget(
+        app(
+          (c) => mostrarNotaFiscalEVerPedido(
             c,
             pedidoId: 'abcd1234-ffff',
             dadosLocais: local,
             repository: repository,
-          )));
+          ),
+        ),
+      );
       await chamar(tester);
       expect(find.text('Nhac Delivery'), findsOneWidget);
+      expect(find.text('Pizza'), findsOneWidget);
+      expect(find.textContaining('53,00'), findsOneWidget);
       expect(find.text('Ver pedido'), findsOneWidget);
     });
 
-    testWidgets('sem API e sem snapshot nunca bloqueia: abre o pedido',
-        (tester) async {
-      when(() => repository.buscarPedidoPorId(any()))
-          .thenAnswer((_) async => throw Exception('offline'));
+    testWidgets('sem API e sem snapshot nunca bloqueia: abre o pedido', (
+      tester,
+    ) async {
+      when(
+        () => repository.buscarPedidoPorId(any()),
+      ).thenAnswer((_) async => throw Exception('offline'));
       preparar(tester);
-      await tester.pumpWidget(app((c) => mostrarNotaFiscalEVerPedido(
+      await tester.pumpWidget(
+        app(
+          (c) => mostrarNotaFiscalEVerPedido(
             c,
             pedidoId: 'abcd1234-ffff',
             repository: repository,
             aoConcluir: () => concluiu++,
-          )));
+          ),
+        ),
+      );
       await chamar(tester);
       await tester.pumpAndSettle();
       expect(concluiu, 1);

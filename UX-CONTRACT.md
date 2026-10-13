@@ -1,5 +1,27 @@
 # Nhac client interaction contract
 
+## Pagamento e comprovante (13/10/2026)
+
+`PAGAMENTO_INDISPONIVEL` preserva a mensagem do servidor: indisponibilidade
+temporária não prova expiração. O estado do pedido continua determinando a
+navegação para rastreio ou histórico. Retry consulta o mesmo pedido.
+
+Dinheiro pendente usa “Aguardando confirmação da loja” e informa “Pagamento na
+entrega”; `PAGO` em dinheiro usa “Pedido confirmado”. Home, rastreio, notificação
+ao vivo e histórico reutilizam `StatusPedido.labelParaPagamento`. O histórico
+recebe `formaPagamento` de `PedidoResumoDTO`; respostas antigas sem esse campo
+continuam legíveis. Publicar o backend antes do cliente para os textos completos.
+
+O checkout captura o comprovante local antes de consumir o carrinho. A consulta
+confirmada do servidor prevalece sobre esse snapshot; se falhar, itens, desconto,
+frete e total da compra continuam disponíveis. Troco é opcional em dinheiro,
+deve ser positivo e cobrir o total após desconto e frete. O servidor valida o
+total canônico e rejeita a compra inteira sem consumir estoque ou cupom.
+
+Fontes: `PedidoReservaService`, `PedidoCreateDTO`, `PedidoResumoDTO` e
+`NotaFiscalDados.fromCarrinho`. Verificação: `PedidoFlowIT`, testes de pagamento
+pendente, comprovante, cartão da home e histórico.
+
 The authenticated app uses Brazilian Portuguese and the existing Flutter theme. Search shortcuts use the exact `categoriaMenu` values offered in the lojista product form. Bottom navigation has Home, Carrinho, Feed and Perfil; coupons remain available through Perfil and checkout.
 
 | Operation | Pending | Success | Failure and recovery |

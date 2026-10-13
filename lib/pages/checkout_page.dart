@@ -68,7 +68,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     } catch (_) {
       if (mounted) {
         setState(
-          () => _erroTentativa = 'Não foi possível conferir a tentativa anterior. Tente novamente antes de criar um pedido.',
+          () => _erroTentativa =
+              'Não foi possível conferir a tentativa anterior. Tente novamente antes de criar um pedido.',
         );
       }
     } finally {
@@ -88,13 +89,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (!mounted || auth.usuarioId != uid) return;
       await LocalCacheService.salvarPedidoAtivo(uid, resposta.pedidoId);
       if (!mounted || auth.usuarioId != uid) return;
-      await context.read<CartProvider>().consumirPedidoRecuperado(
-        resposta.pedidoId,
-        {
-          ...Map<String, dynamic>.from(_tentativaPendente!['payload'] as Map),
-          '_origemCarrinho': _tentativaPendente!['carrinho'],
-        },
-      );
+      await context
+          .read<CartProvider>()
+          .consumirPedidoRecuperado(resposta.pedidoId, {
+            ...Map<String, dynamic>.from(_tentativaPendente!['payload'] as Map),
+            '_origemCarrinho': _tentativaPendente!['carrinho'],
+          });
       await _tentativasCheckout.concluir(uid);
       if (!mounted || auth.usuarioId != uid) return;
       context.go(
@@ -330,7 +330,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         } catch (_) {
                           if (ctx.mounted) {
                             atualizar(
-                              () => erro = 'Não foi possível salvar o número. Tente novamente.',
+                              () => erro =
+                                  'Não foi possível salvar o número. Tente novamente.',
                             );
                           }
                         } finally {
@@ -690,8 +691,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                       : 'Carrinho alterado. Selecione o cupom novamente.'),
                             style: TextStyle(
                               fontSize: 12.sp,
-                              color: const Color(0xFF5D201C)
-                                  .withValues(alpha: 0.58),
+                              color: const Color(
+                                0xFF5D201C,
+                              ).withValues(alpha: 0.58),
                             ),
                           ),
                         ],
@@ -1208,6 +1210,25 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
 
     if (!context.mounted) return;
+    if (trocoPara != null && (!trocoPara.isFinite || trocoPara <= 0)) {
+      setState(() => _isSubmitting = false);
+      context.showError('O valor para troco deve ser positivo.');
+      return;
+    }
+    if (trocoPara != null && trocoPara < total) {
+      setState(() => _isSubmitting = false);
+      context.showError(
+        'O valor para troco deve ser maior ou igual ao total do pedido.',
+      );
+      return;
+    }
+    if (_formaPagamento == 'Dinheiro' &&
+        trocoText.isNotEmpty &&
+        trocoPara == null) {
+      setState(() => _isSubmitting = false);
+      context.showError('Informe um valor válido para troco.');
+      return;
+    }
     if (_formaPagamento == 'Cartão de crédito' &&
         !AppConstants.stripeConfigurado) {
       setState(() => _isSubmitting = false);
@@ -1268,6 +1289,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
       fecharLoading();
 
       if (!context.mounted) return;
+      // Capture os valores antes de consumir as unidades do carrinho.
+      final dadosLocais = NotaFiscalDados.fromCarrinho(
+        pedidoId: idGerado,
+        itens: cartProvider.itens.values,
+        taxaFrete: _taxaFrete,
+        desconto: _subtotalValidado == cartProvider.valorTotal
+            ? (_cupom?.descontoAplicado ?? 0).toDouble()
+            : 0,
+      );
       await cartProvider.consumirPedidoRecuperado(idGerado, {
         ...pedido.toMap(),
         '_origemCarrinho': pedido.origemCarrinho,
@@ -1278,7 +1308,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         context.go('/pagamento?pedidoId=$idGerado');
       } else {
         // Dinheiro
-        await _exibirSucessoEVoltar(idGerado.toString(), cartProvider);
+        await _exibirSucessoEVoltar(dadosLocais);
         await _tentativasCheckout.concluir(uid);
       }
     } on CustomCheckoutException catch (e) {
@@ -1334,37 +1364,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-  Future<void> _exibirSucessoEVoltar(
-    String idGerado,
-    CartProvider cartProvider,
-  ) async {
-    final itens = cartProvider.itens.values.toList();
-    final subtotal = cartProvider.valorTotal;
-    final desconto = _subtotalValidado == subtotal
-        ? (_cupom?.descontoAplicado ?? 0).toDouble()
-        : 0.0;
-    // Snapshot local: usado só se a API não devolver o pedido a tempo.
-    final dadosLocais = NotaFiscalDados(
-      pedidoId: idGerado,
-      lojaNome: '',
-      data: DateTime.now(),
-      itens: itens
-          .map(
-            (i) => NotaFiscalItem(
-              nome: i.nome,
-              preco: i.preco,
-              quantidade: i.quantidade,
-            ),
-          )
-          .toList(),
-      taxaFrete: _taxaFrete,
-      desconto: desconto,
-      total: subtotal + _taxaFrete - desconto,
-    );
-
+  Future<void> _exibirSucessoEVoltar(NotaFiscalDados dadosLocais) async {
     await mostrarNotaFiscalEVerPedido(
       context,
-      pedidoId: idGerado,
+      pedidoId: dadosLocais.pedidoId,
       dadosLocais: dadosLocais,
       aoConcluir: () async {},
     );
