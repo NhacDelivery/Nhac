@@ -71,8 +71,8 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
     final cor = entregue
         ? Colors.green.shade700
         : cancelado
-            ? Colors.grey.shade600
-            : _coral;
+        ? Colors.grey.shade600
+        : _coral;
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Material(
@@ -116,8 +116,9 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
                           if (pedido.criadoEm != null) ...[
                             const SizedBox(height: 4),
                             Text(
-                              DateFormat('dd/MM/yyyy • HH:mm')
-                                  .format(pedido.criadoEm!.toLocal()),
+                              DateFormat(
+                                'dd/MM/yyyy • HH:mm',
+                              ).format(pedido.criadoEm!.toLocal()),
                               style: TextStyle(
                                 color: Colors.grey.shade600,
                                 fontSize: 12,
@@ -144,7 +145,7 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
                         borderRadius: BorderRadius.circular(30),
                       ),
                       child: Text(
-                        pedido.status.label,
+                        pedido.statusTexto,
                         style: TextStyle(
                           color: cor,
                           fontWeight: FontWeight.w600,
@@ -155,8 +156,9 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
                     Padding(
                       padding: const EdgeInsets.only(top: 5),
                       child: Text(
-                        NumberFormat.simpleCurrency(locale: 'pt_BR')
-                            .format(pedido.valorTotal),
+                        NumberFormat.simpleCurrency(
+                          locale: 'pt_BR',
+                        ).format(pedido.valorTotal),
                         style: const TextStyle(
                           color: _marrom,
                           fontWeight: FontWeight.bold,
@@ -193,76 +195,75 @@ class _MeusPedidosPageState extends State<MeusPedidosPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        backgroundColor: const Color(0xFFFFE7E5),
-        appBar: AppBar(
-          backgroundColor: const Color(0xFFFFE7E5),
-          foregroundColor: _marrom,
-          surfaceTintColor: Colors.transparent,
-          elevation: 0,
-          title: const Text(
-            'Meus Pedidos',
-            style: TextStyle(fontWeight: FontWeight.bold),
+    backgroundColor: const Color(0xFFFFE7E5),
+    appBar: AppBar(
+      backgroundColor: const Color(0xFFFFE7E5),
+      foregroundColor: _marrom,
+      surfaceTintColor: Colors.transparent,
+      elevation: 0,
+      title: const Text(
+        'Meus Pedidos',
+        style: TextStyle(fontWeight: FontWeight.bold),
+      ),
+    ),
+    body: RefreshIndicator(
+      color: _coral,
+      onRefresh: () => _carregar(atualizar: true),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text(
+            'Acompanhe seus pedidos e veja seu histórico.',
+            style: TextStyle(color: _marrom),
           ),
-        ),
-        body: RefreshIndicator(
-          color: _coral,
-          onRefresh: () => _carregar(atualizar: true),
-          child: ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(20),
-            children: [
-              const Text(
-                'Acompanhe seus pedidos e veja seu histórico.',
-                style: TextStyle(color: _marrom),
+          const SizedBox(height: 24),
+          if (_pedidos.isEmpty && !_carregando && _erro == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 60),
+              child: Column(
+                children: [
+                  Icon(Icons.receipt_long_outlined, color: _coral, size: 64),
+                  SizedBox(height: 16),
+                  Text(
+                    'Você ainda não fez pedidos',
+                    style: TextStyle(
+                      color: _marrom,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Seus pedidos aparecerão aqui.',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
-              const SizedBox(height: 24),
-              if (_pedidos.isEmpty && !_carregando && _erro == null)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 60),
-                  child: Column(
-                    children: [
-                      Icon(Icons.receipt_long_outlined,
-                          color: _coral, size: 64),
-                      SizedBox(height: 16),
-                      Text(
-                        'Você ainda não fez pedidos',
-                        style: TextStyle(
-                          color: _marrom,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 18,
-                        ),
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'Seus pedidos aparecerão aqui.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
-                  ),
-                ),
-              ..._pedidos.map(_card),
-              if (_erro != null) ...[
-                Text(_erro!, textAlign: TextAlign.center),
-                TextButton(
-                  onPressed: _carregar,
-                  child: const Text(
-                    'Tentar novamente',
-                    style: TextStyle(color: _coral),
-                  ),
-                ),
-              ],
-              if (_carregando)
-                const Center(child: LoadingNhac(telaCheia: false, tamanho: 40)),
-              if (_temMais && !_carregando && _pedidos.isNotEmpty)
-                TextButton(
-                  onPressed: _carregar,
-                  child: const Text(
-                    'Carregar mais',
-                    style: TextStyle(color: _coral),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      );
+            ),
+          ..._pedidos.map(_card),
+          if (_erro != null) ...[
+            Text(_erro!, textAlign: TextAlign.center),
+            TextButton(
+              onPressed: _carregar,
+              child: const Text(
+                'Tentar novamente',
+                style: TextStyle(color: _coral),
+              ),
+            ),
+          ],
+          if (_carregando)
+            const Center(child: LoadingNhac(telaCheia: false, tamanho: 40)),
+          if (_temMais && !_carregando && _pedidos.isNotEmpty)
+            TextButton(
+              onPressed: _carregar,
+              child: const Text(
+                'Carregar mais',
+                style: TextStyle(color: _coral),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
 }

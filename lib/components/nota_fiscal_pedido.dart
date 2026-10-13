@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:nhac/components/botoes/botao_largo_nhac.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
 import 'package:nhac/models/pedido_model.dart';
+import 'package:nhac/models/usuario/carrinho_model.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -46,6 +47,36 @@ class NotaFiscalDados {
   final double total;
 
   double get subtotal => itens.fold(0, (soma, item) => soma + item.subtotal);
+
+  factory NotaFiscalDados.fromCarrinho({
+    required String pedidoId,
+    required Iterable<CartItemModel> itens,
+    required double taxaFrete,
+    required double desconto,
+  }) {
+    final snapshot = List<NotaFiscalItem>.unmodifiable(
+      itens.map(
+        (item) => NotaFiscalItem(
+          nome: item.nome,
+          preco: item.preco,
+          quantidade: item.quantidade,
+        ),
+      ),
+    );
+    final subtotal = snapshot.fold<double>(
+      0,
+      (soma, item) => soma + item.subtotal,
+    );
+    return NotaFiscalDados(
+      pedidoId: pedidoId,
+      lojaNome: '',
+      data: DateTime.now(),
+      itens: snapshot,
+      taxaFrete: taxaFrete,
+      desconto: desconto,
+      total: subtotal + taxaFrete - desconto,
+    );
+  }
 
   factory NotaFiscalDados.fromPedido(PedidoModel pedido) {
     final itens = pedido.itens
