@@ -1,5 +1,6 @@
 """Fail early when the isolated backend does not support this app's contracts."""
 
+import os
 import argparse
 import json
 import sys
@@ -8,6 +9,9 @@ import urllib.request
 
 
 def check_backend(port):
+    password = os.environ.get("E2E_PASSWORD", "")
+    if len(password) < 12:
+        raise RuntimeError("Defina E2E_PASSWORD temporária para o backend isolado")
     base = f"http://127.0.0.1:{port}/api/v1"
 
     def request(path, payload=None, token=None):
@@ -35,7 +39,7 @@ def check_backend(port):
         raise RuntimeError("/produtos/cards: produto fixture e2e-produto-001 ausente")
     page("/produtos/cards/promocoes?page=0&size=1")
     login = request("/auth/login", {
-        "email": "e2e.cliente@nhac.local", "senha": "NhacE2E#123",
+        "email": "e2e.cliente@nhac.local", "senha": password,
     })
     token = login.get("token") if isinstance(login, dict) else None
     if not isinstance(token, str) or not token:

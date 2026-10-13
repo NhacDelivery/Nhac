@@ -125,8 +125,12 @@ class _EmailClienteState extends State<EmailCliente> {
                               const SizedBox(width: 10.0),
                           itemBuilder: (context, index) => ActionChip(
                             label: Text(_dominios[index]),
-                            backgroundColor:
-                                const Color.fromARGB(255, 248, 234, 234),
+                            backgroundColor: const Color.fromARGB(
+                              255,
+                              248,
+                              234,
+                              234,
+                            ),
                             labelStyle: const TextStyle(
                               color: Color(0xFF5D201C),
                               fontWeight: FontWeight.w800,
@@ -149,9 +153,10 @@ class _EmailClienteState extends State<EmailCliente> {
                                     '$prefixo${_dominios[index]}';
                                 _emailController.selection =
                                     TextSelection.fromPosition(
-                                  TextPosition(
-                                      offset: _emailController.text.length),
-                                );
+                                      TextPosition(
+                                        offset: _emailController.text.length,
+                                      ),
+                                    );
                               }
                             },
                           ),
@@ -164,11 +169,14 @@ class _EmailClienteState extends State<EmailCliente> {
                         children: [
                           Expanded(
                             child: Divider(
-                                color: Colors.grey[300], thickness: 1.0),
+                              color: Colors.grey[300],
+                              thickness: 1.0,
+                            ),
                           ),
                           Padding(
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 10.0),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10.0,
+                            ),
                             child: Text(
                               'ou',
                               style: TextStyle(
@@ -180,7 +188,9 @@ class _EmailClienteState extends State<EmailCliente> {
                           ),
                           Expanded(
                             child: Divider(
-                                color: Colors.grey[300], thickness: 1.0),
+                              color: Colors.grey[300],
+                              thickness: 1.0,
+                            ),
                           ),
                         ],
                       ),
@@ -194,39 +204,48 @@ class _EmailClienteState extends State<EmailCliente> {
                           height: 24.0,
                           width: 24.0,
                         ),
-                        onPressed: () async {
-                          setState(() => _isGoogleLoading = true);
-                          try {
-                            final authService = context.read<AuthService>();
-                            await authService.loginComGoogle();
+                        onPressed: _isLoading || _isGoogleLoading
+                            ? null
+                            : () async {
+                                if (_isLoading || _isGoogleLoading) return;
+                                setState(() => _isGoogleLoading = true);
+                                try {
+                                  final authService = context
+                                      .read<AuthService>();
+                                  await authService.loginComGoogle();
 
-                            if (context.mounted) {
-                              context
-                                  .read<UserProvider>()
-                                  .carregarDadosUsuario();
-                              context.showSuccess("Logado com sucesso!");
-                              context.go('/home-page');
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              context.showError(e.toString());
-                            }
-                          } finally {
-                            if (mounted) {
-                              setState(() => _isGoogleLoading = false);
-                            }
-                          }
-                        },
+                                  if (context.mounted) {
+                                    context
+                                        .read<UserProvider>()
+                                        .carregarDadosUsuario();
+                                    context.showSuccess("Logado com sucesso!");
+                                    context.go('/home-page');
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    context.showError(e.toString());
+                                  }
+                                } finally {
+                                  if (mounted) {
+                                    setState(() => _isGoogleLoading = false);
+                                  }
+                                }
+                              },
                       ),
                       const SizedBox(height: 16.0),
                       BotaoLargoNhac(
                         texto: 'Continuar com o telefone',
                         isSecundario: true,
-                        icone: const Icon(Icons.phone,
-                            size: 24.0, color: Color(0xFF5D201C)),
-                        onPressed: () {
-                          context.push('/insira_telefone');
-                        },
+                        icone: const Icon(
+                          Icons.phone,
+                          size: 24.0,
+                          color: Color(0xFF5D201C),
+                        ),
+                        onPressed: _isLoading || _isGoogleLoading
+                            ? null
+                            : () {
+                                context.push('/insira_telefone');
+                              },
                       ),
                     ],
                   ),
@@ -236,7 +255,7 @@ class _EmailClienteState extends State<EmailCliente> {
                 key: E2EKeys.loginSubmit,
                 texto: 'Continuar',
                 carregando: _isLoading,
-                onPressed: _emailValido
+                onPressed: _emailValido && !_isLoading && !_isGoogleLoading
                     ? () async {
                         await redirecionadorEmail();
                       }
@@ -251,6 +270,7 @@ class _EmailClienteState extends State<EmailCliente> {
   }
 
   Future<void> redirecionadorEmail() async {
+    if (_isLoading || _isGoogleLoading) return;
     final localContext = context;
     final cadastroData = localContext.read<CadastroController>();
     final authService = localContext.read<AuthService>();

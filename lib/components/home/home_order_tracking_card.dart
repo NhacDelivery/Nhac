@@ -1,3 +1,4 @@
+import 'package:nhac/components/loading_nhac.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -395,9 +396,7 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
                   const Padding(
                     padding: EdgeInsets.all(20),
                     child: Center(
-                      child: CircularProgressIndicator(
-                        color: Color(0xFFFF6961),
-                      ),
+                      child: LoadingNhac(telaCheia: false, tamanho: 40),
                     ),
                   ),
                 if (_error != null) ...[

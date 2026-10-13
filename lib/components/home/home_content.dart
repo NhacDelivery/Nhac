@@ -977,8 +977,6 @@ class _HomeContentState extends State<HomeContent>
             padding: EdgeInsets.all(24.w),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
-                const EstadoEnderecos(),
-                SizedBox(height: 16.h),
                 TweenAnimationBuilder<double>(
                   duration: const Duration(milliseconds: 800),
                   tween: Tween(begin: 0.0, end: 1.0),
@@ -1093,6 +1091,7 @@ class _HomeContentState extends State<HomeContent>
                           ),
                         ],
                       ),
+                      const EstadoEnderecos(),
                       SizedBox(height: 24.h),
                       Hero(
                         tag: 'search_bar',

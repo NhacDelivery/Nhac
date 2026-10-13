@@ -1,3 +1,4 @@
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:provider/provider.dart';
 import 'package:dio/dio.dart';
 import 'package:nhac/globals/exceptions.dart';
@@ -186,7 +187,8 @@ class _AvaliarProdutoPageState extends State<AvaliarProdutoPage> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          if (_loading) const Center(child: CircularProgressIndicator()),
+          if (_loading)
+            const Center(child: LoadingNhac(telaCheia: false, tamanho: 40)),
           if (_existente != null)
             const Text(
               'Você já avaliou este produto neste pedido.',

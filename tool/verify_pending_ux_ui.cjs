@@ -1,3 +1,5 @@
+const fixturePassword = process.env.E2E_PASSWORD;
+if (!fixturePassword || fixturePassword.length < 12) throw new Error('Defina E2E_PASSWORD temporária do backend isolado.');
 // Local E2E fixture only. Simulated failures do not change production accounts.
 const { chromium } = require('playwright');
 const fs = require('node:fs');
@@ -22,7 +24,7 @@ fs.mkdirSync(dir, { recursive: true });
   await page.locator('input').fill('e2e.cliente@nhac.local');
   await page.getByRole('button',{name:'Continuar',exact:true}).click();
   await page.waitForTimeout(800);
-  await page.locator('input').fill('NhacE2E#123');
+  await page.locator('input').fill(fixturePassword);
   await page.getByRole('button',{name:'Continuar',exact:true}).click();
   await page.waitForTimeout(2500);
   await page.mouse.click(345,810);

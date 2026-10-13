@@ -35,7 +35,7 @@ void main() {
     dotenv.testLoad(fileInput: 'API_BASE_URL=http://localhost:8080/api/v1');
   });
 
-  Future<void> abrir(WidgetTester tester) async {
+  Future<void> abrir(WidgetTester tester, {FeedPostModel? post}) async {
     final router = GoRouter(
       initialLocation: '/',
       routes: [
@@ -55,7 +55,8 @@ void main() {
         ),
         GoRoute(
           path: '/publicar',
-          builder: (_, __) => FeedPublishPage(repository: repository),
+          builder: (_, __) =>
+              FeedPublishPage(repository: repository, post: post),
         ),
       ],
     );
@@ -276,5 +277,46 @@ void main() {
     expect(calls[0], 'Texto rejeitado');
     expect(calls[2], 'Texto corrigido');
     expect(calls[1], isNot(calls[3]));
+  });
+  testWidgets('edição incerta mantém chave e conteúdo após reabrir',
+      (tester) async {
+    final post = FeedPostModel.fromMap({
+      'id': 'editado',
+      'curtidas': 0,
+      'comentarios': 0,
+      'nomeUsuario': 'Autor',
+      'conteudo': 'Original',
+      'imagens': <String>[],
+      'hashTags': <String>[]
+    });
+    final chaves = <String>[];
+    when(() => repository.editar(post, any(), any(),
+            imagens: any(named: 'imagens'),
+            lojaId: any(named: 'lojaId'),
+            alterarLoja: true,
+            idempotencyKey: any(named: 'idempotencyKey')))
+        .thenAnswer((invocation) async {
+      chaves.add(invocation.namedArguments[#idempotencyKey] as String);
+      throw Exception('Resposta perdida');
+    });
+    await abrir(tester, post: post);
+    await tester.enterText(
+        find.byKey(const Key('feed.publish.conteudo')), 'Conteúdo atualizado');
+    await publicar(tester);
+    await tester.pumpAndSettle();
+    final tentativa = await const FeedTentativaService()
+        .carregar('feed-test-user', 'editar:editado');
+    expect(tentativa!['payload']['conteudo'], 'Conteúdo atualizado');
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpAndSettle();
+    await abrir(tester, post: post);
+    final campo = tester
+        .widget<TextFormField>(find.byKey(const Key('feed.publish.conteudo')));
+    expect(campo.controller!.text, 'Conteúdo atualizado');
+    expect(campo.enabled, isFalse);
+    await publicar(tester);
+    await tester.pumpAndSettle();
+    expect(chaves.length, 2);
+    expect(chaves[0], chaves[1]);
   });
 }

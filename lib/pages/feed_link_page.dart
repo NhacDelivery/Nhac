@@ -52,11 +52,12 @@ class _FeedLinkPageState extends State<FeedLinkPage> {
           appBar: AppBar(title: const Text('Publicação compartilhada')),
           body: snapshot.hasError
               ? BannerErroInline(
-                  mensagem: 'Não foi possível abrir a publicação. Ela pode ter sido excluída.',
+                  mensagem:
+                      'Não foi possível abrir a publicação. Ela pode ter sido excluída.',
                   aoTentarNovamente: () async {
-                    setState(
-                      () => _post = FeedRepository().buscarPost(widget.id),
-                    );
+                    setState(() {
+                      _post = FeedRepository().buscarPost(widget.id);
+                    });
                     try {
                       await _post;
                     } catch (_) {}

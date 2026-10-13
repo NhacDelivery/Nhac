@@ -1020,7 +1020,8 @@ class _SearchPageState extends State<SearchPage>
           6,
         ),
         SizedBox(height: 16.h),
-        if (_categoriasCarregando) const LinearProgressIndicator(),
+        if (_categoriasCarregando)
+          const LoadingNhac(telaCheia: false, tamanho: 40),
         if (_erroCategorias)
           TextButton.icon(
             onPressed: _carregarCategorias,

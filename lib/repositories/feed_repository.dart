@@ -161,10 +161,16 @@ class FeedRepository {
     List<String>? imagens,
     String? lojaId,
     bool alterarLoja = false,
+    String? idempotencyKey,
   }) async {
     try {
       final response = await _dio.put(
         '/feed/posts/${Uri.encodeComponent(post.id)}',
+        options: Options(
+          headers: {
+            if (idempotencyKey != null) 'Idempotency-Key': idempotencyKey,
+          },
+        ),
         data: {
           'conteudo': conteudo.trim(),
           'hashTags': tags,

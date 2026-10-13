@@ -1,3 +1,4 @@
+import 'package:nhac/services/preferencias_comida_service.dart';
 import 'dart:io';
 
 import 'package:nhac/services/home_order_route_observer.dart';
@@ -92,6 +93,7 @@ class _ProfileContentState extends State<ProfileContent>
   bool _erroEstatisticas = false;
   bool _confirmandoIdentidade = false;
   Set<String> _preferencias = {};
+  String? _erroSincronizacaoPreferencias;
   bool _preferenciasCarregadas = false, _salvandoPreferencias = false;
   String? _contaPreferencias;
 
@@ -108,9 +110,17 @@ class _ProfileContentState extends State<ProfileContent>
     final usuarioId = context.read<AuthService>().usuarioId;
     if (usuarioId == null) return;
     try {
-      final salvas = await LocalCacheService.carregarPreferenciasComida(
-        usuarioId,
-      );
+      Set<String> salvas;
+      try {
+        salvas = await PreferenciasComidaService.carregar(usuarioId);
+        if (mounted) setState(() => _erroSincronizacaoPreferencias = null);
+      } catch (_) {
+        salvas = await LocalCacheService.carregarPreferenciasComida(usuarioId);
+        if (mounted && context.read<AuthService>().usuarioId == usuarioId) {
+          setState(() => _erroSincronizacaoPreferencias =
+              'Usando as preferências deste aparelho. Atualize o perfil para tentar sincronizar.');
+        }
+      }
       if (mounted && context.read<AuthService>().usuarioId == usuarioId)
         setState(() {
           _preferencias = salvas;
@@ -134,13 +144,24 @@ class _ProfileContentState extends State<ProfileContent>
     if (!_preferenciasCarregadas ||
         _salvandoPreferencias ||
         usuarioId == null ||
-        usuarioId != _contaPreferencias)
-      return;
+        usuarioId != _contaPreferencias) return;
     final novas = {..._preferencias};
     if (!novas.remove(nome)) novas.add(nome);
     setState(() => _salvandoPreferencias = true);
     try {
-      await LocalCacheService.salvarPreferenciasComida(usuarioId, novas);
+      try {
+        await PreferenciasComidaService.salvar(usuarioId, novas);
+      } catch (_) {
+        final salvas = await LocalCacheService.carregarPreferenciasComida(
+          usuarioId,
+        );
+        if (salvas.length != novas.length || !salvas.containsAll(novas))
+          rethrow;
+        if (mounted)
+          context.showError(
+            'Preferências salvas neste aparelho. Sincronização pendente; reabra o perfil quando estiver conectado.',
+          );
+      }
       if (mounted && context.read<AuthService>().usuarioId == usuarioId)
         setState(() => _preferencias = novas);
     } catch (_) {
@@ -482,9 +503,8 @@ class _ProfileContentState extends State<ProfileContent>
     final userProvider = context.watch<UserProvider>();
     final usuario = userProvider.usuario;
     final enderecoProvider = context.watch<EnderecoProvider>();
-    final enderecoisPadrao = enderecoProvider.enderecos
-        .where((e) => e.isPadrao)
-        .firstOrNull;
+    final enderecoisPadrao =
+        enderecoProvider.enderecos.where((e) => e.isPadrao).firstOrNull;
     final String textoEndereco = enderecoisPadrao != null
         ? '${enderecoisPadrao.rua}, ${enderecoisPadrao.numero}${(enderecoisPadrao.complemento?.isNotEmpty ?? false) ? ' - ${enderecoisPadrao.complemento}' : ''}'
         : 'Nenhum endereço selecionado';
@@ -529,31 +549,29 @@ class _ProfileContentState extends State<ProfileContent>
               refreshIndicatorExtent: 140.h,
               refreshTriggerPullDistance: 180.h,
               onRefresh: _atualizarPerfil,
-              builder:
-                  (
-                    context,
-                    refreshState,
-                    pulledExtent,
-                    refreshTriggerPullDistance,
-                    refreshIndicatorExtent,
-                  ) {
-                    return Center(
-                      child: Opacity(
-                        opacity: (pulledExtent / refreshIndicatorExtent).clamp(
-                          0.0,
-                          1.0,
-                        ),
-                        child: Lottie.asset(
-                          'assets/animations/loading_nhac.json',
-                          width: 240.w,
-                          height: 240.h,
-                          animate:
-                              refreshState == RefreshIndicatorMode.refresh ||
-                              refreshState == RefreshIndicatorMode.armed,
-                        ),
-                      ),
-                    );
-                  },
+              builder: (
+                context,
+                refreshState,
+                pulledExtent,
+                refreshTriggerPullDistance,
+                refreshIndicatorExtent,
+              ) {
+                return Center(
+                  child: Opacity(
+                    opacity: (pulledExtent / refreshIndicatorExtent).clamp(
+                      0.0,
+                      1.0,
+                    ),
+                    child: Lottie.asset(
+                      'assets/animations/loading_nhac.json',
+                      width: 240.w,
+                      height: 240.h,
+                      animate: refreshState == RefreshIndicatorMode.refresh ||
+                          refreshState == RefreshIndicatorMode.armed,
+                    ),
+                  ),
+                );
+              },
             ),
             SliverPadding(
               padding: EdgeInsets.symmetric(horizontal: 24.w),
@@ -621,8 +639,9 @@ class _ProfileContentState extends State<ProfileContent>
                                 color: Colors.white,
                                 boxShadow: [
                                   BoxShadow(
-                                    color: const Color(0xFF5D201C)
-                                        .withValues(alpha: 0.1),
+                                    color: const Color(
+                                      0xFF5D201C,
+                                    ).withValues(alpha: 0.1),
                                     blurRadius: 10.r,
                                     offset: Offset(0, 4.h),
                                   ),
@@ -642,15 +661,15 @@ class _ProfileContentState extends State<ProfileContent>
                                         fit: BoxFit.cover,
                                         placeholder: (context, url) =>
                                             const LoadingNhac(
-                                              telaCheia: false,
-                                              tamanho: 40,
-                                            ),
+                                          telaCheia: false,
+                                          tamanho: 40,
+                                        ),
                                         errorWidget: (context, url, error) =>
                                             Icon(
-                                              Icons.person,
-                                              size: 48.r,
-                                              color: Colors.grey.shade400,
-                                            ),
+                                          Icons.person,
+                                          size: 48.r,
+                                          color: Colors.grey.shade400,
+                                        ),
                                       ),
                                     ),
                             ),
@@ -833,8 +852,9 @@ class _ProfileContentState extends State<ProfileContent>
                       borderRadius: BorderRadius.circular(24.r),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF5D201C)
-                              .withValues(alpha: 0.03),
+                          color: const Color(
+                            0xFF5D201C,
+                          ).withValues(alpha: 0.03),
                           blurRadius: 15.r,
                           offset: Offset(0, 5.h),
                         ),
@@ -900,7 +920,8 @@ class _ProfileContentState extends State<ProfileContent>
                   ),
                   SizedBox(height: 4.h),
                   Text(
-                    'Salvas neste aparelho. Ainda não mudam as recomendações.',
+                    _erroSincronizacaoPreferencias ??
+                        'Salvas na sua conta e neste aparelho. Ainda não mudam as recomendações.',
                     style: TextStyle(
                       fontSize: 12.sp,
                       color: Colors.grey.shade600,
@@ -915,8 +936,9 @@ class _ProfileContentState extends State<ProfileContent>
                       border: Border.all(color: Colors.white, width: 2),
                       boxShadow: [
                         BoxShadow(
-                          color: const Color(0xFF5D201C)
-                              .withValues(alpha: 0.03),
+                          color: const Color(
+                            0xFF5D201C,
+                          ).withValues(alpha: 0.03),
                           blurRadius: 15.r,
                           offset: Offset(0, 5.h),
                         ),

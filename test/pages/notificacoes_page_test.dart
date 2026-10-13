@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nhac/pages/notificacoes_page.dart';
 import 'package:nhac/services/notificacao_historico_service.dart';
@@ -17,7 +18,11 @@ void main() {
       );
       await NotificacaoHistoricoService.registrar('u1', aviso);
       await tester.pumpWidget(
-        const MaterialApp(home: NotificacoesPage(usuarioId: 'u1')),
+        ScreenUtilInit(
+          designSize: const Size(390, 844),
+          builder: (_, __) =>
+              const MaterialApp(home: NotificacoesPage(usuarioId: 'u1')),
+        ),
       );
       await tester.pumpAndSettle();
       expect(find.byIcon(Icons.notifications_active_outlined), findsOneWidget);

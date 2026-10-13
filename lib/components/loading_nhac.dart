@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:lottie/lottie.dart';
 
 class LoadingNhac extends StatelessWidget {
@@ -16,46 +15,51 @@ class LoadingNhac extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget loadingContent = Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        SizedBox(
-          width: tamanho.r,
-          height: tamanho.r,
-          child: Lottie.asset(
-            'assets/animations/loading_nhac.json',
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) {
-              return Icon(
-                Icons.restaurant_rounded,
-                color: const Color(0xFFFE645C),
-                size: tamanho.w,
-              );
-            },
+    final animacao = SizedBox(
+      width: tamanho,
+      height: tamanho,
+      child: Lottie.asset(
+        'assets/animations/loading_nhac.json',
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Icon(
+            Icons.restaurant_rounded,
+            color: const Color(0xFFFE645C),
+            size: tamanho,
           ),
         ),
-        if (mensagem != null) ...[
-          SizedBox(height: 16.h),
-          Text(
-            mensagem!,
-            style: TextStyle(
-              color: const Color(0xFF5D201C),
-              fontSize: 16.sp,
-              fontWeight: FontWeight.w600,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ],
+      ),
     );
+    // Sem legenda, o próprio SizedBox respeita a altura de botões e rodapés.
+    Widget loadingContent = mensagem == null
+        ? animacao
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(child: animacao),
+              if (mensagem != null) ...[
+                const SizedBox(height: 16),
+                Text(
+                  mensagem!,
+                  style: TextStyle(
+                    color: const Color(0xFF5D201C),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ],
+          );
 
     if (telaCheia) {
       return Scaffold(
         backgroundColor: const Color(0xFFFFE7E5),
         body: Center(
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 32.w),
+            padding: const EdgeInsets.symmetric(horizontal: 32),
             child: loadingContent,
           ),
         ),

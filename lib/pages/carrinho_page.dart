@@ -96,8 +96,6 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                     espacoParaBarraFlutuante,
                   ),
                   children: [
-                    const EstadoEnderecos(),
-                    SizedBox(height: 8.h),
                     TweenAnimationBuilder<double>(
                       duration: const Duration(milliseconds: 800),
                       tween: Tween(begin: 0.0, end: 1.0),
@@ -113,6 +111,7 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                       },
                       child: _buildAddressSection(context, defaultAddress),
                     ),
+                    const EstadoEnderecos(),
                     SizedBox(height: 24.h),
                     ...cartProvider.itens.values.toList().asMap().entries.map((
                       entry,

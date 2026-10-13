@@ -1,3 +1,4 @@
+import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/utils/request_outcome.dart';
 import 'package:nhac/components/nhac_confirm_dialog.dart';
@@ -68,6 +69,9 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
   final _tentativas = const FeedTentativaService();
   Map<String, dynamic>? _pendente;
   bool _restaurando = true;
+  bool _falhaRestauracao = false;
+  String get _escopo =>
+      widget.post == null ? 'post' : 'editar:${widget.post!.id}';
   @override
   void initState() {
     super.initState();
@@ -88,10 +92,10 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
         _lojaRestauradaId = widget.post!.mentionedStore?.id;
         _lojaRestauradaNome = widget.post!.mentionedStore?.nome;
       }
-      if (uid != null && widget.post == null)
-        _pendente = await _tentativas.carregar(uid, 'post');
+      if (uid != null) _pendente = await _tentativas.carregar(uid, _escopo);
       if (!mounted) return;
       if (_pendente != null) {
+        _fotos.clear();
         _conteudo.text = _pendente!['payload']['conteudo'] as String;
         _tags.text = (_pendente!['payload']['hashTags'] as List).join(' ');
         _fotos.addAll(
@@ -108,13 +112,17 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
         }
       }
     } catch (_) {
-      if (mounted) _erro = 'Não foi possível recuperar o envio anterior. Reabra a tela para tentar novamente.';
+      _falhaRestauracao = true;
+      if (mounted)
+        _erro =
+            'Não foi possível recuperar o envio anterior. Reabra a tela para tentar novamente.';
     } finally {
       if (mounted) setState(() => _restaurando = false);
     }
   }
 
-  bool get _ocupado => _enviando || _selecionandoFoto || _restaurando;
+  bool get _ocupado =>
+      _enviando || _selecionandoFoto || _restaurando || _falhaRestauracao;
   bool get _alterado {
     final original = widget.post;
     if (original == null)
@@ -146,8 +154,7 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
 
   Future<void> _sair() async {
     if (_ocupado) return;
-    final descartar =
-        !_alterado ||
+    final descartar = !_alterado ||
         await confirmarNhac(
           context,
           titulo: widget.post == null
@@ -200,8 +207,7 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
     if (_ocupado ||
         _pendente != null ||
         _buscando ||
-        _busca.text.trim().isEmpty)
-      return;
+        _busca.text.trim().isEmpty) return;
     final consulta = ++_consulta;
     setState(() {
       _buscando = true;
@@ -229,6 +235,12 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
 
   Future<void> _publicar() async {
     if (_ocupado) return;
+    final uid = context.read<AuthService>().usuarioId;
+    if (uid == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Faça login para publicar.')));
+      return;
+    }
     if (!_form.currentState!.validate()) {
       _focoConteudo.requestFocus();
       return;
@@ -248,17 +260,25 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
         if (!mounted) return;
       }
       setState(() => _progresso = 'Publicando...');
-      final uid = context.read<AuthService>().usuarioId;
-      if (uid == null) throw StateError('Faça login para publicar.');
+
       if (widget.post != null) {
+        _pendente ??= await _tentativas.preparar(uid, _escopo, {
+          'conteudo': _conteudo.text.trim(),
+          'hashTags': _hashtags,
+          'imagens': _fotos.map((f) => f.url!).toList(),
+          'lojaId': _lojaId,
+        });
+        final payload = _pendente!['payload'] as Map;
         final post = await _repository.editar(
           widget.post!,
-          _conteudo.text,
-          _hashtags,
-          imagens: _fotos.map((f) => f.url!).toList(),
-          lojaId: _lojaId,
+          payload['conteudo'] as String,
+          List<String>.from(payload['hashTags'] as List),
+          imagens: List<String>.from(payload['imagens'] as List),
+          lojaId: payload['lojaId'] as String?,
           alterarLoja: true,
+          idempotencyKey: _pendente!['key'] as String,
         );
+        await _tentativas.concluir(uid, _escopo);
         if (!mounted) return;
         setState(() => _podeSair = true);
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -288,9 +308,7 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
       });
     } catch (e) {
       if (rejeicaoDefinitiva(e)) {
-        final uid = context.read<AuthService>().usuarioId;
-        if (uid != null && widget.post == null)
-          await _tentativas.concluir(uid, 'post');
+        await _tentativas.concluir(uid, _escopo);
         _pendente = null;
       }
       if (mounted)
@@ -394,9 +412,9 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
                                         fit: BoxFit.cover,
                                         errorBuilder: (_, __, ___) =>
                                             const SizedBox(
-                                              height: 76,
-                                              child: Icon(Icons.broken_image),
-                                            ),
+                                          height: 76,
+                                          child: Icon(Icons.broken_image),
+                                        ),
                                       )
                                     : Image.memory(
                                         _fotos[i].bytes!,
@@ -405,9 +423,9 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
                                         fit: BoxFit.cover,
                                         errorBuilder: (_, __, ___) =>
                                             const SizedBox(
-                                              height: 76,
-                                              child: Icon(Icons.broken_image),
-                                            ),
+                                          height: 76,
+                                          child: Icon(Icons.broken_image),
+                                        ),
                                       ),
                               ),
                               SizedBox(
@@ -416,7 +434,7 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
                                   onPressed: _ocupado || _pendente != null
                                       ? null
                                       : () =>
-                                            setState(() => _fotos.removeAt(i)),
+                                          setState(() => _fotos.removeAt(i)),
                                   child: Text('Remover ${i + 1}'),
                                 ),
                               ),
@@ -480,10 +498,10 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
                       onDeleted: _ocupado || _pendente != null
                           ? null
                           : () => setState(() {
-                              _loja = null;
-                              _lojaRestauradaId = null;
-                              _lojaRestauradaNome = null;
-                            }),
+                                _loja = null;
+                                _lojaRestauradaId = null;
+                                _lojaRestauradaNome = null;
+                              }),
                     ),
                   ),
                 const SizedBox(height: 8),
@@ -507,13 +525,13 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
                       onPressed: _ocupado || _pendente != null
                           ? null
                           : () => setState(() {
-                              _busca.clear();
-                              _consulta++;
-                              _buscando = false;
-                              _buscou = false;
-                              _lojas = [];
-                              _erroBusca = null;
-                            }),
+                                _busca.clear();
+                                _consulta++;
+                                _buscando = false;
+                                _buscou = false;
+                                _lojas = [];
+                                _erroBusca = null;
+                              }),
                       icon: const Icon(Icons.clear),
                     ),
                   ),
@@ -542,10 +560,10 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
                     onTap: _ocupado || _pendente != null
                         ? null
                         : () => setState(() {
-                            _loja = loja;
-                            _lojas = [];
-                            _buscou = false;
-                          }),
+                              _loja = loja;
+                              _lojas = [];
+                              _buscou = false;
+                            }),
                   ),
                 if (_lojas.length == 50)
                   const Text(
@@ -576,13 +594,13 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
                         ? const SizedBox(
                             width: 22,
                             height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: LoadingNhac(telaCheia: false, tamanho: 22),
                           )
                         : Text(
                             _pendente == null
                                 ? widget.post == null
-                                      ? 'Publicar'
-                                      : 'Salvar alterações'
+                                    ? 'Publicar'
+                                    : 'Salvar alterações'
                                 : 'Confirmar envio anterior',
                           ),
                   ),

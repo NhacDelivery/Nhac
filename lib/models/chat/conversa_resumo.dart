@@ -18,19 +18,30 @@ class ConversaResumo {
   });
 
   factory ConversaResumo.fromMap(Map<String, dynamic> map) {
+    final interlocutor = map['interlocutor'] is Map
+        ? Map<String, dynamic>.from(map['interlocutor'] as Map)
+        : const <String, dynamic>{};
     return ConversaResumo(
       id: map['id']?.toString() ?? map['conversaId']?.toString() ?? '',
-      lojaId: map['lojaId']?.toString() ?? '',
+      lojaId: interlocutor['id']?.toString() ?? map['lojaId']?.toString() ?? '',
       lojaNome:
+          interlocutor['nome']?.toString() ??
           map['lojaNome']?.toString() ??
           map['nomeLoja']?.toString() ??
           map['nome']?.toString() ??
           'Loja',
-      ultimaMensagem: map['ultimaMensagem']?.toString() ?? '',
+      ultimaMensagem:
+          map['ultimaMensagemPreview']?.toString() ??
+          map['ultimaMensagem']?.toString() ??
+          '',
       ultimaMensagemData:
-          DateTime.tryParse(map['ultimaMensagemData']?.toString() ?? '') ??
+          DateTime.tryParse(
+            (map['ultimaMensagemEm'] ?? map['ultimaMensagemData'])
+                    ?.toString() ??
+                '',
+          )?.toLocal() ??
           DateTime.now(),
-      mensagensNaoLidas: safeInt(map['mensagensNaoLidas']),
+      mensagensNaoLidas: safeInt(map['naoLidas'] ?? map['mensagensNaoLidas']),
     );
   }
 }

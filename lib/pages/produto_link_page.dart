@@ -18,6 +18,7 @@ class _ProdutoLinkPageState extends State<ProdutoLinkPage> {
     super.initState();
     _produto = ProdutoRepository().buscarPorId(widget.produtoId);
   }
+
   @override
   void didUpdateWidget(covariant ProdutoLinkPage oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -25,6 +26,7 @@ class _ProdutoLinkPageState extends State<ProdutoLinkPage> {
       _produto = ProdutoRepository().buscarPorId(widget.produtoId);
     }
   }
+
   @override
   Widget build(BuildContext context) => FutureBuilder<ProdutosModel>(
     future: _produto,
@@ -34,10 +36,17 @@ class _ProdutoLinkPageState extends State<ProdutoLinkPage> {
         appBar: AppBar(title: const Text('Produto compartilhado')),
         body: snapshot.hasError
             ? BannerErroInline(
-                mensagem: 'Não foi possível abrir este produto. Ele pode não estar mais disponível.',
+                mensagem:
+                    'Não foi possível abrir este produto. Ele pode não estar mais disponível.',
                 aoTentarNovamente: () async {
-                  setState(() => _produto = ProdutoRepository().buscarPorId(widget.produtoId));
-                  try { await _produto; } catch (_) {}
+                  setState(() {
+                    _produto = ProdutoRepository().buscarPorId(
+                      widget.produtoId,
+                    );
+                  });
+                  try {
+                    await _produto;
+                  } catch (_) {}
                 },
               )
             : const LoadingNhac(telaCheia: true),

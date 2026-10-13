@@ -9,6 +9,7 @@ class ProdutosModel {
   final String imagemUrl;
   final int percentualDesconto;
   final String lojaId;
+  final String lojaNome;
   final bool lojaAberta;
   final List<GrupoAdicionalModel> adicionais;
 
@@ -21,6 +22,7 @@ class ProdutosModel {
     this.imagemUrl = '',
     this.percentualDesconto = 0,
     this.lojaId = '',
+    this.lojaNome = '',
     this.lojaAberta = true,
     this.adicionais = const [],
   });
@@ -42,6 +44,7 @@ class ProdutosModel {
       imagemUrl: map['imagemUrl']?.toString() ?? '',
       percentualDesconto: safeInt(map['percentualDesconto']),
       lojaId: map['lojaId']?.toString() ?? '',
+      lojaNome: map['lojaNome']?.toString() ?? '',
       lojaAberta: safeBool(map['lojaAberta'], fallback: true),
     );
   }
@@ -56,6 +59,7 @@ class ProdutosModel {
       'imagemUrl': imagemUrl,
       'percentualDesconto': percentualDesconto,
       'lojaId': lojaId,
+      'lojaNome': lojaNome,
       'lojaAberta': lojaAberta,
       'adicionais': adicionais.map((g) => g.toMap()).toList(),
     };
