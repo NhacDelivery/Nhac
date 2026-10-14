@@ -95,6 +95,12 @@ A recuperação de cobrança consulta o servidor sem reutilizar resposta em cach
 para não reabrir pagamento pendente após confirmação assíncrona. Um teste de
 regressão cobre duas aberturas rápidas com confirmação entre elas.
 
+O rastreio reconcilia o estado por HTTP a cada 30 segundos enquanto visível e
+em primeiro plano, mesmo com socket conectado. Uma conexão não garante entrega
+de todos os eventos; a reconexão também invalida o snapshot e agenda consulta
+quando outra requisição está em andamento. Teste de regressão cobre evento de
+pagamento perdido com conexão ainda aberta.
+
 Todas as novas jornadas conferem um único pedido e estoque 19 (partindo de 20)
 após retomadas e operações repetidas. A entrega confere uma única corrida e
 frete bruto de R$ 5 nos ganhos, horários de coleta/baixa, ausência de pedido

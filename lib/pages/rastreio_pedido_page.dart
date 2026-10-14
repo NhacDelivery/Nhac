@@ -61,7 +61,6 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
   String get _cacheKey => '${SharedGet.sessionGeneration}|${widget.pedidoId}';
   bool _visible = true;
   bool _foreground = true;
-  bool _connected = false;
   bool get _active => _visible && _foreground;
   StreamSubscription<bool>? _connectionSubscription;
   DateTime? _nextRouteAttempt;
@@ -191,7 +190,8 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (ModalRoute.of(context)?.isCurrent == true &&
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
-        _carregarDados(silencioso: true, recuperarStatus: !_connected);
+        // A conexão aberta não garante que todo evento tenha sido recebido.
+        _carregarDados(silencioso: true);
       }
     });
   }
@@ -233,8 +233,11 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
       }
     });
     _connectionSubscription = _statusSocket.conectado.listen((connected) {
-      _connected = connected;
-      if (connected && _active) _carregarDados(silencioso: true);
+      if (connected && _active) {
+        _pedidoRepository.invalidarPedido(widget.pedidoId);
+        _statusRefreshPending = _refreshing;
+        _carregarDados(silencioso: true);
+      }
     });
     await _statusSocket.conectar(widget.pedidoId);
   }
@@ -242,7 +245,6 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
   Future<void> _carregarDados({
     bool silencioso = false,
     bool tentarRota = false,
-    bool recuperarStatus = true,
   }) async {
     if (_refreshing || !mounted || !_active) return;
     final session = SharedGet.sessionGeneration;
@@ -257,9 +259,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     }
 
     try {
-      final pedido = !recuperarStatus && _pedido != null
-          ? _pedido!
-          : await _pedidoRepository.buscarPedidoPorId(widget.pedidoId);
+      final pedido = await _pedidoRepository.buscarPedidoPorId(widget.pedidoId);
       if (!mounted ||
           !_active ||
           session != SharedGet.sessionGeneration ||
