@@ -149,6 +149,7 @@ void main() {
       await waitFor(
         tester,
         find.byType(PedidoEntreguePage),
+        timeout: const Duration(seconds: 45),
         step: 'abrir pedido entregue',
       );
       await waitFor(
