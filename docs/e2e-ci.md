@@ -91,6 +91,10 @@ escolha no checkout do teste; o bootstrap E2E não inicializa a SDK. Não abrir
 PaymentSheet com essa chave nem interpretar estes cenários como homologação do
 provedor. O teste exige que o webhook altere o pedido, além de retornar HTTP 200.
 
+A recuperação de cobrança consulta o servidor sem reutilizar resposta em cache,
+para não reabrir pagamento pendente após confirmação assíncrona. Um teste de
+regressão cobre duas aberturas rápidas com confirmação entre elas.
+
 Todas as novas jornadas conferem um único pedido e estoque 19 (partindo de 20)
 após retomadas e operações repetidas. A entrega confere uma única corrida e
 frete bruto de R$ 5 nos ganhos, horários de coleta/baixa, ausência de pedido
