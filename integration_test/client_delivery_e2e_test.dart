@@ -199,7 +199,7 @@ void main() {
         find.byKey(const Key('campo-comentario-avaliacao')),
         'Entrega E2E concluída',
       );
-      await tester.testTextInput.hide();
+      tester.testTextInput.hide();
       await tapE2E(
         tester,
         find.byKey(const Key('botao-enviar-avaliacao')),

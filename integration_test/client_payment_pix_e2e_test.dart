@@ -31,7 +31,7 @@ void main() {
         step: 'selecionar PIX',
       );
       await tester.enterText(find.byKey(E2EKeys.checkoutCpf), '52998224725');
-      await tester.testTextInput.hide();
+      tester.testTextInput.hide();
       await tapE2E(
         tester,
         E2EFinders.checkoutConfirm,
