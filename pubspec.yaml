@@ -52,6 +52,7 @@ dependencies:
   stomp_dart_client: ^3.0.1
   barcode_widget: ^2.0.4
 dev_dependencies:
+  crypto: ^3.0.7
   sentry_dart_plugin: ^3.3.0
   flutter_test:
     sdk: flutter

@@ -29,8 +29,17 @@ inclusive quando uma etapa posterior falha.
    com a fixture, sem depender de `E2E_TOKEN` manual.
 2. `client_login_e2e_test.dart`: login e abertura da home pela interface.
 3. `client_order_cash_e2e_test.dart`: compra em dinheiro, idempotência e rastreio.
+4. `client_delivery_e2e_test.dart`: confirmação da loja, preparo, oferta automática,
+   aceite, coleta, código inválido/correto, conclusão repetida, histórico, ganhos
+   únicos, entregador liberado e avaliação enviada pela interface do cliente.
+5. `client_payment_pix_e2e_test.dart`: checkout PIX, retomada pelo histórico,
+   mesmo código/prazo/valor e confirmação pelo recurso do perfil E2E.
+6. `client_payment_card_e2e_test.dart`: checkout cartão, assinatura inválida,
+   evento de falha, retomada da cobrança, webhook assinado de sucesso/repetido,
+   falha tardia sem regressão e recuperação da nota fiscal do pedido pago.
 
-`E2E_ONLY` aceita `all`, `contract_smoke`, `login` ou `order_cash`. PRs/pushes usam
+`E2E_ONLY` aceita `all`, `contract_smoke`, `login`, `order_cash`, `delivery`,
+`payment_pix` ou `payment_card`. PRs/pushes usam
 uma repetição; execução manual e agendamento usam três. Uma falha do smoke não
 é mascarada pelo sucesso dos testes de interface.
 
@@ -62,5 +71,31 @@ do agendamento deve chegar à `main` do cliente no fluxo normal de integração;
 publicar somente em `eu-e-tu` já habilita seu push/PR, mas não atualiza o workflow
 agendado da branch padrão.
 
-Esta etapa alinha e torna reproduzível a suíte existente. PIX/cartão e entrega
-completa entre os três aplicativos continuam sendo a próxima ampliação de E2E.
+## Cobertura e limites dos novos cenários
+
+O cliente Flutter, HTTP, Spring, WebSocket/polling e MariaDB são reais. Loja e
+entregador operam pelas APIs autenticadas: as interfaces dos outros aplicativos
+não estão cobertas. O entregador é cadastrado pela API com a conta secundária
+`e2e.pedido@nhac.local`; a sessão principal não é substituída.
+
+Retomada significa desmontar a tela de pagamento, abrir o pedido pelo histórico
+e continuar o pagamento no rastreio. Não representa encerramento do processo
+Android, reinício do dispositivo ou falha de rede. Cada arquivo começa com
+estado limpo; a retomada ocorre dentro do mesmo cenário e mantém o banco.
+
+PIX usa a simulação existente, permitida pelo backend somente no ambiente de
+teste. Cartão usa eventos HMAC SHA-256 no webhook real e o segredo fictício
+`whsec_e2e_mock`. O evento usa `2026-08-26.dahlia`, correspondente a stripe-java
+33.4.2; atualizar junto com o SDK. A chave publishable fictícia só habilita a
+escolha no checkout do teste; o bootstrap E2E não inicializa a SDK. Não abrir
+PaymentSheet com essa chave nem interpretar estes cenários como homologação do
+provedor. O teste exige que o webhook altere o pedido, além de retornar HTTP 200.
+
+Todas as novas jornadas conferem um único pedido e estoque 19 (partindo de 20)
+após retomadas e operações repetidas. A entrega confere uma única corrida e
+frete bruto de R$ 5 nos ganhos, horários de coleta/baixa, ausência de pedido
+ativo e código oculto depois da conclusão.
+
+Próximas ampliações: expiração/cancelamento com devolução de estoque, fechamento
+real do processo e recuperação por armazenamento, indisponibilidade de rede,
+Stripe PaymentSheet/Asaas no sandbox e UI dos aplicativos de loja e entregador.

@@ -107,7 +107,7 @@ except Exception:
         with socket.socket() as sock:
             self.assertNotEqual(sock.connect_ex(("127.0.0.1", self.port)), 0)
 
-    def test_all_runs_contract_login_and_purchase_with_a_fresh_backend_each_time(self):
+    def test_all_runs_six_scenarios_with_a_fresh_backend_each_time(self):
         result = self.run_suite()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         trace = self.trace.read_text().splitlines()
@@ -115,6 +115,9 @@ except Exception:
             'backend-start', 'integration_test/backend_contract_smoke_test.dart',
             'backend-start', 'integration_test/client_login_e2e_test.dart',
             'backend-start', 'integration_test/client_order_cash_e2e_test.dart',
+            'backend-start', 'integration_test/client_delivery_e2e_test.dart',
+            'backend-start', 'integration_test/client_payment_pix_e2e_test.dart',
+            'backend-start', 'integration_test/client_payment_card_e2e_test.dart',
         ])
         self.assert_port_released()
 
@@ -124,6 +127,15 @@ except Exception:
         self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
         self.assertIn('| contract_smoke | 0 | 1 |',
                       (self.app / 'e2e-logs/summary.md').read_text())
+        self.assert_port_released()
+
+    def test_payment_card_can_run_alone(self):
+        self.env['E2E_ONLY'] = 'payment_card'
+        result = self.run_suite()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(self.trace.read_text().splitlines(), [
+            'backend-start', 'integration_test/client_payment_card_e2e_test.dart',
+        ])
         self.assert_port_released()
 
     def test_external_api_is_rejected_before_starting_any_process(self):
