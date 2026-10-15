@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 Future<void> main() async {
   final client = HttpClient();
-  final baseUrl = 'backend-nhac.onrender.com';
+  final baseUrl = 'backend-nhac.cloud.run';
   
   try {
     final uuid = 'test-uuid-${DateTime.now().millisecondsSinceEpoch}';
