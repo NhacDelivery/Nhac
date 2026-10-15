@@ -27,7 +27,8 @@ class OperacaoPagamentoModel {
           'O pedido foi cancelado e a devolução precisa de análise. Não é necessário solicitar outro estorno.',
         'REGULAR' =>
           'Você pode cancelar enquanto a loja ainda não começou o preparo. O valor será devolvido pelo mesmo meio de pagamento.',
-        _ =>
+        'ESTORNO_SOLICITADO' || 'ESTORNO_ENVIANDO' || 'ESTORNO_PROCESSANDO' =>
           'O pedido foi cancelado. A devolução ainda não foi confirmada; você pode acompanhar por aqui.',
+        _ => 'Não foi possível identificar o estado atual. Atualize para conferir o pagamento.',
       };
 }

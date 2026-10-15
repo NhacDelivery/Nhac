@@ -52,6 +52,20 @@ void main() {
   Future<void> sair(WidgetTester tester) async =>
       tester.pumpWidget(const SizedBox());
 
+  testWidgets('erro é legível em cartão estreito com texto ampliado', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    when(() => repo.buscarOperacaoPagamento('pedido')).thenThrow(Exception('offline'));
+    await tester.pumpWidget(ScreenUtilInit(designSize: const Size(390, 844),
+      builder: (_, __) => MaterialApp(home: Scaffold(body: SingleChildScrollView(
+        child: Center(child: SizedBox(width: 240, child: OperacaoPagamentoCard(
+          pedidoId: 'pedido', repository: repo))))))));
+    await tester.pumpAndSettle();
+    expect(find.text('Não foi possível atualizar o pagamento.'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    await sair(tester);
+  });
+
   testWidgets('conciliação não permite novo pagamento ou estorno',
       (tester) async {
     when(() => repo.buscarOperacaoPagamento('pedido')).thenAnswer(

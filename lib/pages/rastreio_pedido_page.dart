@@ -1018,7 +1018,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                       ),
                     ],
                   ),
-                  if (['PIX', 'CARTAO', 'STRIPE', 'GOOGLE_PAY']
+                  if ((status == StatusPedido.pendente || status == StatusPedido.pago) && ['PIX', 'CARTAO', 'STRIPE', 'GOOGLE_PAY']
                       .contains(_pedido!.formaPagamento.toUpperCase()))
                     OperacaoPagamentoCard(
                         key: ValueKey('operacao-${widget.pedidoId}'),
