@@ -5,6 +5,10 @@ inputs:
   env_file_content:
     description: Content for .env file
     required: true
+  api_base_url:
+    description: Public backend URL included in this build
+    required: false
+    default: https://backend-nhac.cloud.run/api/v1
   google_services_json:
     description: Content for android/app/google-services.json
     required: true
@@ -27,6 +31,7 @@ runs:
     - name: Create and validate local config files
       shell: bash
       env:
+        API_BASE_URL: ${{ inputs.api_base_url }}
         ENV_FILE_CONTENT: ${{ inputs.env_file_content }}
         GOOGLE_SERVICES_JSON_CONTENT: ${{ inputs.google_services_json }}
         REQUIRE_KEYSTORE: ${{ inputs.require_keystore }}
@@ -42,6 +47,16 @@ runs:
           echo "::error::.env está vazio - confira o secret ENV_FILE do repositório"
           exit 1
         fi
+
+        # A configuração pública do build prevalece sobre a URL antiga no secret ENV_FILE.
+        python3 - <<'PYCONFIG'
+        import os
+        import re
+        from pathlib import Path
+        path = Path('.env')
+        content = re.sub(r'^\s*(?:export\s+)?API_BASE_URL\s*=.*$', '', path.read_text(), flags=re.MULTILINE)
+        path.write_text(content.rstrip() + '\nAPI_BASE_URL=' + os.environ['API_BASE_URL'] + '\n')
+        PYCONFIG
 
         python3 -c "import json; json.load(open('android/app/google-services.json'))" || {
           echo "::error::google-services.json inválido - confira o secret GOOGLE_SERVICES_JSON"

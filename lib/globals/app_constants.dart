@@ -12,7 +12,7 @@ class AppConstants {
     final value = dotenv.env['API_BASE_URL'];
 
     if (value == null || value.trim().isEmpty) {
-      return 'https://backend-nhac.onrender.com/api/v1';
+      return 'https://backend-nhac.cloud.run/api/v1';
     }
 
     return value.trim();

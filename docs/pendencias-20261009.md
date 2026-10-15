@@ -4,11 +4,11 @@ Implementado nesta branch: categorias e retries sem retorno de Future no setStat
 
 ## Configuração e validação fora dos testes locais
 
-O backend correspondente é `feature/chat-clientes-20261008`. O domínio usado pelos links é `backend-nhac.onrender.com` e o pacote Android é `com.feentzs.nhac`.
+O backend correspondente é `feature/chat-clientes-20261008`. O domínio usado pelos links é `backend-nhac.cloud.run` e o pacote Android é `com.feentzs.nhac`.
 
 - Configurar `NHAC_ANDROID_SHA256_CERTIFICATES` no backend com os SHA-256 dos certificados que realmente assinam o APK e, quando aplicável, da assinatura do Google Play. O servidor não inventa um certificado quando essa configuração está vazia.
 - Configurar `NHAC_IOS_TEAM_ID`, habilitar Associated Domains no App ID e assinar com o perfil da mesma equipe. AASA está em `/.well-known/apple-app-site-association`.
-- Verificar os dois arquivos de associação no domínio HTTPS e testar um link compartilhado com app instalado e sem app. Android: `adb shell pm verify-app-links --re-verify com.feentzs.nhac`, `adb shell pm get-app-links com.feentzs.nhac` e `adb shell am start -a android.intent.action.VIEW -d https://backend-nhac.onrender.com/publicacao/ID_REAL`.
+- Verificar os dois arquivos de associação no domínio HTTPS e testar um link compartilhado com app instalado e sem app. Android: `adb shell pm verify-app-links --re-verify com.feentzs.nhac`, `adb shell pm get-app-links com.feentzs.nhac` e `adb shell am start -a android.intent.action.VIEW -d https://backend-nhac.cloud.run/publicacao/ID_REAL`.
 - Validar em dois aparelhos a seleção, remoção e sincronização das preferências; encerrar o processo com uma escolha feita offline e confirmar a sincronização ao reabrir.
 
 ## Credenciais E2E
