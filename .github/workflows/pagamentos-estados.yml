@@ -35,7 +35,7 @@ jobs:
         run: |
           git diff --name-only --diff-filter=ACM "origin/$BASE_REF...HEAD" -- '*.dart' > /tmp/pagamento-files
           if [ -s /tmp/pagamento-files ]; then xargs dart format < /tmp/pagamento-files; fi
-      - run: flutter test --update-goldens --dart-define=CAPTURE_UI=true test/components/operacao_pagamento_card_test.dart test/repositories/pedido_repository_test.dart
+      - run: flutter test --update-goldens --dart-define=CAPTURE_UI=true test/components/operacao_pagamento_card_test.dart test/repositories/pedido_repository_test.dart test/pages/rastreio_entregador_test.dart test/pages/rastreio_codigo_entrega_test.dart
       - run: flutter build web --release
       - uses: actions/upload-artifact@v6
         if: always()
@@ -51,4 +51,7 @@ jobs:
             lib/pages/pedido_entregue_page.dart
             test/components/operacao_pagamento_card_test.dart
             test/repositories/pedido_repository_test.dart
+            lib/components/estado_com_retry.dart
+            test/pages/rastreio_entregador_test.dart
+            test/pages/rastreio_codigo_entrega_test.dart
           retention-days: 7
