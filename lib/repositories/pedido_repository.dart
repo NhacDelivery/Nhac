@@ -146,18 +146,24 @@ class PedidoRepository {
     }
   }
 
-  Future<OperacaoPagamentoModel> buscarOperacaoPagamento(String pedidoId) async {
+  Future<OperacaoPagamentoModel> buscarOperacaoPagamento(
+      String pedidoId) async {
     try {
       final response = await _dio.get('/pedidos/$pedidoId/operacao-pagamento');
-      return OperacaoPagamentoModel.fromMap(Map<String, dynamic>.from(response.data as Map));
-    } on DioException catch (e) { throw mapException(e); }
+      return OperacaoPagamentoModel.fromMap(
+          Map<String, dynamic>.from(response.data as Map));
+    } on DioException catch (e) {
+      throw mapException(e);
+    }
   }
 
   Future<void> solicitarEstorno(String pedidoId) async {
     try {
       await _dio.post('/pedidos/$pedidoId/estorno');
       invalidarPedido(pedidoId);
-    } on DioException catch (e) { throw mapException(e); }
+    } on DioException catch (e) {
+      throw mapException(e);
+    }
   }
 
   Future<void> cancelarPedido(String pedidoId) async {

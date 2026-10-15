@@ -349,8 +349,8 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
           }
         } catch (e) {
           _rotaSemCoordenadas = e.toString().toLowerCase().contains(
-            'coordenad',
-          );
+                'coordenad',
+              );
           if (_rotaSemCoordenadas) rota = null;
           rotaErro = e.toString();
         }
@@ -379,8 +379,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
           if (ponto != null && ponto.isValido) {
             motoboyLocation = LatLng(ponto.latitude, ponto.longitude);
             motoboyAtualizadoEm = ponto.atualizadaEm;
-            motoboyDesatualizado =
-                ponto.atualizadaEm == null ||
+            motoboyDesatualizado = ponto.atualizadaEm == null ||
                 DateTime.now().difference(ponto.atualizadaEm!) >
                     const Duration(minutes: 2);
           } else if (motoboyLocation != null) {
@@ -695,20 +694,17 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     final distanciaKm = _rota?.distanciaKm ?? 0;
     final tempoEstimadoMin = _tempoEstimadoMinutos();
     final previsao = DateTime.now().add(Duration(minutes: tempoEstimadoMin));
-    final horaPrevisao = status.terminal
-        ? '--:--'
-        : DateFormat('HH:mm').format(previsao);
+    final horaPrevisao =
+        status.terminal ? '--:--' : DateFormat('HH:mm').format(previsao);
     final tempoExibicao = status == StatusPedido.entregue
         ? 'Entregue'
         : status == StatusPedido.cancelado
-        ? 'Cancelado'
-        : '$tempoEstimadoMin min total';
-    final distanciaTexto = _rota == null
-        ? 'Indisponível'
-        : '${distanciaKm.toStringAsFixed(1)} km';
-    final tempoEstimadoTexto = tempoEstimadoMin > 0
-        ? '$tempoEstimadoMin min'
-        : '--';
+            ? 'Cancelado'
+            : '$tempoEstimadoMin min total';
+    final distanciaTexto =
+        _rota == null ? 'Indisponível' : '${distanciaKm.toStringAsFixed(1)} km';
+    final tempoEstimadoTexto =
+        tempoEstimadoMin > 0 ? '$tempoEstimadoMin min' : '--';
 
     int quantidadeItens = _pedido!.itens.fold(
       0,
@@ -1022,10 +1018,13 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                       ),
                     ],
                   ),
-                  if (['PIX', 'CARTAO', 'STRIPE', 'GOOGLE_PAY'].contains(_pedido!.formaPagamento.toUpperCase()))
-                    OperacaoPagamentoCard(key: ValueKey('operacao-${widget.pedidoId}'),
-                      pedidoId: widget.pedidoId, repository: _pedidoRepository,
-                      aoCancelar: () => _carregarDados(silencioso: true)),
+                  if (['PIX', 'CARTAO', 'STRIPE', 'GOOGLE_PAY']
+                      .contains(_pedido!.formaPagamento.toUpperCase()))
+                    OperacaoPagamentoCard(
+                        key: ValueKey('operacao-${widget.pedidoId}'),
+                        pedidoId: widget.pedidoId,
+                        repository: _pedidoRepository,
+                        aoCancelar: () => _carregarDados(silencioso: true)),
                   if (status == StatusPedido.pendente) ...[
                     SizedBox(height: 20.h),
                     if (_pedido!.formaPagamento.toUpperCase() == 'PIX' ||
