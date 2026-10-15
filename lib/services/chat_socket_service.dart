@@ -29,6 +29,7 @@ class ChatSocketService {
   final _errosController = StreamController<String>.broadcast();
   final _conectadoController = StreamController<bool>.broadcast();
   bool _disposed = false;
+  int _geracao = 0;
 
   void _emitMensagem(MensagemChat mensagem) {
     if (!_disposed && !_mensagensController.isClosed) {
@@ -69,10 +70,11 @@ class ChatSocketService {
 
   Future<void> conectar(String conversaId) async {
     if (_disposed || _client != null) return;
+    final geracao = ++_geracao;
     _conversaId = conversaId;
 
     final token = await SessionStorageService().obterToken();
-    if (_disposed || _client != null) return;
+    if (_disposed || _client != null || geracao != _geracao) return;
     if (token == null || token.isEmpty) {
       _emitErro('Sessão expirada. Entre novamente para conversar.');
       return;
@@ -91,21 +93,23 @@ class ChatSocketService {
         reconnectDelay: const Duration(seconds: 5),
         heartbeatIncoming: const Duration(seconds: 10),
         heartbeatOutgoing: const Duration(seconds: 10),
-        onConnect: _aoConectar,
+        onConnect: (frame) {
+          if (geracao == _geracao) _aoConectar(frame);
+        },
         onWebSocketError: (dynamic erro) {
+          if (geracao != _geracao) return;
           debugPrint('💬 [CHAT WS] erro: $erro');
           _emitConectado(false);
         },
         onStompError: (StompFrame frame) {
+          if (geracao != _geracao) return;
           debugPrint('💬 [CHAT STOMP] erro: ${frame.body}');
-          _emitErro(
-            frame.body?.isNotEmpty == true
-                ? frame.body!
-                : 'Não foi possível conectar ao chat.',
-          );
+          _emitErro('Não foi possível conectar ao chat. Tente novamente.');
           _emitConectado(false);
         },
-        onDisconnect: (_) => _emitConectado(false),
+        onDisconnect: (_) {
+          if (geracao == _geracao) _emitConectado(false);
+        },
       ),
     );
 
@@ -138,8 +142,8 @@ class ChatSocketService {
         if (erro.body == null) return;
         try {
           final mapa = jsonDecode(erro.body!) as Map<String, dynamic>;
-          _emitErro(
-              (mapa['erro'] ?? 'Não foi possível enviar a mensagem.').toString());
+          _emitErro((mapa['erro'] ?? 'Não foi possível enviar a mensagem.')
+              .toString());
         } catch (_) {
           _emitErro('Não foi possível enviar a mensagem.');
         }
@@ -158,7 +162,8 @@ class ChatSocketService {
     try {
       _client!.send(
         destination: '/app/conversas/$conversaId/enviar',
-        body: jsonEncode({'conteudo': texto, 'clientMessageId': clientMessageId}),
+        body:
+            jsonEncode({'conteudo': texto, 'clientMessageId': clientMessageId}),
       );
       return true;
     } catch (e) {
@@ -167,7 +172,13 @@ class ChatSocketService {
     }
   }
 
+  Future<void> reconectar(String conversaId) async {
+    await desconectar();
+    await conectar(conversaId);
+  }
+
   Future<void> desconectar() async {
+    _geracao++;
     final client = _client;
     _client = null;
     _conversaId = null;

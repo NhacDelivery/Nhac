@@ -74,7 +74,7 @@ Exception mapException(Object error) {
     }
 
     return AppException(
-      'Ocorreu um erro no servidor: ${error.response?.statusCode ?? error.message}',
+      'Não foi possível concluir a solicitação. Tente novamente mais tarde.',
       statusCode: error.response?.statusCode,
       code: error.response?.statusCode?.toString(),
     );
@@ -107,9 +107,14 @@ Exception mapException(Object error) {
 
   if (error is AppException) return error;
 
+  if (error is app_exc.AppException) {
+    return AppException(error.message, code: error.code);
+  }
+
   if (error.toString().contains('SocketException')) {
     return NetworkException('Sem conexão com a internet.');
   }
 
-  return AppException('Ocorreu um erro inesperado: $error');
+  return AppException(
+      'Não foi possível concluir a solicitação. Tente novamente.');
 }

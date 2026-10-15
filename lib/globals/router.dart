@@ -12,6 +12,7 @@ import 'package:nhac/pages/auth/insira_telefone.dart';
 import 'package:nhac/pages/carrinho_page.dart';
 import 'package:nhac/models/chat/pedido_chat_referencia.dart';
 import 'package:nhac/pages/chat_loja_page.dart';
+import 'package:nhac/pages/chat_conversa_page.dart';
 import 'package:nhac/pages/checkout_page.dart';
 import 'package:nhac/pages/pagamento_pendente_page.dart';
 import 'package:nhac/pages/meus_pedidos_page.dart';
@@ -149,8 +150,7 @@ final GoRouter appRouter = GoRouter(
 
     final bool estaAutenticado = authServiceRoteador.isAuthenticated;
 
-    final bool telaPublica =
-        state.matchedLocation.startsWith('/publicacao/') ||
+    final bool telaPublica = state.matchedLocation.startsWith('/publicacao/') ||
         state.matchedLocation.startsWith('/produto/') ||
         state.matchedLocation == '/' ||
         state.matchedLocation == '/splash' ||
@@ -165,7 +165,7 @@ final GoRouter appRouter = GoRouter(
 
     final bool noMeioDoCadastro =
         state.matchedLocation == '/verificacao_numero' ||
-        state.matchedLocation.startsWith('/cadastro');
+            state.matchedLocation.startsWith('/cadastro');
 
     if (!estaAutenticado && !telaPublica) {
       return '/bem-vindo';
@@ -463,12 +463,27 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
     GoRoute(
+      path: '/chat-pessoa',
+      pageBuilder: (context, state) {
+        final dados = state.extra as Map<String, dynamic>? ?? const {};
+        return _buildSlideRightToLeftPage(
+          key: state.pageKey,
+          child: ChatConversaPage(
+            conversaId: (dados['conversaId'] ?? '').toString(),
+            interlocutorNome: (dados['pessoaNome'] ?? 'Pessoa').toString(),
+            conversaPessoa: true,
+          ),
+        );
+      },
+    ),
+    GoRoute(
       path: '/chat-loja',
       pageBuilder: (context, state) {
         final dados = state.extra as Map<String, dynamic>? ?? const {};
         return _buildSlideRightToLeftPage(
           key: state.pageKey,
           child: ChatLojaPage(
+            conversaId: dados['conversaId']?.toString(),
             lojaId: (dados['lojaId'] ?? '').toString(),
             lojaNome: (dados['lojaNome'] ?? 'Loja').toString(),
             produtoReferencia: dados['produto'] is ProdutosModel

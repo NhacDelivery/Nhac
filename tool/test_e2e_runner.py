@@ -107,7 +107,7 @@ except Exception:
         with socket.socket() as sock:
             self.assertNotEqual(sock.connect_ex(("127.0.0.1", self.port)), 0)
 
-    def test_all_runs_six_scenarios_with_a_fresh_backend_each_time(self):
+    def test_all_runs_seven_scenarios_with_a_fresh_backend_each_time(self):
         result = self.run_suite()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         trace = self.trace.read_text().splitlines()
@@ -118,6 +118,7 @@ except Exception:
             'backend-start', 'integration_test/client_delivery_e2e_test.dart',
             'backend-start', 'integration_test/client_payment_pix_e2e_test.dart',
             'backend-start', 'integration_test/client_payment_card_e2e_test.dart',
+            'backend-start', 'integration_test/client_chat_e2e_test.dart',
         ])
         self.assert_port_released()
 

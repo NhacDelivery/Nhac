@@ -6,13 +6,17 @@ import 'package:nhac/repositories/chat_repository.dart';
 class MockChatDio extends Mock implements Dio {}
 
 Map<String, dynamic> conversa(String id, String tipo) => {
-  'id': id,
-  'tipo': tipo,
-  'interlocutor': {'id': '$id-destino', 'nome': '$id nome', 'imagemUrl': null},
-  'ultimaMensagemPreview': 'Mensagem $id',
-  'ultimaMensagemEm': '2026-10-09T22:30:00Z',
-  'naoLidas': 3,
-};
+      'id': id,
+      'tipo': tipo,
+      'interlocutor': {
+        'id': '$id-destino',
+        'nome': '$id nome',
+        'imagemUrl': null
+      },
+      'ultimaMensagemPreview': 'Mensagem $id',
+      'ultimaMensagemEm': '2026-10-09T22:30:00Z',
+      'naoLidas': 3,
+    };
 
 void responder(
   MockChatDio dio,
@@ -31,6 +35,31 @@ void responder(
 }
 
 void main() {
+  test('fallback REST conserva identificador e devolve mensagem confirmada',
+      () async {
+    final dio = MockChatDio();
+    const id = '123e4567-e89b-12d3-a456-426614174000';
+    when(() => dio.post('/conversas/conversa/mensagens', data: {
+              'conteudo': 'Olá',
+              'clientMessageId': id,
+            }))
+        .thenAnswer((_) async =>
+            Response(requestOptions: RequestOptions(path: '/chat'), data: {
+              'id': 'msg_$id',
+              'conversaId': 'conversa',
+              'remetenteTipo': 'CLIENTE',
+              'remetenteUsuarioId': 'eu',
+              'conteudo': 'Olá',
+              'enviadaEm': '2026-10-15T12:00:00Z',
+            }));
+    final mensagem = await ChatRepository(dio: dio)
+        .enviarMensagem('conversa', conteudo: 'Olá', clientMessageId: id);
+    expect(mensagem.id, 'msg_$id');
+    expect(mensagem.remetenteUsuarioId, 'eu');
+    verify(() => dio.post('/conversas/conversa/mensagens',
+        data: {'conteudo': 'Olá', 'clientMessageId': id})).called(1);
+  });
+
   test(
     'lista lojas pelo contrato de conversas, sem misturar pessoas',
     () async {
@@ -90,13 +119,17 @@ void main() {
 
   test('pagina as conversas do tipo solicitado sem repetir itens', () async {
     final dio = MockChatDio();
-    responder(dio, 0, [
-      conversa('primeira', 'LOJA'),
-      conversa('pessoa', 'CLIENTE'),
-    ], last: false);
+    responder(
+        dio,
+        0,
+        [
+          conversa('primeira', 'LOJA'),
+          conversa('pessoa', 'CLIENTE'),
+        ],
+        last: false);
     responder(dio, 1, [conversa('segunda', 'LOJA')]);
-    final result = await ChatRepository(dio: dio)
-        .listarConversas(pagina: 1, tamanho: 1);
+    final result =
+        await ChatRepository(dio: dio).listarConversas(pagina: 1, tamanho: 1);
     expect(result.single.id, 'segunda');
   });
 
@@ -104,11 +137,11 @@ void main() {
     final dio = MockChatDio();
     when(() => dio.get('/conversas', queryParameters: {'page': 0, 'size': 100}))
         .thenThrow(
-          DioException.connectionError(
-            requestOptions: RequestOptions(path: '/conversas'),
-            reason: 'offline',
-          ),
-        );
+      DioException.connectionError(
+        requestOptions: RequestOptions(path: '/conversas'),
+        reason: 'offline',
+      ),
+    );
     await expectLater(
       ChatRepository(dio: dio).listarConversasPessoas(),
       throwsA(isA<Exception>()),

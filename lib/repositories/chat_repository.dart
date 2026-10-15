@@ -1,8 +1,7 @@
 // lib/repositories/chat_repository.dart
 //
-// Parte REST do chat do cliente. O ENVIO de mensagem não passa por aqui —
-// é WebSocket (ChatSocketService). Este arquivo só abre a conversa, carrega
-// o histórico e marca como lida.
+// Parte REST do chat do cliente, incluindo recuperação de envio com o mesmo
+// clientMessageId usado pelo WebSocket.
 
 import 'package:dio/dio.dart';
 import 'package:nhac/globals/exceptions.dart';
@@ -14,6 +13,24 @@ import 'package:nhac/services/api_client.dart';
 class ChatRepository {
   final Dio _dio;
   ChatRepository({Dio? dio}) : _dio = dio ?? ApiClient().dio;
+
+  Future<MensagemChat> enviarMensagem(
+    String conversaId, {
+    required String conteudo,
+    required String clientMessageId,
+  }) async {
+    try {
+      final response =
+          await _dio.post('/conversas/$conversaId/mensagens', data: {
+        'conteudo': conteudo,
+        'clientMessageId': clientMessageId,
+      });
+      return MensagemChat.fromMap(
+          Map<String, dynamic>.from(response.data as Map));
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
 
   /// POST /conversas/lojas/{lojaId} — idempotente, devolve o id da conversa.
   ///

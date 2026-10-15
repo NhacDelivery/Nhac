@@ -8,7 +8,8 @@ class MensagemChat {
   final String id;
   final String conversaId;
 
-  /// 'CLIENTE' ou 'LOJA'. Do lado do app, CLIENTE é sempre o próprio usuário.
+  /// 'CLIENTE' ou 'LOJA'. Em chats diretos, ambos são CLIENTE; a autoria
+  /// depende de remetenteUsuarioId e da sessão autenticada.
   final String remetenteTipo;
   final String? remetenteUsuarioId;
   final String conteudo;
