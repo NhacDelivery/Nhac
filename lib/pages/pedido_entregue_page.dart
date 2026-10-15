@@ -1,3 +1,4 @@
+import 'package:nhac/components/pedido/operacao_pagamento_card.dart';
 import 'package:nhac/repositories/avaliacao_repository.dart';
 import 'package:nhac/pages/avaliar_produto_page.dart';
 import 'package:flutter/material.dart';
@@ -226,6 +227,13 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(height: 16.h),
+              if (cancelado &&
+                  ['PIX', 'CARTAO', 'STRIPE', 'GOOGLE_PAY']
+                      .contains(pedido.formaPagamento.toUpperCase()))
+                OperacaoPagamentoCard(
+                    key: ValueKey('operacao-${widget.pedidoId}'),
+                    pedidoId: widget.pedidoId,
+                    repository: _repository),
               // Ícone de sucesso animado/destaque
               Center(
                 child: Container(
@@ -248,8 +256,8 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                     entregue
                         ? Icons.check_circle_rounded
                         : cancelado
-                        ? Icons.cancel_outlined
-                        : Icons.receipt_long_rounded,
+                            ? Icons.cancel_outlined
+                            : Icons.receipt_long_rounded,
                     color: entregue
                         ? Colors.green.shade600
                         : const Color(0xFFFF6961),
@@ -272,8 +280,8 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                 entregue
                     ? 'Esperamos que você aproveite sua refeição.'
                     : cancelado
-                    ? 'Este pedido foi finalizado e não será entregue.'
-                    : 'Confira o resumo do seu pedido.',
+                        ? 'Este pedido foi finalizado e não será entregue.'
+                        : 'Confira o resumo do seu pedido.',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 14.sp, color: Colors.grey.shade600),
               ),
@@ -427,8 +435,8 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                                   item.adicionais.isEmpty
                                       ? item.nome
                                       : item.nome +
-                                            '\n' +
-                                            item.adicionais.join(' • '),
+                                          '\n' +
+                                          item.adicionais.join(' • '),
                                   style: TextStyle(
                                     fontSize: 13.sp,
                                     color: Colors.grey.shade800,
@@ -587,42 +595,42 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                 borderRadius: BorderRadius.circular(22.r),
                 child:
                     entregador.fotoUrl != null && entregador.fotoUrl!.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: entregador.fotoUrl!,
-                        width: 44.r,
-                        height: 44.r,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          width: 44.r,
-                          height: 44.r,
-                          color: const Color(0xFFFFE7E5),
-                          child: Icon(
-                            Icons.two_wheeler,
-                            color: const Color(0xFFFF6961),
-                            size: 22.r,
+                        ? CachedNetworkImage(
+                            imageUrl: entregador.fotoUrl!,
+                            width: 44.r,
+                            height: 44.r,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Container(
+                              width: 44.r,
+                              height: 44.r,
+                              color: const Color(0xFFFFE7E5),
+                              child: Icon(
+                                Icons.two_wheeler,
+                                color: const Color(0xFFFF6961),
+                                size: 22.r,
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              width: 44.r,
+                              height: 44.r,
+                              color: const Color(0xFFFFE7E5),
+                              child: Icon(
+                                Icons.two_wheeler,
+                                color: const Color(0xFFFF6961),
+                                size: 22.r,
+                              ),
+                            ),
+                          )
+                        : Container(
+                            width: 44.r,
+                            height: 44.r,
+                            color: const Color(0xFFFFE7E5),
+                            child: Icon(
+                              Icons.two_wheeler,
+                              color: const Color(0xFFFF6961),
+                              size: 22.r,
+                            ),
                           ),
-                        ),
-                        errorWidget: (context, url, error) => Container(
-                          width: 44.r,
-                          height: 44.r,
-                          color: const Color(0xFFFFE7E5),
-                          child: Icon(
-                            Icons.two_wheeler,
-                            color: const Color(0xFFFF6961),
-                            size: 22.r,
-                          ),
-                        ),
-                      )
-                    : Container(
-                        width: 44.r,
-                        height: 44.r,
-                        color: const Color(0xFFFFE7E5),
-                        child: Icon(
-                          Icons.two_wheeler,
-                          color: const Color(0xFFFF6961),
-                          size: 22.r,
-                        ),
-                      ),
               ),
               SizedBox(width: 12.w),
               Expanded(

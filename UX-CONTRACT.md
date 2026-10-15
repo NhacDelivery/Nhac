@@ -225,3 +225,23 @@ nova regra de permissão nesta mudança.
 
 Verificação visual: capturas de estados de widgets no job Chat e estados de
 recuperação. Não equivalem a uma certificação de browser/acessibilidade completa.
+
+
+## Operação de pagamentos (passo 5)
+
+OperacaoPagamentoCard é o dono compartilhado do acompanhamento no rastreio e no
+pedido cancelado. Consulta ao abrir, ao retomar e a cada 30 segundos enquanto a
+rota estiver visível, sem sobreposição. Não armazena estado financeiro em disco.
+Falhas preservam o último estado e oferecem retry somente da consulta.
+
+O backend autoriza estorno automático somente do pedido PAGO, antes do preparo,
+com cobrança eletrônica identificada. confirmarNhac informa que cancelar o pedido
+é imediato e a devolução é assíncrona. O botão bloqueia do diálogo ao fim do envio.
+Resultado incerto exige consultar antes de permitir nova solicitação. O servidor
+é idempotente; nunca afirmar devolução concluída antes da confirmação do provedor.
+Após confirmação do cancelamento, o rastreio abre os detalhes existentes; histórico
+mostra o mesmo acompanhamento. Publicar o backend com V1023 antes do app.
+
+| Capability | Canonical owner | Source of truth | Allowed variants | Verification |
+|---|---|---|---|---|
+| CRUD | PedidoRepository / OperacaoPagamentoCard / confirmarNhac | autorização e fila persistida do backend | solicitação e acompanhamento | test/components/operacao_pagamento_card_test.dart |
