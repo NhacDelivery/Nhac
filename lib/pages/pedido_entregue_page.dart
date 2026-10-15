@@ -1,3 +1,4 @@
+import 'package:nhac/components/pedido/operacao_pagamento_card.dart';
 import 'package:nhac/repositories/avaliacao_repository.dart';
 import 'package:nhac/pages/avaliar_produto_page.dart';
 import 'package:flutter/material.dart';
@@ -226,6 +227,9 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(height: 16.h),
+              if (cancelado && ['PIX', 'CARTAO', 'STRIPE', 'GOOGLE_PAY'].contains(pedido.formaPagamento.toUpperCase()))
+                OperacaoPagamentoCard(key: ValueKey('operacao-${widget.pedidoId}'),
+                  pedidoId: widget.pedidoId, repository: _repository),
               // Ícone de sucesso animado/destaque
               Center(
                 child: Container(

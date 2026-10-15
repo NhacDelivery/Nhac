@@ -42,6 +42,17 @@ void main() {
         ],
       );
 
+  test('operação consulta estado sem cache e estorno usa POST do mesmo pedido', () async {
+    when(() => dio.get('/pedidos/p1/operacao-pagamento')).thenAnswer((_) async => Response(
+      requestOptions: RequestOptions(path: '/pedidos/p1/operacao-pagamento'),
+      data: {'estado': 'ESTORNO_PROCESSANDO', 'podeSolicitarEstorno': false}, statusCode: 200));
+    when(() => dio.post('/pedidos/p1/estorno')).thenAnswer((_) async => Response(
+      requestOptions: RequestOptions(path: '/pedidos/p1/estorno'), statusCode: 202));
+    expect((await repository.buscarOperacaoPagamento('p1')).estado, 'ESTORNO_PROCESSANDO');
+    await repository.solicitarEstorno('p1');
+    verify(() => dio.post('/pedidos/p1/estorno')).called(1);
+  });
+
   test('pedido envia coordenadas do endereço usadas no frete', () {
     final pedido = CriarPedidoRequest(
       lojaId: 'loja1',

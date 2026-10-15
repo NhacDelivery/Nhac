@@ -1,3 +1,4 @@
+import 'package:nhac/components/pedido/operacao_pagamento_card.dart';
 import 'package:nhac/components/estado_com_retry.dart';
 import 'dart:async';
 import 'package:nhac/models/chat/pedido_chat_referencia.dart';
@@ -1021,6 +1022,10 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                       ),
                     ],
                   ),
+                  if (['PIX', 'CARTAO', 'STRIPE', 'GOOGLE_PAY'].contains(_pedido!.formaPagamento.toUpperCase()))
+                    OperacaoPagamentoCard(key: ValueKey('operacao-${widget.pedidoId}'),
+                      pedidoId: widget.pedidoId, repository: _pedidoRepository,
+                      aoCancelar: () => _carregarDados(silencioso: true)),
                   if (status == StatusPedido.pendente) ...[
                     SizedBox(height: 20.h),
                     if (_pedido!.formaPagamento.toUpperCase() == 'PIX' ||

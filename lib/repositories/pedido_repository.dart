@@ -1,4 +1,5 @@
 import 'package:nhac/services/shared_get.dart';
+import 'package:nhac/models/pedido/operacao_pagamento_model.dart';
 import 'package:dio/dio.dart';
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/models/pedido/avaliacao_entregador_model.dart';
@@ -143,6 +144,20 @@ class PedidoRepository {
     } on DioException catch (e) {
       throw mapException(e);
     }
+  }
+
+  Future<OperacaoPagamentoModel> buscarOperacaoPagamento(String pedidoId) async {
+    try {
+      final response = await _dio.get('/pedidos/$pedidoId/operacao-pagamento');
+      return OperacaoPagamentoModel.fromMap(Map<String, dynamic>.from(response.data as Map));
+    } on DioException catch (e) { throw mapException(e); }
+  }
+
+  Future<void> solicitarEstorno(String pedidoId) async {
+    try {
+      await _dio.post('/pedidos/$pedidoId/estorno');
+      invalidarPedido(pedidoId);
+    } on DioException catch (e) { throw mapException(e); }
   }
 
   Future<void> cancelarPedido(String pedidoId) async {
