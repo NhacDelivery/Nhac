@@ -18,8 +18,10 @@ class ContractTest(unittest.TestCase):
         self.responses = {
             "/produtos/cards": (200, {"content": [{"id": "e2e-produto-001"}]}),
             "/produtos/cards/promocoes": (200, {"content": []}),
+            "/lojas": (200, {"content": []}),
             "/auth/login": (200, {"token": "fixture-test-token"}),
             "/pedidos/ativos": (200, []),
+            "/pedidos": (200, {"content": [], "totalElements": 0}),
             "/feed/posts": (200, {"content": []}),
         }
         self.calls = []
@@ -29,7 +31,7 @@ class ContractTest(unittest.TestCase):
             def do_GET(self):
                 path = urlsplit(self.path).path.removeprefix("/api/v1")
                 test.calls.append(path)
-                if path in ("/pedidos/ativos", "/feed/posts"):
+                if path in ("/pedidos/ativos", "/pedidos", "/feed/posts"):
                     test.assertEqual(self.headers["Authorization"], "Bearer fixture-test-token")
                 status, body = test.responses[path]
                 self.send_response(status)
@@ -60,7 +62,22 @@ class ContractTest(unittest.TestCase):
 
     def test_current_contract_authenticates_and_checks_empty_active_orders(self):
         self.check()
-        self.assertEqual(len(self.calls), 5)
+        self.assertEqual(len(self.calls), 7)
+
+    def test_active_orders_from_previous_execution_stop_the_suite(self):
+        self.responses["/pedidos/ativos"] = (200, [{"id": "pedido-anterior"}])
+        with self.assertRaisesRegex(RuntimeError, "fixture contaminada"):
+            self.check()
+
+    def test_history_from_previous_execution_stops_the_suite(self):
+        self.responses["/pedidos"] = (200, {"content": [{"id": "pedido-anterior"}], "totalElements": 1})
+        with self.assertRaisesRegex(RuntimeError, "fixture contaminada"):
+            self.check()
+
+    def test_malformed_history_contract_stops_the_suite(self):
+        self.responses["/pedidos"] = (200, [])
+        with self.assertRaisesRegex(RuntimeError, "resposta paginada inválida"):
+            self.check()
 
     def test_old_backend_stops_before_login_or_android_test(self):
         self.responses["/produtos/cards"] = (404, {"message": "Produto cards não encontrado"})

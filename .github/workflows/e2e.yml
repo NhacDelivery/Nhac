@@ -2,8 +2,17 @@ name: E2E cliente
 
 on:
   workflow_dispatch:
+    inputs:
+      app_ref:
+        description: 'Ref do Nhac (vazio usa a revisão padrão deste workflow)'
+        required: false
+        type: string
+      backend_ref:
+        description: 'Ref do backend (vazio usa a revisão padrão deste workflow)'
+        required: false
+        type: string
   push:
-    branches: [main]
+    branches: [main, eu-e-tu]
   pull_request:
   schedule:
     - cron: '0 6 * * *'
@@ -19,9 +28,37 @@ env:
   FLUTTER_VERSION: '3.44.7'
 
 jobs:
+  resolve-revisions:
+    name: Resolver par de revisões E2E
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      app_sha: ${{ steps.revisions.outputs.app_sha }}
+      backend_sha: ${{ steps.revisions.outputs.backend_sha }}
+    steps:
+      - name: Resolver revisão do app
+        uses: actions/checkout@v4
+        with:
+          repository: NhacDelivery/Nhac
+          ref: ${{ inputs.app_ref || (github.event_name == 'schedule' && 'eu-e-tu' || github.sha) }}
+          path: Nhac
+          persist-credentials: false
+      - name: Resolver revisão do backend
+        uses: actions/checkout@v4
+        with:
+          repository: NhacDelivery/backend-nhac
+          ref: ${{ inputs.backend_ref || 'main' }}
+          path: backend-nhac
+          persist-credentials: false
+      - name: Fixar commits para todos os devices
+        id: revisions
+        run: |
+          echo "app_sha=$(git -C Nhac rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "backend_sha=$(git -C backend-nhac rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
   e2e:
+    needs: resolve-revisions
     name: E2E API${{ matrix.api_level }} ${{ matrix.profile }}
-    if: ${{ github.run_attempt <= 2 }}
     runs-on: ubuntu-24.04
     timeout-minutes: 110
     strategy:
@@ -47,19 +84,55 @@ jobs:
       - name: Checkout app
         uses: actions/checkout@v4
         with:
+          ref: ${{ needs.resolve-revisions.outputs.app_sha }}
+          persist-credentials: false
           path: Nhac
 
       - name: Checkout backend
         uses: actions/checkout@v4
         with:
           repository: NhacDelivery/backend-nhac
-          # Feed + checkout contracts: cards, active orders and payment recovery.
-          ref: feature/chat-clientes-20261008
+          persist-credentials: false
+          ref: ${{ needs.resolve-revisions.outputs.backend_sha }}
           path: backend-nhac
 
-      - name: Testar verificação dos contratos E2E
+      - name: Registrar revisões efetivamente testadas
+        env:
+          EXPECTED_APP_SHA: ${{ needs.resolve-revisions.outputs.app_sha }}
+          EXPECTED_BACKEND_SHA: ${{ needs.resolve-revisions.outputs.backend_sha }}
+          APP_REF: ${{ inputs.app_ref || (github.event_name == 'schedule' && 'eu-e-tu' || github.sha) }}
+          BACKEND_REF: ${{ inputs.backend_ref || 'main' }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os, subprocess
+          from pathlib import Path
+          app_sha = subprocess.check_output(['git', '-C', 'Nhac', 'rev-parse', 'HEAD'], text=True).strip()
+          backend_sha = subprocess.check_output(['git', '-C', 'backend-nhac', 'rev-parse', 'HEAD'], text=True).strip()
+          if app_sha != os.environ['EXPECTED_APP_SHA'] or backend_sha != os.environ['EXPECTED_BACKEND_SHA']:
+              raise SystemExit('Checkout divergiu das revisões resolvidas; E2E interrompido.')
+          metadata = {
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'event': os.environ['GITHUB_EVENT_NAME'],
+              'trigger_ref': os.environ['GITHUB_REF'],
+              'workflow_repository': os.environ['GITHUB_REPOSITORY'],
+              'app': {'repository': 'NhacDelivery/Nhac', 'ref': os.environ['APP_REF'], 'sha': app_sha},
+              'backend': {'repository': 'NhacDelivery/backend-nhac', 'ref': os.environ['BACKEND_REF'], 'sha': backend_sha},
+          }
+          output = Path('e2e-metadata')
+          output.mkdir(exist_ok=True)
+          (output / 'revisions.json').write_text(json.dumps(metadata, indent=2) + '\n')
+          summary = '## Revisões E2E\n\n| Repositório | Ref solicitada | SHA testado |\n|---|---|---|\n'
+          for item in (metadata['app'], metadata['backend']):
+              summary += f"| {item['repository']} | {item['ref']} | `{item['sha']}` |\n"
+          (output / 'revisions.md').write_text(summary)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as file:
+              file.write(summary)
+          PYTHON
+
+      - name: Testar preflight e orquestração E2E
         working-directory: Nhac
-        run: python3 -m unittest discover -s tool -p test_check_e2e_backend.py -v
+        run: python3 -m unittest discover -s tool -p 'test_*.py' -v
 
       - name: Setup Java 25
         uses: actions/setup-java@v4
@@ -192,6 +265,7 @@ jobs:
         with:
           name: e2e-diagnostics-${{ matrix.api_level }}-${{ matrix.profile }}-${{ github.run_number }}-${{ github.run_attempt }}
           path: |
+            e2e-metadata
             Nhac/e2e-logs
             Nhac/integration_test/screenshots
             Nhac/build/**/outputs/**/*.mp4

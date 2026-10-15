@@ -233,6 +233,51 @@ void main() {
     expect(pagamento.simulacaoDisponivel, isTrue);
   });
 
+  test(
+    'retomada consulta o servidor mesmo logo após obter uma cobrança',
+    () async {
+      var calls = 0;
+      final options = RequestOptions(path: '/pedidos/ped1/pagamento');
+      when(() => dio.get('/pedidos/ped1/pagamento')).thenAnswer((_) async {
+        calls++;
+        if (calls > 1) {
+          // Confirmação assíncrona entre duas aberturas rápidas da tela.
+          throw DioException(
+            requestOptions: options,
+            response: Response(
+              requestOptions: options,
+              statusCode: 409,
+              data: {
+                'error': 'PAGAMENTO_INDISPONIVEL',
+                'message': 'Este pedido já foi pago.',
+              },
+            ),
+          );
+        }
+        return Response(
+          requestOptions: options,
+          statusCode: 200,
+          data: {
+            'pedidoId': 'ped1',
+            'formaPagamento': 'CARTAO',
+            'status': 'PENDENTE',
+            'valorTotal': 30,
+            'clientSecret': 'secret-pendente',
+          },
+        );
+      });
+      expect(
+        (await repository.buscarPagamento('ped1')).clientSecret,
+        'secret-pendente',
+      );
+      await expectLater(
+        repository.buscarPagamento('ped1'),
+        throwsA(isA<AppException>()),
+      );
+      verify(() => dio.get('/pedidos/ped1/pagamento')).called(2);
+    },
+  );
+
   test('409 PEDIDO_ATIVO expõe o pedido para recuperar o fluxo', () async {
     when(() => dio.post('/pedidos',
         data: any(named: 'data'),

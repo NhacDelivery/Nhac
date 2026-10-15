@@ -28,10 +28,10 @@ if ! [[ "$REPEAT" =~ ^[1-9][0-9]*$ ]] || [[ "$REPEAT" -gt 20 ]]; then
   echo "E2E_REPEAT deve ser um inteiro entre 1 e 20." >&2
   exit 2
 fi
-if [[ "$ONLY" != all && "$ONLY" != login && "$ONLY" != order_cash ]]; then
-  echo "E2E_ONLY aceita login ou order_cash." >&2
-  exit 2
-fi
+case "$ONLY" in
+  all|contract_smoke|login|order_cash|delivery|payment_pix|payment_card) ;;
+  *) echo "E2E_ONLY aceita all, contract_smoke, login, order_cash, delivery, payment_pix ou payment_card." >&2; exit 2 ;;
+esac
 if [[ -z "$BACKEND_JAVA_HOME" || ! -x "$BACKEND_JAVA_HOME/bin/java" || ! -f "$BACKEND_JAR" ]]; then
   echo "Build do backend ou JDK ausente. Execute ./mvnw -B -ntp -DskipTests package com Java 25." >&2
   exit 2
@@ -160,14 +160,23 @@ start_backend() {
   return 1
 }
 
-declare -A passed=([login]=0 [order_cash]=0)
-declare -A failed=([login]=0 [order_cash]=0)
-declare -A retried=([login]=0 [order_cash]=0)
-declare -A elapsed=([login]=0 [order_cash]=0)
+declare -A passed failed retried elapsed
+declare -A test_files=(
+  [contract_smoke]=integration_test/backend_contract_smoke_test.dart
+  [login]=integration_test/client_login_e2e_test.dart
+  [order_cash]=integration_test/client_order_cash_e2e_test.dart
+  [delivery]=integration_test/client_delivery_e2e_test.dart
+  [payment_pix]=integration_test/client_payment_pix_e2e_test.dart
+  [payment_card]=integration_test/client_payment_card_e2e_test.dart
+)
 DEFINES=(--dart-define=RUN_E2E=true --dart-define="E2E_PASSWORD=$E2E_PASSWORD")
 tests=()
-[[ "$ONLY" == all || "$ONLY" == login ]] && tests+=(login)
-[[ "$ONLY" == all || "$ONLY" == order_cash ]] && tests+=(order_cash)
+for name in contract_smoke login order_cash delivery payment_pix payment_card; do
+  if [[ "$ONLY" == all || "$ONLY" == "$name" ]]; then
+    tests+=("$name")
+    passed[$name]=0 failed[$name]=0 retried[$name]=0 elapsed[$name]=0
+  fi
+done
 attempts=2
 if (( REPEAT > 1 )); then attempts=1; fi
 
@@ -182,7 +191,7 @@ for execution in $(seq 1 "$REPEAT"); do
       adb -s "$DEVICE_ID" shell pm clear "$APP_ID" >/dev/null 2>&1 || true
       adb -s "$DEVICE_ID" logcat -c || true
       started=$SECONDS
-      if timeout --signal=INT --kill-after=30s 10m "$FLUTTER_BIN" test "integration_test/client_${name}_e2e_test.dart" \
+      if timeout --signal=INT --kill-after=30s 10m "$FLUTTER_BIN" test "${test_files[$name]}" \
         --no-pub --device-id "$DEVICE_ID" "${DEFINES[@]}" \
         --reporter expanded --file-reporter "json:$LOG_DIR/$label.json" \
         2>&1 | tee "$LOG_DIR/$label.log"; then

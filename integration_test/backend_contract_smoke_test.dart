@@ -9,7 +9,6 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   const runE2E = bool.fromEnvironment('RUN_E2E', defaultValue: false);
-  const e2eToken = String.fromEnvironment('E2E_TOKEN', defaultValue: '');
 
   testWidgets('backend responde catálogo no contrato /api/v1/lojas', (_) async {
     await E2EConfig.validate();
@@ -22,18 +21,24 @@ void main() {
     expect(response.statusCode, 200);
     expect(response.data, isA<Map>());
     expect((response.data as Map).containsKey('content'), isTrue);
+    dio.close(force: true);
   }, skip: !runE2E);
 
   testWidgets(
-    'token E2E acessa histórico pelo contrato canônico GET /pedidos',
+    'login da fixture acessa histórico pelo contrato canônico GET /pedidos',
     (_) async {
       await E2EConfig.validate();
-      final dio = Dio(
-        BaseOptions(
-          baseUrl: AppConstants.apiBaseUrl,
-          headers: {'Authorization': 'Bearer $e2eToken'},
-        ),
+      final dio = Dio(BaseOptions(baseUrl: AppConstants.apiBaseUrl));
+
+      final login = await dio.post(
+        '/auth/login',
+        data: {'email': E2EConfig.email, 'senha': E2EConfig.password},
       );
+      expect(login.statusCode, 200);
+      final token = (login.data as Map)['token'];
+      expect(token, isA<String>());
+      expect(token, isNotEmpty);
+      dio.options.headers['Authorization'] = 'Bearer $token';
 
       final response = await dio.get(
         '/pedidos',
@@ -42,8 +47,10 @@ void main() {
 
       expect(response.statusCode, 200);
       expect(response.data, isA<Map>());
-      expect((response.data as Map).containsKey('content'), isTrue);
+      expect((response.data as Map)['content'], isEmpty);
+      expect((response.data as Map)['totalElements'], 0);
+      dio.close(force: true);
     },
-    skip: !runE2E || e2eToken.isEmpty,
+    skip: !runE2E,
   );
 }

@@ -49,7 +49,7 @@ class PedidoRepository {
   Future<PagamentoPendenteModel> buscarPagamento(String pedidoId) async {
     try {
       final response = await SharedGet.forClient(_dio)
-          .get(_dio, '/pedidos/$pedidoId/pagamento');
+          .get(_dio, '/pedidos/$pedidoId/pagamento', validity: Duration.zero);
       return PagamentoPendenteModel.fromMap(
           Map<String, dynamic>.from(response.data as Map));
     } on DioException catch (e) {

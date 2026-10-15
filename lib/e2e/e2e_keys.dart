@@ -11,6 +11,9 @@ abstract final class E2EKeys {
   static const cartOpen = Key('e2e.cart.open');
   static const cartCheckout = Key('e2e.cart.checkout');
   static const checkoutAddress = Key('e2e.checkout.address');
+  static const checkoutPix = Key('e2e.checkout.payment.pix');
+  static const checkoutCard = Key('e2e.checkout.payment.card');
+  static const checkoutCpf = Key('e2e.checkout.cpf');
   static const checkoutCash = Key('e2e.checkout.payment.cash');
   static const checkoutConfirm = Key('e2e.checkout.confirm');
   static const checkoutSuccess = Key('e2e.checkout.success');

@@ -1,8 +1,15 @@
 import 'e2e_config.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'e2e_finders.dart';
 import 'e2e_wait.dart';
+
+Future<void> dismissE2EKeyboard(WidgetTester tester) async {
+  // IntegrationTest usa o teclado nativo, sem TestTextInput registrado.
+  FocusManager.instance.primaryFocus?.unfocus();
+  await tester.pump(const Duration(milliseconds: 200));
+}
 
 Future<void> tapE2E(
   WidgetTester tester,

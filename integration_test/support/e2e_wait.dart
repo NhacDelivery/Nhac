@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 Future<void> waitFor(
@@ -16,9 +17,13 @@ Future<void> waitFor(
       .take(30)
       .map((widget) => widget.runtimeType)
       .join(', ');
+  final statuses = tester.allWidgets.whereType<Semantics>().where(
+    (widget) => widget.key == const Key('e2e.tracking.status'),
+  ).map((widget) => widget.properties.value).toList();
   throw TestFailure(
     'Timeout na etapa "${step ?? 'aguardar widget'}". '
     'Finder: $finder. Último estado: ${tester.binding.renderViews.length} '
-    'render view(s); primeiros widgets: [$widgetTypes].',
+    'render view(s); ciclo de vida: ${tester.binding.lifecycleState}; '
+    'status renderizados: $statuses; primeiros widgets: [$widgetTypes].',
   );
 }

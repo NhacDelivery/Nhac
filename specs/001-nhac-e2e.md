@@ -1,6 +1,6 @@
 # Spec 001 — E2E do app Nhac
 
-Status: PROPOSTA PARA IMPLEMENTAÇÃO
+Status: IMPLEMENTADA — ampliada com entrega e recuperação de pagamentos
 Escopo inicial: `/workspaces/Nhac`
 Dependências: `/workspaces/backend-nhac`
 Próxima fase: `/workspaces/Nhac-Motoboy`
@@ -57,7 +57,7 @@ Criar perfil Spring `e2e` com Flyway habilitado e MariaDB real.
 Dados mínimos determinísticos:
 
 - usuário: `e2e.cliente@nhac.local`
-- senha: `NhacE2E#123`
+- senha: `E2E_PASSWORD` temporária, gerada por execução (mínimo 12 caracteres)
 - papel: `CLIENTE`
 - loja: ID fixo `e2e-loja-001`, aberta
 - produto: ID fixo `e2e-produto-001`, ativo, estoque >= 20
@@ -336,3 +336,20 @@ Após esta ficar verde, criar `002-motoboy-e2e.md` cobrindo:
 `login -> cadastro entregador -> online -> oferta -> aceitar -> coletar -> concluir`.
 
 Essa segunda spec deve reutilizar o mesmo backend E2E e a mesma estratégia de fixtures, conectando o pedido criado pelo cliente à jornada do motoboy.
+
+## Ampliação — passo 3
+
+O runner executa seis arquivos independentes e reinicia a fixture entre eles.
+Entrega completa valida a UI do cliente e as APIs reais dos atores loja e
+entregador, com cadastro do entregador pela API. PIX/cartão validam retomada
+da cobrança existente pelo histórico/rastreio, sem novo pedido ou reserva.
+Cartão recebe webhook assinado e PIX usa a simulação existente do perfil E2E.
+
+Critérios: todas as transições vistas pelo cliente; código só após coleta;
+código errado não conclui; retries não duplicam corrida/ganhos/estoque; baixa
+remove pedido ativo e libera entregador; avaliação persiste; assinatura errada
+não paga; falha de cartão permite recuperação; sucesso repetido e falha tardia
+não regressam o status; nota fiscal e rastreio correspondem ao mesmo pedido.
+
+Limites e próximas ampliações estão em `docs/e2e-ci.md`: retomada de tela não é
+reinício do processo, e mocks de pagamento não homologam PaymentSheet/provedor.

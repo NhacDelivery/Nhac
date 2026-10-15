@@ -554,6 +554,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     ),
                     SizedBox(height: 8.h),
                     TextField(
+                      key: E2EKeys.checkoutCpf,
                       controller: _cpfController,
                       keyboardType: TextInputType.number,
                       decoration: InputDecoration(
@@ -952,7 +953,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Widget _buildPaymentOption(String title, IconData icon) {
     final isSelected = _formaPagamento == title;
     return Semantics(
-      key: title == 'Dinheiro' ? E2EKeys.checkoutCash : null,
+      key: switch (title) {
+        'Dinheiro' => E2EKeys.checkoutCash,
+        'PIX' => E2EKeys.checkoutPix,
+        'Cartão de crédito' => E2EKeys.checkoutCard,
+        _ => null,
+      },
       button: true,
       label:
           'Forma de pagamento $title. ${isSelected ? "Selecionada" : "Toque para selecionar"}',
