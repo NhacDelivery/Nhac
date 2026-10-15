@@ -1,4 +1,6 @@
+import 'package:nhac/components/selecionar_endereco_padrao.dart';
 import 'dart:async';
+import 'package:nhac/components/estado_com_retry.dart';
 
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
@@ -75,8 +77,14 @@ class _EnderecosPageState extends State<EnderecosPage> {
                 ],
               ),
             ),
+            if (enderecoProvider.erro != null)
+              BannerErroInline(
+                  mensagem: enderecoProvider.erro!,
+                  aoTentarNovamente: enderecoProvider.isLoading
+                      ? null
+                      : enderecoProvider.buscarEnderecos),
             Expanded(
-              child: enderecoProvider.isLoading
+              child: enderecoProvider.isLoading && enderecos.isEmpty
                   ? Center(
                       child: Lottie.asset(
                         'assets/animations/botao_loading_nhac.json',
@@ -85,7 +93,9 @@ class _EnderecosPageState extends State<EnderecosPage> {
                       ),
                     )
                   : enderecos.isEmpty
-                      ? _buildEmptyState()
+                      ? (enderecoProvider.erro == null
+                          ? _buildEmptyState()
+                          : const SizedBox.shrink())
                       : ListView.builder(
                           physics: const BouncingScrollPhysics(),
                           padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -274,7 +284,14 @@ class _EnderecosPageState extends State<EnderecosPage> {
 
     try {
       await context.read<EnderecoProvider>().adicionarEndereco(novoEndereco);
-      if (mounted) context.showSuccess('Endereço salvo com sucesso!');
+      if (mounted) {
+        final erro = context.read<EnderecoProvider>().erro;
+        if (erro != null) {
+          context.showInfo(erro);
+        } else {
+          context.showSuccess('Endereço salvo com sucesso!');
+        }
+      }
     } catch (e) {
       if (mounted) context.showError('Erro ao salvar endereço.');
     }
@@ -430,7 +447,9 @@ class _EnderecosPageState extends State<EnderecosPage> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       onSelected: (value) async {
         if (value == 'isPadrao') {
-          await context.read<EnderecoProvider>().definirComoPadrao(endereco.id);
+          if (!await selecionarEnderecoPadrao(context, endereco.id)) {
+            return;
+          }
           if (mounted) context.showSuccess('Endereço padrão atualizado!');
         } else if (value == 'editar') {
           _abrirEdicaoEndereco(endereco);
@@ -475,10 +494,12 @@ class _EnderecosPageState extends State<EnderecosPage> {
   }
 
   void _abrirEdicaoEndereco(EnderecoModel enderecoAtual) {
+    final provider = context.read<EnderecoProvider>();
     final numeroController = TextEditingController(text: enderecoAtual.numero);
     final complementoController =
         TextEditingController(text: enderecoAtual.complemento);
 
+    bool salvando = false;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -487,6 +508,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) {
+        return StatefulBuilder(builder: (context, atualizar) {
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -551,6 +573,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
               const SizedBox(height: 32.0),
               BotaoLargoNhac(
                 texto: 'Salvar Alterações',
+                carregando: salvando,
                 onPressed: () async {
                   final enderecoAtualizado = enderecoAtual.copyWith(
                     numero: numeroController.text.isEmpty
@@ -559,17 +582,19 @@ class _EnderecosPageState extends State<EnderecosPage> {
                     complemento: complementoController.text,
                   );
 
-                  Navigator.pop(context);
-
+                  if (salvando || provider.isLoading) return;
+                  atualizar(() => salvando = true);
                   try {
-                    await context.read<EnderecoProvider>().atualizarEndereco(
+                    await provider.atualizarEndereco(
                         enderecoAtualizado.id, enderecoAtualizado);
-                    if (context.mounted) {
-                      context.showSuccess('Endereço atualizado com sucesso!');
+                    if (context.mounted) Navigator.pop(context);
+                    if (mounted) {
+                      this.context.showSuccess('Endereço atualizado com sucesso!');
                     }
                   } catch (e) {
                     if (context.mounted) {
-                      context.showError('Erro ao atualizar endereço.');
+                      atualizar(() => salvando = false);
+                      context.showError('Não foi possível salvar o endereço. Tente novamente.');
                     }
                   }
                 },
@@ -578,8 +603,12 @@ class _EnderecosPageState extends State<EnderecosPage> {
             ],
           ),
         );
+        });
       },
-    );
+    ).whenComplete(() {
+      numeroController.dispose();
+      complementoController.dispose();
+    });
   }
 
   void _confirmarisPadrao(EnderecoModel endereco) {
@@ -597,12 +626,12 @@ class _EnderecosPageState extends State<EnderecosPage> {
           ),
           ElevatedButton(
             onPressed: () async {
-              Navigator.pop(context);
-              await context
-                  .read<EnderecoProvider>()
-                  .definirComoPadrao(endereco.id);
+              if (!await selecionarEnderecoPadrao(context, endereco.id)) {
+                return;
+              }
               if (mounted && context.mounted) {
-                context.showSuccess('Endereço padrão atualizado!');
+                Navigator.pop(context);
+                this.context.showSuccess('Endereço padrão atualizado!');
               }
             },
             style: ElevatedButton.styleFrom(
@@ -618,38 +647,40 @@ class _EnderecosPageState extends State<EnderecosPage> {
     );
   }
 
-  void _confirmarRemocao(EnderecoModel endereco) {
-    showDialog(
+  Future<void> _confirmarRemocao(EnderecoModel endereco) async {
+    final provider = context.read<EnderecoProvider>();
+    if (provider.isLoading) return;
+    final confirmar = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text('Remover endereço?'),
         content: const Text('Esta ação não pode ser desfeita.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar', style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await context
-                  .read<EnderecoProvider>()
-                  .removerEndereco(endereco.id);
-              if (mounted && context.mounted) {
-                context.showSuccess('Endereço removido!');
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ),
-            child: const Text('Remover', style: TextStyle(color: Colors.white)),
-          ),
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Remover')),
         ],
       ),
     );
+    if (confirmar != true || !mounted || provider.isLoading) return;
+    try {
+      await provider.removerEndereco(endereco.id);
+      if (!mounted) return;
+      if (provider.erro != null) {
+        context.showInfo(provider.erro!);
+      } else {
+        context.showSuccess('Endereço removido!');
+      }
+    } catch (_) {
+      if (mounted) {
+        context
+            .showError('Não foi possível remover o endereço. Tente novamente.');
+      }
+    }
   }
 }
 
@@ -667,10 +698,17 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
   bool _isLoadingSearch = false;
   String? _erroBusca;
   Timer? _debounce;
-  final Dio _dio = Dio();
+  int _versaoBusca = 0;
+  bool _carregandoDetalhes = false;
+  final Dio _dio = Dio(BaseOptions(
+    connectTimeout: const Duration(seconds: 10),
+    receiveTimeout: const Duration(seconds: 10),
+    sendTimeout: const Duration(seconds: 10),
+  ));
   final String _googleApiKey = AppConstants.googleApiKey;
 
   void _filtrarEnderecos(String query) {
+    final versao = ++_versaoBusca;
     if (_debounce?.isActive ?? false) _debounce?.cancel();
 
     if (query.isEmpty) {
@@ -690,15 +728,16 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
     });
 
     _debounce = Timer(const Duration(milliseconds: 500), () async {
-      if (!mounted) return;
+      if (!mounted || versao != _versaoBusca) return;
       if (_googleApiKey.isEmpty) {
         debugPrint('🚨 ERRO CRÍTICO: A chave do Google (API Key) está vazia!');
         debugPrint(
             'Verifique se o arquivo .env existe e se está declarado no pubspec.yaml.');
-        if (!mounted) return;
+        if (!mounted || versao != _versaoBusca) return;
         setState(() {
           _isLoadingSearch = false;
-          _erroBusca = 'Chave da API do Google não configurada (.env ausente).';
+          _erroBusca =
+              'Busca de endereços indisponível no momento. Tente novamente mais tarde.';
         });
         return;
       }
@@ -717,7 +756,7 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
           },
         );
 
-        if (!mounted) return;
+        if (!mounted || versao != _versaoBusca) return;
         if (response.statusCode == 200) {
           final data = response.data;
 
@@ -744,14 +783,15 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
             setState(() {
               _sugestoes = [];
               _isLoadingSearch = false;
-              _erroBusca = 'Google recusou a busca (${data['status']})'
-                  '${data.containsKey('error_message') ? ': ${data['error_message']}' : '.'}';
+              _erroBusca = data['status'] == 'ZERO_RESULTS'
+                  ? null
+                  : 'Não foi possível buscar endereços. Tente novamente.';
             });
           }
         }
       } catch (e) {
         debugPrint('⚠️ ERRO DE REQUISIÇÃO (Dio): $e');
-        if (!mounted) return;
+        if (!mounted || versao != _versaoBusca) return;
         setState(() {
           _sugestoes = [];
           _isLoadingSearch = false;
@@ -762,8 +802,13 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
   }
 
   Future<void> _obterDetalhes(String placeId, String description) async {
+    if (_carregandoDetalhes) return;
+    _debounce?.cancel();
+    final versao = ++_versaoBusca;
+    _carregandoDetalhes = true;
     setState(() {
       _isLoadingSearch = true;
+      _erroBusca = null;
     });
 
     try {
@@ -776,6 +821,10 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
         },
       );
 
+      if (!mounted || versao != _versaoBusca) return;
+      if (response.statusCode != 200 || response.data['status'] != 'OK') {
+        throw StateError('Detalhes indisponíveis');
+      }
       if (response.statusCode == 200) {
         final data = response.data;
         if (data['status'] == 'OK') {
@@ -857,7 +906,7 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
             }
           }
 
-          if (mounted) {
+          if (mounted && versao == _versaoBusca) {
             Navigator.pop(context, {
               'rua': rua,
               'numero': numero,
@@ -872,9 +921,15 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
         }
       }
     } catch (e) {
-      debugPrint('Erro ao obter detalhes do local: $e');
+      if (mounted && versao == _versaoBusca) {
+        setState(() {
+          _erroBusca =
+              'Não foi possível obter os detalhes deste endereço. Toque novamente ou faça outra busca.';
+        });
+      }
     } finally {
-      if (mounted) {
+      _carregandoDetalhes = false;
+      if (mounted && versao == _versaoBusca) {
         setState(() {
           _isLoadingSearch = false;
         });
@@ -959,6 +1014,7 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
                       icon: null,
                       suffixIcon: _searchController.text.isNotEmpty
                           ? IconButton(
+                              tooltip: 'Limpar busca',
                               icon: const Icon(Icons.clear,
                                   size: 20, color: Colors.grey),
                               onPressed: () {
@@ -972,6 +1028,8 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
                 ],
               ),
             ),
+            if (_erroBusca != null && _sugestoes.isNotEmpty)
+              BannerErroInline(mensagem: _erroBusca!),
             Expanded(
               child: _isLoadingSearch
                   ? _buildLoadingState()

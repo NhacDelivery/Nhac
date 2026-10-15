@@ -2,6 +2,27 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:nhac/models/pedido/status_pedido.dart';
 
 void main() {
+  test('dinheiro aguarda confirmação da loja e não pagamento eletrônico', () {
+    expect(
+      StatusPedido.pendente.labelParaPagamento('DINHEIRO'),
+      'Aguardando confirmação da loja',
+    );
+    expect(
+      StatusPedido.pago.labelParaPagamento(' dinheiro '),
+      'Pedido confirmado',
+    );
+    for (final forma in ['PIX', 'CARTAO', 'STRIPE', 'GOOGLE_PAY']) {
+      expect(
+        StatusPedido.pendente.labelParaPagamento(forma),
+        'Aguardando pagamento',
+      );
+      expect(
+        StatusPedido.pago.labelParaPagamento(forma),
+        'Pagamento confirmado',
+      );
+    }
+    expect(StatusPedido.entregue.labelParaPagamento('DINHEIRO'), 'Entregue');
+  });
   test('mapeia todos os status canônicos do backend', () {
     expect(StatusPedido.fromApi('PENDENTE'), StatusPedido.pendente);
     expect(StatusPedido.fromApi('PAGO'), StatusPedido.pago);

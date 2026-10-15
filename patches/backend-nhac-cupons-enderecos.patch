@@ -1,0 +1,161 @@
+diff --git a/src/main/java/br/com/nhac/backend_nhac/domain/cupom/CupomRepository.java b/src/main/java/br/com/nhac/backend_nhac/domain/cupom/CupomRepository.java
+index f7de278..889a7df 100644
+--- a/src/main/java/br/com/nhac/backend_nhac/domain/cupom/CupomRepository.java
++++ b/src/main/java/br/com/nhac/backend_nhac/domain/cupom/CupomRepository.java
+@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
+ import org.springframework.data.jpa.repository.Lock;
+ 
+ public interface CupomRepository extends JpaRepository<Cupom, String> {
++    long countByUsuarioId(String usuarioId);
+     List<Cupom> findByUsuarioIdOrderByCriadoEmDesc(String usuarioId);
+     Optional<Cupom> findByUsuarioIdAndOrigem(String usuarioId, String origem);
+     @Lock(LockModeType.PESSIMISTIC_WRITE)
+diff --git a/src/main/java/br/com/nhac/backend_nhac/domain/usuario/UsuarioService.java b/src/main/java/br/com/nhac/backend_nhac/domain/usuario/UsuarioService.java
+index a145880..da3de31 100644
+--- a/src/main/java/br/com/nhac/backend_nhac/domain/usuario/UsuarioService.java
++++ b/src/main/java/br/com/nhac/backend_nhac/domain/usuario/UsuarioService.java
+@@ -17,12 +17,15 @@ import org.springframework.stereotype.Service;
+ import org.springframework.transaction.annotation.Transactional;
+ 
+ import java.util.List;
++import java.util.Comparator;
++import br.com.nhac.backend_nhac.domain.cupom.CupomRepository;
+ import java.util.Map;
+ import java.util.stream.Collectors;
+ 
+ @Service
+ public class UsuarioService {
+ 
++    private final CupomRepository cupomRepository;
+     private final UsuarioRepository usuarioRepository;
+     private final EnderecoUsuarioRepository enderecoRepository;
+     private final PasswordEncoder passwordEncoder;
+@@ -33,7 +36,9 @@ public class UsuarioService {
+                           EnderecoUsuarioRepository enderecoRepository,
+                           PasswordEncoder passwordEncoder,
+                           br.com.nhac.backend_nhac.domain.pedido.PedidoRepository pedidoRepository,
+-                          br.com.nhac.backend_nhac.domain.favorito.FavoritoRepository favoritoRepository) {
++                          br.com.nhac.backend_nhac.domain.favorito.FavoritoRepository favoritoRepository,
++                          CupomRepository cupomRepository) {
++        this.cupomRepository = cupomRepository;
+         this.usuarioRepository = usuarioRepository;
+         this.enderecoRepository = enderecoRepository;
+         this.passwordEncoder = passwordEncoder;
+@@ -108,6 +113,8 @@ public class UsuarioService {
+ 
+     @Transactional
+     public void adicionarEndereco(String usuarioId, EnderecoUsuarioDTO dto) {
++        // Serializa mudanças de padrão e exclusões da mesma conta.
++        usuarioRepository.findLockedById(usuarioId);
+         Usuario usuario = usuarioRepository.findById(usuarioId)
+                 .orElseThrow(() -> new IdNaoEncontradoException("Usuário não encontrado."));
+         EnderecoUsuario endereco = dto.toEntity(usuario);
+@@ -121,6 +128,8 @@ public class UsuarioService {
+ 
+     @Transactional
+     public void atualizarEndereco(String usuarioId, String enderecoId, EnderecoUsuarioDTO dto) {
++        // Serializa mudanças de padrão e exclusões da mesma conta.
++        usuarioRepository.findLockedById(usuarioId);
+         EnderecoUsuario endereco = enderecoRepository.findById(enderecoId)
+                 .orElseThrow(() -> new IdNaoEncontradoException("Endereço não encontrado."));
+ 
+@@ -146,6 +155,8 @@ public class UsuarioService {
+ 
+     @Transactional
+     public void removerEndereco(String usuarioId, String enderecoId) {
++        // Serializa mudanças de padrão e exclusões da mesma conta.
++        usuarioRepository.findLockedById(usuarioId);
+         EnderecoUsuario endereco = enderecoRepository.findById(enderecoId)
+                 .orElseThrow(() -> new IdNaoEncontradoException("Endereço não encontrado."));
+ 
+@@ -154,6 +165,17 @@ public class UsuarioService {
+         }
+ 
+         enderecoRepository.delete(endereco);
++        if (endereco.isPadrao()) {
++            List<EnderecoUsuario> restantes = enderecoRepository.findByUsuarioId(usuarioId).stream()
++                    .filter(e -> !e.getId().equals(enderecoId))
++                    .sorted(Comparator.comparing(EnderecoUsuario::getId))
++                    .toList();
++            if (restantes.stream().noneMatch(EnderecoUsuario::isPadrao) && !restantes.isEmpty()) {
++                EnderecoUsuario novoPadrao = restantes.getFirst();
++                novoPadrao.setPadrao(true);
++                enderecoRepository.save(novoPadrao);
++            }
++        }
+     }
+ 
+ 
+@@ -209,7 +231,7 @@ public class UsuarioService {
+         }
+         long totalPedidos = pedidoRepository.countByUsuarioId(id);
+         long lojasFavoritadas = favoritoRepository.countByUsuarioId(id);
+-        long cuponsResgatados = pedidoRepository.countByUsuarioIdAndCupomIdIsNotNull(id);
++        long cuponsResgatados = cupomRepository.countByUsuarioId(id);
+         
+         return new br.com.nhac.backend_nhac.domain.usuario.dto.UsuarioEstatisticasDTO(totalPedidos, lojasFavoritadas, cuponsResgatados);
+     }
+diff --git a/src/test/java/br/com/nhac/backend_nhac/domain/usuario/UsuarioServiceTest.java b/src/test/java/br/com/nhac/backend_nhac/domain/usuario/UsuarioServiceTest.java
+index f0e6539..1fb9900 100644
+--- a/src/test/java/br/com/nhac/backend_nhac/domain/usuario/UsuarioServiceTest.java
++++ b/src/test/java/br/com/nhac/backend_nhac/domain/usuario/UsuarioServiceTest.java
+@@ -27,6 +27,7 @@ import static org.mockito.Mockito.*;
+ @ExtendWith(MockitoExtension.class)
+ class UsuarioServiceTest {
+ 
++    @Mock private br.com.nhac.backend_nhac.domain.cupom.CupomRepository cupomRepository;
+     @Mock private UsuarioRepository usuarioRepository;
+     @Mock private EnderecoUsuarioRepository enderecoRepository;
+     @Mock private PasswordEncoder passwordEncoder;
+@@ -35,6 +36,42 @@ class UsuarioServiceTest {
+ 
+     @InjectMocks private UsuarioService usuarioService;
+ 
++    @Test
++    void estatisticasContamCuponsRecebidosMesmoSemPedido() {
++        when(usuarioRepository.existsById("cliente")).thenReturn(true);
++        when(cupomRepository.countByUsuarioId("cliente")).thenReturn(2L);
++        var stats = usuarioService.obterEstatisticas("cliente");
++        assertEquals(2L, stats.cuponsResgatados());
++        assertEquals(0L, stats.totalPedidos());
++        verify(pedidoRepository, never()).countByUsuarioIdAndCupomIdIsNotNull(any());
++    }
++
++    @Test
++    void removerPadraoPromoveOutroEnderecoDaMesmaConta() {
++        Usuario usuario = usuarioPadrao("cliente");
++        EnderecoUsuario removido = new EnderecoUsuario();
++        removido.setId("a"); removido.setUsuario(usuario); removido.setPadrao(true);
++        EnderecoUsuario proximo = new EnderecoUsuario();
++        proximo.setId("b"); proximo.setUsuario(usuario);
++        when(enderecoRepository.findById("a")).thenReturn(Optional.of(removido));
++        when(enderecoRepository.findByUsuarioId("cliente")).thenReturn(List.of(proximo));
++        usuarioService.removerEndereco("cliente", "a");
++        assertTrue(proximo.isPadrao());
++        verify(usuarioRepository).findLockedById("cliente");
++        verify(enderecoRepository).delete(removido);
++        verify(enderecoRepository).save(proximo);
++    }
++
++    @Test
++    void removerUltimoPadraoNaoInventaEndereco() {
++        EnderecoUsuario removido = new EnderecoUsuario();
++        removido.setId("a"); removido.setUsuario(usuarioPadrao("cliente")); removido.setPadrao(true);
++        when(enderecoRepository.findById("a")).thenReturn(Optional.of(removido));
++        when(enderecoRepository.findByUsuarioId("cliente")).thenReturn(List.of());
++        usuarioService.removerEndereco("cliente", "a");
++        verify(enderecoRepository, never()).save(any());
++    }
++
+     private Usuario usuarioPadrao(String id) {
+         Usuario usuario = new Usuario();
+         usuario.setId(id);
+@@ -360,7 +397,7 @@ class UsuarioServiceTest {
+         when(usuarioRepository.existsById("usu_1")).thenReturn(true);
+         when(pedidoRepository.countByUsuarioId("usu_1")).thenReturn(15L);
+         when(favoritoRepository.countByUsuarioId("usu_1")).thenReturn(3L);
+-        when(pedidoRepository.countByUsuarioIdAndCupomIdIsNotNull("usu_1")).thenReturn(5L);
++        when(cupomRepository.countByUsuarioId("usu_1")).thenReturn(5L);
+ 
+         br.com.nhac.backend_nhac.domain.usuario.dto.UsuarioEstatisticasDTO stats =
+                 usuarioService.obterEstatisticas("usu_1");

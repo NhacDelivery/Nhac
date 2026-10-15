@@ -1,3 +1,4 @@
+import 'e2e_config.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'e2e_finders.dart';
@@ -31,7 +32,7 @@ Future<void> loginAsFixtureUser(WidgetTester tester) async {
   await tapE2E(tester, E2EFinders.loginSubmit, step: 'continuar para senha');
 
   await waitFor(tester, E2EFinders.loginPassword, step: 'abrir senha');
-  await tester.enterText(E2EFinders.loginPassword, 'NhacE2E#123');
+  await tester.enterText(E2EFinders.loginPassword, E2EConfig.password);
   await tapE2E(tester, E2EFinders.loginSubmit, step: 'enviar login');
 
   await waitFor(tester, E2EFinders.homeReady, step: 'autenticar e abrir home');

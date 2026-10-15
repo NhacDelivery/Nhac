@@ -33,8 +33,9 @@ class MensagemChat {
       remetenteUsuarioId: map['remetenteUsuarioId']?.toString(),
       conteudo: (map['conteudo'] ?? '').toString(),
       // enviadaEm vem como Instant serializado em ISO-8601 (UTC).
-      enviadaEm: DateTime.tryParse(map['enviadaEm']?.toString() ?? '')?.toLocal() ??
-          DateTime.now(),
+      enviadaEm:
+          DateTime.tryParse(map['enviadaEm']?.toString() ?? '')?.toLocal() ??
+              DateTime.now(),
     );
   }
 

@@ -11,6 +11,7 @@ void main() {
 
   setUp(() {
     dio = MockDio();
+    when(() => dio.options).thenReturn(BaseOptions());
     repository = LojaRepository(dio: dio);
   });
 

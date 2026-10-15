@@ -1,4 +1,7 @@
+import 'package:nhac/pages/avatar_crop_page.dart';
+
 import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/components/loading_nhac.dart';
@@ -33,10 +36,13 @@ class _EditarFotoPageState extends State<EditarFotoPage> {
         imageQuality: 85,
       );
 
-      if (pickedFile != null) {
-        setState(() {
-          _image = File(pickedFile.path);
-        });
+      if (pickedFile != null && mounted) {
+        final recorte = await Navigator.of(context).push<File>(
+          MaterialPageRoute(
+            builder: (_) => AvatarCropPage(arquivo: File(pickedFile.path)),
+          ),
+        );
+        if (mounted && recorte != null) setState(() => _image = recorte);
       }
     } catch (e) {
       if (!mounted) return;
@@ -91,21 +97,19 @@ class _EditarFotoPageState extends State<EditarFotoPage> {
 
       if (!mounted) return;
       final userProvider = context.read<UserProvider>();
-      
-      await UserRepository().atualizarDadosUsuario(uid, {
-        'imagemUrl': url,
-      });
+
+      await UserRepository().atualizarDadosUsuario(uid, {'imagemUrl': url});
 
       await userProvider.carregarDadosUsuario();
 
       if (!mounted) return;
-      
+
       context.showSuccess('Foto de perfil atualizada com sucesso!');
 
       context.pop();
     } catch (e) {
       if (!mounted) return;
-      
+
       context.showError('Erro ao atualizar foto: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -122,7 +126,11 @@ class _EditarFotoPageState extends State<EditarFotoPage> {
         backgroundColor: const Color(0xFFFFE7E5),
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF5D201C), size: 20),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Color(0xFF5D201C),
+            size: 20,
+          ),
           onPressed: () => context.pop(),
         ),
       ),
@@ -168,35 +176,57 @@ class _EditarFotoPageState extends State<EditarFotoPage> {
                                 height: 160,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  border: Border.all(color: Colors.white, width: 4),
+                                  border: Border.all(
+                                    color: Colors.white,
+                                    width: 4,
+                                  ),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Color(0xFF5D201C).withValues(alpha: 0.1),
+                                      color: Color(0xFF5D201C)
+                                          .withValues(alpha: 0.1),
                                       blurRadius: 10,
                                       spreadRadius: 2,
                                     ),
                                   ],
                                 ),
                                 child: ClipOval(
-                                  child: _image != null 
-    ? Image.file(_image!, fit: BoxFit.cover)
-    : (usuario?.imagemUrl != null && usuario!.imagemUrl!.isNotEmpty 
-        ? CachedNetworkImage(
-            imageUrl: usuario.imagemUrl!,
-                                              fit: BoxFit.cover,
-                                              placeholder: (ctx, url) => Container(
-                                                color: Colors.grey.shade200,
-                                                child: const LoadingNhac(telaCheia: false, tamanho: 40),
-                                              ),
-                                              errorWidget: (ctx, url, err) => Container(
+                                  child: _image != null
+                                      ? Image.file(_image!, fit: BoxFit.cover)
+                                      : (usuario?.imagemUrl != null &&
+                                                usuario!.imagemUrl!.isNotEmpty
+                                            ? CachedNetworkImage(
+                                                imageUrl: usuario.imagemUrl!,
+                                                fit: BoxFit.cover,
+                                                placeholder: (ctx, url) =>
+                                                    Container(
+                                                      color:
+                                                          Colors.grey.shade200,
+                                                      child: const LoadingNhac(
+                                                        telaCheia: false,
+                                                        tamanho: 40,
+                                                      ),
+                                                    ),
+                                                errorWidget: (ctx, url, err) =>
+                                                    Container(
+                                                      color:
+                                                          Colors.grey.shade300,
+                                                      child: Icon(
+                                                        Icons.person,
+                                                        size: 80,
+                                                        color: Colors
+                                                            .grey
+                                                            .shade600,
+                                                      ),
+                                                    ),
+                                              )
+                                            : Container(
                                                 color: Colors.grey.shade300,
-                                                child: Icon(Icons.person, size: 80, color: Colors.grey.shade600),
-                                              ),
-                                            )
-                                          : Container(
-                                              color: Colors.grey.shade300,
-                                              child: Icon(Icons.person, size: 80, color: Colors.grey.shade600),
-                                            )),
+                                                child: Icon(
+                                                  Icons.person,
+                                                  size: 80,
+                                                  color: Colors.grey.shade600,
+                                                ),
+                                              )),
                                 ),
                               ),
                               Positioned(
@@ -208,7 +238,11 @@ class _EditarFotoPageState extends State<EditarFotoPage> {
                                     color: Color(0xFFFE645C),
                                     shape: BoxShape.circle,
                                   ),
-                                  child: const Icon(Icons.camera_alt, color: Colors.white, size: 24),
+                                  child: const Icon(
+                                    Icons.camera_alt,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
                                 ),
                               ),
                             ],
@@ -231,7 +265,12 @@ class _EditarFotoPageState extends State<EditarFotoPage> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.only(left: 24.0, right: 24.0, bottom: 32.0, top: 16.0),
+              padding: const EdgeInsets.only(
+                left: 24.0,
+                right: 24.0,
+                bottom: 32.0,
+                top: 16.0,
+              ),
               child: BotaoLargoNhac(
                 texto: 'Salvar alterações',
                 carregando: _isLoading,

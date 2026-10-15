@@ -1,3 +1,4 @@
+import 'package:uuid/uuid.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/models/usuario/carrinho_model.dart';
@@ -10,11 +11,12 @@ class CartProvider extends ChangeNotifier {
   int _sessionVersion = 0;
   bool _disposed = false;
 
-  CartRepository get _cartRepository => _repositoryOverride ??
-      CartRepository(usuarioId: _sessionUserId);
+  CartRepository get _cartRepository =>
+      _repositoryOverride ?? CartRepository(usuarioId: _sessionUserId);
 
   CartProvider({CartRepository? repository, AuthService? authService})
-      : _repositoryOverride = repository, _authService = authService {
+    : _repositoryOverride = repository,
+      _authService = authService {
     _sessionUserId = authService?.usuarioId;
     authService?.addListener(_onSessionChanged);
   }
@@ -40,31 +42,43 @@ class CartProvider extends ChangeNotifier {
   double _valorTotal = 0.0;
   int _totalDeUnidades = 0;
   String _observacao = '';
-  String _lojaIdAtual = '';   
+  String _lojaIdAtual = '';
 
   Map<String, CartItemModel> get itens => _itens;
   int get quantidadeItens => _itens.length;
   double get valorTotal => _valorTotal;
   int get totalDeUnidades => _totalDeUnidades;
   String get observacao => _observacao;
-  String get lojaId => _lojaIdAtual;   
+  String get lojaId => _lojaIdAtual;
 
   Future<void> carregarCarrinhoLocal() async {
     final sessionVersion = _sessionVersion;
-    final listaSalva = await _cartRepository.carregarCarrinhoLocal();
+    final repository = _cartRepository;
+    final listaSalva = await repository.carregarCarrinhoLocal();
+    final observacaoSalva = await repository.carregarObservacaoLocal();
     if (_disposed || sessionVersion != _sessionVersion) return;
-    _itens = {for (var item in listaSalva) item.produtoId: item};
+    _itens = {for (var item in listaSalva) item.chave: item};
+    _observacao = _itens.isEmpty ? '' : observacaoSalva;
     _lojaIdAtual = '';
     if (_itens.isNotEmpty) {
-      _lojaIdAtual = _itens.values.first.lojaId;  
+      _lojaIdAtual = _itens.values.first.lojaId;
     }
     _recalcularTotais();
   }
 
-  void setObservacao(String texto) {
+  Future<void> persistirSnapshot() => _cartRepository.salvarCarrinhoLocal(
+    _itens.values.toList(),
+    observacao: _observacao,
+  );
+
+  Future<void> setObservacao(String texto) async {
     if (_observacao != texto) {
       _observacao = texto;
       notifyListeners();
+      await _cartRepository.salvarCarrinhoLocal(
+        _itens.values.toList(),
+        observacao: _observacao,
+      );
     }
   }
 
@@ -73,32 +87,49 @@ class CartProvider extends ChangeNotifier {
     required String nome,
     required double preco,
     required String imagemUrl,
-    required String lojaId,    
+    required String lojaId,
     required int quantidade,
+    List<String> adicionais = const [],
+    List<String> adicionaisNomes = const [],
   }) async {
     if (quantidade <= 0) throw Exception('Quantidade inválida');
 
-    if (_itens.isNotEmpty && _lojaIdAtual.isNotEmpty && _lojaIdAtual != lojaId) {
-      throw Exception('Você só pode adicionar itens de uma loja por vez. Limpe o carrinho atual.');
+    if (_itens.isNotEmpty &&
+        _lojaIdAtual.isNotEmpty &&
+        _lojaIdAtual != lojaId) {
+      throw Exception(
+        'Você só pode adicionar itens de uma loja por vez. Limpe o carrinho atual.',
+      );
     }
 
-    if (_itens.containsKey(idProduto)) {
-      _itens[idProduto]!.quantidade += quantidade;
+    final chave = adicionais.isEmpty
+        ? idProduto
+        : '$idProduto:${(List.of(adicionais)..sort()).join(',')}';
+    if (_itens.containsKey(chave)) {
+      _itens[chave]!.quantidade += quantidade;
+      _itens[chave]!.unidades.addAll(
+        List.generate(quantidade, (_) => const Uuid().v4()),
+      );
     } else {
-      _itens[idProduto] = CartItemModel(
+      _itens[chave] = CartItemModel(
         produtoId: idProduto,
+        adicionais: adicionais,
+        adicionaisNomes: adicionaisNomes,
         nome: nome,
         imagemUrl: imagemUrl,
         preco: preco,
-        lojaId: lojaId,   
+        lojaId: lojaId,
         quantidade: quantidade,
       );
     }
 
-    _lojaIdAtual = lojaId;   
+    _lojaIdAtual = lojaId;
     _recalcularTotais();
-    await _cartRepository.salvarCarrinhoLocal(_itens.values.toList());
-    return true;   
+    await _cartRepository.salvarCarrinhoLocal(
+      _itens.values.toList(),
+      observacao: _observacao,
+    );
+    return true;
   }
 
   Future<void> removerItem(String idProduto) async {
@@ -106,35 +137,63 @@ class CartProvider extends ChangeNotifier {
 
     if (_itens[idProduto]!.quantidade > 1) {
       _itens[idProduto]!.quantidade -= 1;
+      if (_itens[idProduto]!.unidades.isNotEmpty)
+        _itens[idProduto]!.unidades.removeLast();
     } else {
       _itens.remove(idProduto);
     }
 
-    if (_itens.isEmpty) _lojaIdAtual = '';   
+    if (_itens.isEmpty) {
+      _lojaIdAtual = '';
+      _observacao = '';
+    }
 
     _recalcularTotais();
-    await _cartRepository.salvarCarrinhoLocal(_itens.values.toList());
+    await _cartRepository.salvarCarrinhoLocal(
+      _itens.values.toList(),
+      observacao: _observacao,
+    );
   }
 
   Future<void> excluirItemDoCarrinho(String idProduto) async {
     _itens.remove(idProduto);
-    if (_itens.isEmpty) _lojaIdAtual = '';   
+    if (_itens.isEmpty) {
+      _lojaIdAtual = '';
+      _observacao = '';
+    }
     _recalcularTotais();
-    await _cartRepository.salvarCarrinhoLocal(_itens.values.toList());
+    await _cartRepository.salvarCarrinhoLocal(
+      _itens.values.toList(),
+      observacao: _observacao,
+    );
   }
 
   void marcarItemComoEsgotado(String idProduto) {
-    if (_itens.containsKey(idProduto)) {
-      _itens[idProduto]!.esgotado = true;
+    for (final item in _itens.values.where((i) => i.produtoId == idProduto)) {
+      item.esgotado = true;
       notifyListeners();
-      _cartRepository.salvarCarrinhoLocal(_itens.values.toList());
+      _cartRepository.salvarCarrinhoLocal(
+        _itens.values.toList(),
+        observacao: _observacao,
+      );
     }
+  }
+
+  Future<void> consumirPedidoRecuperado(
+    String pedidoId,
+    Map<String, dynamic> payload,
+  ) async {
+    final repository = _cartRepository;
+    final version = _sessionVersion;
+    await repository.consumirPedido(pedidoId, payload);
+    if (_disposed || version != _sessionVersion) return;
+    await carregarCarrinhoLocal();
   }
 
   Future<void> esvaziarCarrinho() async {
     _itens.clear();
     _observacao = '';
-    _lojaIdAtual = '';   
+    _lojaIdAtual = '';
     _recalcularTotais();
     await _cartRepository.limparCarrinho();
   }

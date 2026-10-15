@@ -1,4 +1,6 @@
 import 'dart:math';
+import 'package:go_router/go_router.dart';
+import 'package:nhac/repositories/produto_repository.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -15,10 +17,13 @@ class ProductCard extends StatefulWidget {
     required this.produto,
     this.lojaFechada = false,
     this.onFlyToCart,
+    this.repository,
   });
 
   final ProdutosModel produto;
+  final ProdutoRepository? repository;
   final bool lojaFechada;
+
   /// Callback que recebe a posição global do botão "+" e a URL da imagem
   /// para disparar a animação fly-to-cart. Se null, não dispara animação.
   final void Function(Offset origin, String imageUrl)? onFlyToCart;
@@ -27,8 +32,10 @@ class ProductCard extends StatefulWidget {
   State<ProductCard> createState() => _ProductCardState();
 }
 
-class _ProductCardState extends State<ProductCard> with SingleTickerProviderStateMixin {
+class _ProductCardState extends State<ProductCard>
+    with SingleTickerProviderStateMixin {
   late AnimationController _shakeController;
+  bool _adicionando = false;
 
   @override
   void initState() {
@@ -72,7 +79,9 @@ class _ProductCardState extends State<ProductCard> with SingleTickerProviderStat
             child: Stack(
               children: [
                 ClipRRect(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16.r)),
+                  borderRadius: BorderRadius.vertical(
+                    top: Radius.circular(16.r),
+                  ),
                   child: CachedNetworkImage(
                     imageUrl: widget.produto.imagemUrl,
                     fit: BoxFit.cover,
@@ -85,8 +94,11 @@ class _ProductCardState extends State<ProductCard> with SingleTickerProviderStat
                     ),
                     errorWidget: (context, url, error) => Container(
                       color: const Color(0xFFFFF0EE),
-                      child: Icon(Icons.image_not_supported_outlined,
-                          color: const Color(0xFF5D201C), size: 32.r),
+                      child: Icon(
+                        Icons.image_not_supported_outlined,
+                        color: const Color(0xFF5D201C),
+                        size: 32.r,
+                      ),
                     ),
                   ),
                 ),
@@ -101,16 +113,14 @@ class _ProductCardState extends State<ProductCard> with SingleTickerProviderStat
                 Text(
                   widget.produto.nome,
                   style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14.sp,
-                      color: const Color(0xFF5D201C)),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14.sp,
+                    color: const Color(0xFF5D201C),
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 SizedBox(height: 4.h),
-                Text("500g",
-                    style: TextStyle(
-                        color: Colors.grey.shade600, fontSize: 12.sp)),
                 SizedBox(height: 8.h),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -119,9 +129,10 @@ class _ProductCardState extends State<ProductCard> with SingleTickerProviderStat
                       child: Text(
                         'R\$ ${widget.produto.preco.toStringAsFixed(2)}',
                         style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16.sp,
-                            color: const Color(0xFF5D201C)),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16.sp,
+                          color: const Color(0xFF5D201C),
+                        ),
                       ),
                     ),
                     Builder(
@@ -129,62 +140,112 @@ class _ProductCardState extends State<ProductCard> with SingleTickerProviderStat
                         return AnimatedBuilder(
                           animation: _shakeController,
                           builder: (context, child) {
-                            final sineValue = sin(5 * pi * _shakeController.value);
+                            final sineValue = sin(
+                              5 * pi * _shakeController.value,
+                            );
                             return Transform.translate(
                               offset: Offset(sineValue * 2, 2),
                               child: child,
                             );
                           },
                           child: InkWell(
-                            onTap: () async {
-                              if (widget.lojaFechada) {
-                                context.showError('Esta loja está fechada no momento.');
-                                _triggerShake();
-                                return;
-                              }
-
-                              try {
-                                final cartProvider = context.read<CartProvider>();
-                                await cartProvider.adicionarItemComQuantidade(
-                                  idProduto: widget.produto.id,
-                                  nome: widget.produto.nome,
-                                  preco: widget.produto.preco,
-                                  imagemUrl: widget.produto.imagemUrl,
-                                  lojaId: widget.produto.lojaId,
-                                  quantidade: 1,
-                                );
-                                
-                                if (context.mounted) {
-                                  if (widget.onFlyToCart != null) {
-                                    final renderBox = btnContext.findRenderObject() as RenderBox?;
-                                    if (renderBox != null && renderBox.attached) {
-                                      final origin = renderBox.localToGlobal(
-                                        renderBox.size.center(Offset.zero),
+                            onTap: _adicionando
+                                ? null
+                                : () async {
+                                    if (widget.lojaFechada) {
+                                      context.showError(
+                                        'Esta loja está fechada no momento.',
                                       );
-                                      widget.onFlyToCart!(origin, widget.produto.imagemUrl);
+                                      _triggerShake();
+                                      return;
                                     }
-                                  }
 
-                                  showAppNotification(
-                                    context,
-                                    type: NotificationType.success,
-                                    imageUrl: widget.produto.imagemUrl,
-                                    message: '${widget.produto.nome} adicionado!',
-                                  );
-                                }
-                              } catch (e) {
-                                if (context.mounted) {
-                                  context.showError(e.toString().replaceAll('Exception: ', ''));
-                                  _triggerShake();
-                                }
-                              }
-                            },
+                                    setState(() => _adicionando = true);
+                                    try {
+                                      final completo =
+                                          await (widget.repository ??
+                                                  ProdutoRepository())
+                                              .buscarPorId(widget.produto.id);
+                                      if (!context.mounted) return;
+                                      if (!completo.lojaAberta) {
+                                        context.showError(
+                                          'Esta loja está fechada no momento.',
+                                        );
+                                        return;
+                                      }
+                                      if (completo.adicionais.isNotEmpty) {
+                                        await context.push(
+                                          '/produto/${Uri.encodeComponent(completo.id)}',
+                                        );
+                                        return;
+                                      }
+                                      final cartProvider =
+                                          context.read<CartProvider>();
+                                      await cartProvider
+                                          .adicionarItemComQuantidade(
+                                        idProduto: widget.produto.id,
+                                        nome: widget.produto.nome,
+                                        preco: widget.produto.preco,
+                                        imagemUrl: widget.produto.imagemUrl,
+                                        lojaId: widget.produto.lojaId,
+                                        quantidade: 1,
+                                      );
+
+                                      if (context.mounted) {
+                                        if (widget.onFlyToCart != null) {
+                                          final renderBox = btnContext
+                                              .findRenderObject() as RenderBox?;
+                                          if (renderBox != null &&
+                                              renderBox.attached) {
+                                            final origin =
+                                                renderBox.localToGlobal(
+                                              renderBox.size.center(
+                                                Offset.zero,
+                                              ),
+                                            );
+                                            widget.onFlyToCart!(
+                                              origin,
+                                              widget.produto.imagemUrl,
+                                            );
+                                          }
+                                        }
+
+                                        showAppNotification(
+                                          context,
+                                          type: NotificationType.success,
+                                          imageUrl: widget.produto.imagemUrl,
+                                          message:
+                                              '${widget.produto.nome} adicionado!',
+                                        );
+                                      }
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        context.showError(
+                                          e.toString().replaceAll(
+                                                'Exception: ',
+                                                '',
+                                              ),
+                                        );
+                                        _triggerShake();
+                                      }
+                                    } finally {
+                                      if (mounted)
+                                        setState(() => _adicionando = false);
+                                    }
+                                  },
                             child: Container(
                               padding: EdgeInsets.all(4.w),
                               decoration: BoxDecoration(
-                                  color: widget.lojaFechada ? Colors.grey.shade400 : const Color(0xFF5D201C),
-                                  shape: BoxShape.circle),
-                              child: Icon(Icons.add, color: Colors.white, size: 16.r),
+                                color: widget.lojaFechada
+                                    ? Colors.grey.shade400
+                                    : const Color(0xFF5D201C),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.add,
+                                color: Colors.white,
+                                size: 16.r,
+                              ),
                             ),
                           ),
                         );

@@ -1,6 +1,7 @@
 abstract class AppException implements Exception {
   final String message;
-  AppException(this.message);
+  final String? code;
+  AppException(this.message, {this.code});
 
   @override
   String toString() => message;
@@ -14,7 +15,7 @@ class ValidationException extends AppException {
 
 // 1 e 5. Regra de Negócio (Status 400 / 422)
 class BusinessRuleException extends AppException {
-  BusinessRuleException(super.message);
+  BusinessRuleException(super.message, {super.code});
 }
 
 // 2. Não Encontrado (Status 404)

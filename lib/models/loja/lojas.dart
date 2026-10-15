@@ -47,6 +47,13 @@ class LojasModel {
           : null,
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'id': id, 'nome': nome, 'categoria': categoria,
+    'descricao': descricao, 'imagemUrl': imagemUrl, 'isAberto': isAberto,
+    'dadosOperacionais': dadosOperacionais?.toMap(),
+    'endereco': endereco?.toMap(), 'horarios': horarios?.toMap(),
+  };
 }
 
 class DadosOperacionais {
@@ -77,6 +84,12 @@ class DadosOperacionais {
       totalAvaliacoes: safeInt(map['totalAvaliacoes']),
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'avaliacaoMedia': avaliacaoMedia, 'taxaEntregaBase': taxaEntregaBase,
+    'tempoEntregaMin': tempoEntregaMin, 'tempoEntregaMax': tempoEntregaMax,
+    'totalAvaliacoes': totalAvaliacoes,
+  };
 }
 
 class EnderecoLoja {
@@ -103,6 +116,11 @@ class EnderecoLoja {
       cep: map['cep']?.toString() ?? '',
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'rua': rua, 'numero': numero, 'cidade': cidade,
+    'estado': estado, 'cep': cep,
+  };
 }
 
 class HorariosLoja {
@@ -135,4 +153,9 @@ class HorariosLoja {
       sabado: map['sabado']?.toString() ?? 'Fechado',
     );
   }
+
+  Map<String, dynamic> toMap() => {
+    'domingo': domingo, 'segunda': segunda, 'terca': terca,
+    'quarta': quarta, 'quinta': quinta, 'sexta': sexta, 'sabado': sabado,
+  };
 }

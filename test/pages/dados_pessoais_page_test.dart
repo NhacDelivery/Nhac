@@ -26,6 +26,8 @@ class MockUserProvider extends ChangeNotifier implements UserProvider {
 
   @override
   bool get isLoading => false;
+  @override
+  String? get erro => null;
 
   @override
   void limparUsuario() {}
@@ -42,6 +44,19 @@ class MockUserProvider extends ChangeNotifier implements UserProvider {
   bool get isPhoneUser => false;
 }
 
+class IndisponivelUserProvider extends MockUserProvider {
+  @override
+  UsuarioModel? get usuario => recuperado ? super.usuario : null;
+  bool recuperado = false;
+  @override
+  String? get erro => recuperado ? null : 'Não foi possível carregar o perfil.';
+  @override
+  Future<void> carregarDadosUsuario() async {
+    recuperado = true;
+    notifyListeners();
+  }
+}
+
 void main() {
   Widget createWidgetUnderTest(UserProvider provider, bool isGoogle) {
     return ScreenUtilInit(
@@ -55,18 +70,20 @@ void main() {
     );
   }
 
-  testWidgets('Deve mostrar os dados básicos do usuário', (WidgetTester tester) async {
+  testWidgets('Deve mostrar os dados básicos do usuário',
+      (WidgetTester tester) async {
     final mockProvider = MockUserProvider();
 
     await tester.pumpWidget(createWidgetUnderTest(mockProvider, true));
     await tester.pump();
 
     expect(find.text('E-mail'), findsOneWidget);
-    expect(find.text('teste@google.com'), findsOneWidget);
+    expect(find.textContaining('teste@google.com'), findsOneWidget);
     expect(find.text('Usuario Teste'), findsOneWidget);
   });
 
-  testWidgets('Deve habilitar clique para usuário comum', (WidgetTester tester) async {
+  testWidgets('Deve habilitar clique para usuário comum',
+      (WidgetTester tester) async {
     final mockProvider = MockUserProvider();
 
     await tester.pumpWidget(createWidgetUnderTest(mockProvider, false));
@@ -76,10 +93,35 @@ void main() {
       of: find.text('E-mail'),
       matching: find.byType(InkWell),
     );
-    
+
     expect(emailItem, findsOneWidget);
 
     final inkWell = tester.widget<InkWell>(emailItem);
     expect(inkWell.onTap, isNotNull);
+  });
+  testWidgets('Google e telefone são claramente somente leitura',
+      (tester) async {
+    await tester.pumpWidget(createWidgetUnderTest(MockUserProvider(), true));
+    await tester.pump();
+    for (final titulo in ['Telefone', 'E-mail']) {
+      final tile =
+          find.ancestor(of: find.text(titulo), matching: find.byType(InkWell));
+      expect(tester.widget<InkWell>(tile).onTap, isNull);
+    }
+    expect(find.textContaining('Gerenciado pela sua conta Google'),
+        findsOneWidget);
+    expect(find.textContaining('Não pode ser alterado pelo aplicativo'),
+        findsOneWidget);
+  });
+
+  testWidgets('dados pessoais com erro oferece retry e recupera perfil',
+      (tester) async {
+    final provider = IndisponivelUserProvider();
+    await tester.pumpWidget(createWidgetUnderTest(provider, true));
+    await tester.pumpAndSettle();
+    expect(find.text('Não foi possível carregar o perfil.'), findsOneWidget);
+    await tester.tap(find.text('Tentar novamente'));
+    await tester.pumpAndSettle();
+    expect(find.text('Usuario Teste'), findsOneWidget);
   });
 }

@@ -17,6 +17,10 @@ RUN_E2E=true E2E_REPEAT=3 ./tool/run_e2e.sh
 Use Java 25 para compilar o backend e defina `BACKEND_JAVA_HOME` se o JDK atual
 for diferente. O script usa o jar já compilado, reinicia o backend antes de cada
 cenário para recriar as fixtures e grava logs e evidências em `e2e-logs/`.
+Antes de instalar o APK, confere os contratos de cards, promoções, login,
+pedidos ativos e feed, além da presença do produto fixture. Um backend antigo
+falha nessa etapa com a rota HTTP, em vez de gerar timeout na tela da loja.
+O CI fixa o commit do backend `feature/feed-api` compatível com esses contratos.
 Com `E2E_REPEAT=3`, executa três rodadas independentes sem retry; com uma única
 rodada, repete uma vez cada teste que falhar e registra `flaky` no resumo.
 O arquivo `.env` é a fonte da URL e do modo E2E; o runner rejeita URLs fora do

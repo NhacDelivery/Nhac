@@ -2,6 +2,7 @@ import 'package:nhac/utils/safe_parse_helpers.dart';
 
 class AvaliacoesModel {
   final String comentario;
+  final List<String> imagens;
   final String? criadoEm;
   final String id;
   final String nomeUsuario;
@@ -10,6 +11,7 @@ class AvaliacoesModel {
 
   AvaliacoesModel({
     this.comentario = '',
+    this.imagens = const [],
     this.criadoEm,
     required this.id,
     required this.nomeUsuario,
@@ -24,19 +26,19 @@ class AvaliacoesModel {
     String? nomeUsuario,
     double? nota,
     String? userId,
-  }) =>
-      AvaliacoesModel(
-        comentario: comentario ?? this.comentario,
-        criadoEm: criadoEm ?? this.criadoEm,
-        id: id ?? this.id,
-        nomeUsuario: nomeUsuario ?? this.nomeUsuario,
-        nota: nota ?? this.nota,
-        userId: userId ?? this.userId,
-      );
+  }) => AvaliacoesModel(
+    comentario: comentario ?? this.comentario,
+    criadoEm: criadoEm ?? this.criadoEm,
+    id: id ?? this.id,
+    nomeUsuario: nomeUsuario ?? this.nomeUsuario,
+    nota: nota ?? this.nota,
+    userId: userId ?? this.userId,
+  );
 
   factory AvaliacoesModel.fromMap(Map<String, dynamic> map, String docId) {
     return AvaliacoesModel(
       comentario: map['comentario'] ?? '',
+      imagens: List<String>.from(map['imagens'] as List? ?? []),
       criadoEm: (map['dataCriacao'] ?? map['criadoEm'])?.toString(),
       id: docId,
       nomeUsuario: map['nomeUsuario'] ?? '',

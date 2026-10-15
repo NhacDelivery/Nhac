@@ -1,9 +1,11 @@
 class TopCommentModel {
+  final DateTime? criadoEm;
   final String nomeUsuario;
   final String conteudo;
   final int curtidas;
 
   const TopCommentModel({
+    this.criadoEm,
     required this.nomeUsuario,
     required this.conteudo,
     required this.curtidas,
@@ -11,12 +13,14 @@ class TopCommentModel {
 }
 
 class MentionedStoreModel {
+  final String? id;
   final String nome;
   final String imageUrl;
   final double rating;
   final String avaliacoes;
 
   const MentionedStoreModel({
+    this.id,
     required this.nome,
     required this.imageUrl,
     required this.rating,
@@ -26,7 +30,9 @@ class MentionedStoreModel {
 
 class FeedPostModel {
   final String id;
+  final DateTime? criadoEm;
   final String nomeUsuario;
+  final String? usuarioId;
   final String? avatarUrl;
   final String? badge;
   final String? dispositivo;
@@ -34,6 +40,10 @@ class FeedPostModel {
   final List<String> imagens;
   final int curtidas;
   final int comentarios;
+  final int salvos;
+  final bool curtido;
+  final bool salvo;
+  final bool podeEditar;
   final List<String> hashTags;
   final bool isPatrocinado;
   final String? sponsorLabel;
@@ -42,18 +52,63 @@ class FeedPostModel {
 
   const FeedPostModel({
     required this.id,
+    this.criadoEm,
     required this.nomeUsuario,
     this.avatarUrl,
+    this.usuarioId,
     this.badge,
     this.dispositivo,
     required this.conteudo,
     this.imagens = const [],
     required this.curtidas,
     required this.comentarios,
+    this.salvos = 0,
+    this.curtido = false,
+    this.salvo = false,
+    this.podeEditar = false,
     this.hashTags = const [],
     this.isPatrocinado = false,
     this.sponsorLabel,
     this.topComment,
     this.mentionedStore,
   });
+
+  factory FeedPostModel.fromMap(Map<String, dynamic> map) {
+    final store = map['mentionedStore'] as Map?;
+    return FeedPostModel(
+      id: map['id'] as String,
+      criadoEm: DateTime.tryParse(map['criadoEm'] as String? ?? ''),
+      nomeUsuario: map['nomeUsuario'] as String,
+      usuarioId: map['usuarioId'] as String?,
+      topComment: map['topComment'] is Map
+          ? TopCommentModel(
+              nomeUsuario: map['topComment']['nomeUsuario'] as String,
+              conteudo: map['topComment']['conteudo'] as String,
+              curtidas: (map['topComment']['curtidas'] as num? ?? 0).toInt(),
+              criadoEm: DateTime.tryParse(map['topComment']['criadoEm'] as String? ?? ''),
+            )
+          : null,
+      avatarUrl: map['avatarUrl'] as String?,
+      conteudo: map['conteudo'] as String,
+      imagens: List<String>.from(map['imagens'] as List? ?? const []),
+      hashTags: List<String>.from(map['hashTags'] as List? ?? const []),
+      curtidas: (map['curtidas'] as num).toInt(),
+      comentarios: (map['comentarios'] as num).toInt(),
+      salvos: (map['salvos'] as num? ?? 0).toInt(),
+      curtido: map['curtido'] == true,
+      salvo: map['salvo'] == true,
+      podeEditar: map['podeEditar'] == true,
+      isPatrocinado: map['isPatrocinado'] == true,
+      sponsorLabel: map['sponsorLabel'] as String?,
+      mentionedStore: store == null
+          ? null
+          : MentionedStoreModel(
+              id: store['id'] as String?,
+              nome: store['nome'] as String,
+              imageUrl: store['imageUrl'] as String? ?? '',
+              rating: (store['rating'] as num? ?? 0).toDouble(),
+              avaliacoes: store['avaliacoes'] as String? ?? '0 avaliações',
+            ),
+    );
+  }
 }

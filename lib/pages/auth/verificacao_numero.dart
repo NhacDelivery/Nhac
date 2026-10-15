@@ -64,6 +64,7 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
   Future<void> _reenviarCodigo() async {
     try {
       await context.read<AuthService>().enviarCodigoSms(widget.numero);
+      if (!mounted) return;
       _iniciarTimer();
       if (mounted) {
         context.showSuccess("Código reenviado com sucesso!");
@@ -100,8 +101,8 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-             const SetaVoltar(),
-             const SizedBox(height: 18.0),
+                const SetaVoltar(),
+                const SizedBox(height: 18.0),
                 const Text(
                   'Verifique seu número',
                   style: TextStyle(
@@ -153,15 +154,18 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
                     fieldHeight: 55.0,
                   ),
                   onChanged: (value) {},
-                 onCompleted: (value) async {
+                  onCompleted: (value) async {
                     final localContext = context;
                     final authService = localContext.read<AuthService>();
-                    
+
                     try {
-                      final isNovoUsuario = await authService.loginSms(widget.numero, value);
-                      
+                      final isNovoUsuario = await authService.loginSms(
+                        widget.numero,
+                        value,
+                      );
+
                       if (!localContext.mounted) return;
-                      
+
                       if (isNovoUsuario) {
                         localContext.push('/cadastro/nome');
                       } else {
@@ -173,8 +177,8 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
                       }
                     }
                   },
-                  
-                   autoFocus: true,
+
+                  autoFocus: true,
                   enableActiveFill: true,
                   cursorColor: const Color(0xFFFF6961),
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,

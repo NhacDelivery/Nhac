@@ -47,7 +47,8 @@ class LiveNotificationManager(private val context: Context) {
 
     private fun buildNotification(pedidoId: String, nomeProduto: String, status: String, tempoEstimado: String, stageIndex: Int): android.app.Notification {
         val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("pedidoId", pedidoId)
         }
 
         val pendingIntent = PendingIntent.getActivity(

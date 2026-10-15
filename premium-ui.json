@@ -1,0 +1,27 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": [
+    "lib",
+    "web"
+  ],
+  "locale": "pt-BR",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": [
+    "Toast",
+    "CRUD"
+  ],
+  "requiredCommands": [
+    "unit",
+    "analyze",
+    "build"
+  ],
+  "commands": {
+    "unit": "flutter test",
+    "analyze": "flutter analyze --no-fatal-infos",
+    "build": "flutter build web --release"
+  },
+  "evidence": {
+    "failurePaths": "test/repositories/pedido_repository_test.dart",
+    "crudFullFlow": "integration_test/client_order_cash_e2e_test.dart"
+  }
+}

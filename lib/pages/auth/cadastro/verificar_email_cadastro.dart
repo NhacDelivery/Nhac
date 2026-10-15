@@ -17,6 +17,7 @@ import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:provider/provider.dart';
+import 'package:nhac/services/local_cache_service.dart';
 
 class VerificarEmailCadastro extends StatefulWidget {
   final String email;
@@ -39,6 +40,7 @@ class _VerificarEmailCadastroState extends State<VerificarEmailCadastro> {
   @override
   void initState() {
     super.initState();
+    if (widget.email.isNotEmpty) LocalCacheService.salvarEmailVerificacao(widget.email);
     _iniciarTimer();
   }
 
@@ -84,6 +86,7 @@ class _VerificarEmailCadastroState extends State<VerificarEmailCadastro> {
     setState(() => _validando = true);
     try {
       await authService.confirmarEmailCadastro(widget.email, codigo);
+      await LocalCacheService.limparEmailVerificacao();
       if (!localContext.mounted) return;
       // A partir daqui o backend libera o POST /auth/registrar por 30 min.
       localContext.push('/cadastro/nome');

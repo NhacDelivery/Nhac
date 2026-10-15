@@ -1,3 +1,4 @@
+import 'package:nhac/components/selecionar_endereco_padrao.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
@@ -10,7 +11,7 @@ class HomeAddressBottomSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final enderecos = context.watch<EnderecoProvider>().enderecos;
-    
+
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -52,43 +53,48 @@ class HomeAddressBottomSheet extends StatelessWidget {
               separatorBuilder: (_, __) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final endereco = enderecos[index];
-                return ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  onTap: () async {
-                    await context
-                        .read<EnderecoProvider>()
-                        .definirComoPadrao(endereco.id);
-                    if (context.mounted) Navigator.pop(context);
-                  },
-                  leading: Container(
-                    padding: EdgeInsets.all(8.w),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFF6961).withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      endereco.bairro.toLowerCase().contains('trabalho') ||
-                             (endereco.complemento ?? '').toLowerCase().contains('trabalho')
-                          ? Icons.work_outline
-                          : Icons.home_outlined,
-                      color: const Color(0xFFFF6961),
-                      size: 20.r,
-                    ),
-                  ),
-                  title: Text('${endereco.rua}, ${endereco.numero}',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 15.sp)),
-                  subtitle: Text(
-                    '${endereco.bairro}${(endereco.complemento?.isNotEmpty ?? false) ? ' - ${endereco.complemento}' : ''}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 13.sp),
-                  ),
-                  trailing: endereco.isPadrao
-                      ? Icon(Icons.check_circle,
-                          color: const Color(0xFFFF6961), size: 22.r)
-                      : null,
-                );
+                return Material(
+                    type: MaterialType.transparency,
+                    child: ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      onTap: () async {
+                        if (!await selecionarEnderecoPadrao(
+                            context, endereco.id)) {
+                          return;
+                        }
+                        if (context.mounted) Navigator.pop(context);
+                      },
+                      leading: Container(
+                        padding: EdgeInsets.all(8.w),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFF6961).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          endereco.bairro.toLowerCase().contains('trabalho') ||
+                                  (endereco.complemento ?? '')
+                                      .toLowerCase()
+                                      .contains('trabalho')
+                              ? Icons.work_outline
+                              : Icons.home_outlined,
+                          color: const Color(0xFFFF6961),
+                          size: 20.r,
+                        ),
+                      ),
+                      title: Text('${endereco.rua}, ${endereco.numero}',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 15.sp)),
+                      subtitle: Text(
+                        '${endereco.bairro}${(endereco.complemento?.isNotEmpty ?? false) ? ' - ${endereco.complemento}' : ''}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 13.sp),
+                      ),
+                      trailing: endereco.isPadrao
+                          ? Icon(Icons.check_circle,
+                              color: const Color(0xFFFF6961), size: 22.r)
+                          : null,
+                    ));
               },
             ),
           ),
@@ -115,11 +121,12 @@ class HomeAddressBottomSheet extends StatelessWidget {
                       child: Icon(Icons.add, color: Colors.grey, size: 20.r),
                     ),
                     SizedBox(width: 16.w),
-                    Text('Adicionar novo endereço',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 15.sp,
-                            color: Colors.grey)),
+                    Expanded(
+                        child: Text('Adicionar novo endereço',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15.sp,
+                                color: Colors.grey))),
                   ],
                 ),
               ),

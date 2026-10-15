@@ -5,3 +5,15 @@ build/
 *.iml
 .idea/
 android/app/google-services.json
+/backend-work/
+/merchant-work/
+/*-tests.log
+/flutter-*.log
+/analyze-ux*.log
+/request-benchmark.log
+/test/.request_baseline/
+/test/.request_benchmark_test.dart
+
+.flutter-plugins
+.flutter-plugins-dependencies
+__pycache__/
