@@ -29,8 +29,8 @@ if ! [[ "$REPEAT" =~ ^[1-9][0-9]*$ ]] || [[ "$REPEAT" -gt 20 ]]; then
   exit 2
 fi
 case "$ONLY" in
-  all|contract_smoke|login|order_cash|delivery|payment_pix|payment_card) ;;
-  *) echo "E2E_ONLY aceita all, contract_smoke, login, order_cash, delivery, payment_pix ou payment_card." >&2; exit 2 ;;
+  all|contract_smoke|login|order_cash|delivery|payment_pix|payment_card|chat) ;;
+  *) echo "E2E_ONLY aceita all, contract_smoke, login, order_cash, delivery, payment_pix, payment_card ou chat." >&2; exit 2 ;;
 esac
 if [[ -z "$BACKEND_JAVA_HOME" || ! -x "$BACKEND_JAVA_HOME/bin/java" || ! -f "$BACKEND_JAR" ]]; then
   echo "Build do backend ou JDK ausente. Execute ./mvnw -B -ntp -DskipTests package com Java 25." >&2
@@ -168,10 +168,11 @@ declare -A test_files=(
   [delivery]=integration_test/client_delivery_e2e_test.dart
   [payment_pix]=integration_test/client_payment_pix_e2e_test.dart
   [payment_card]=integration_test/client_payment_card_e2e_test.dart
+  [chat]=integration_test/client_chat_e2e_test.dart
 )
 DEFINES=(--dart-define=RUN_E2E=true --dart-define="E2E_PASSWORD=$E2E_PASSWORD")
 tests=()
-for name in contract_smoke login order_cash delivery payment_pix payment_card; do
+for name in contract_smoke login order_cash delivery payment_pix payment_card chat; do
   if [[ "$ONLY" == all || "$ONLY" == "$name" ]]; then
     tests+=("$name")
     passed[$name]=0 failed[$name]=0 retried[$name]=0 elapsed[$name]=0

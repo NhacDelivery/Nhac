@@ -190,3 +190,38 @@ Em destaque na loja usa desconto > 0; Vendidos ordena quantidades de pedidos ENT
 Percentual positivo da loja usa suas avaliações com nota >= 4 e não afirma percentual por produto.
 Recuperação do checkout subtrai só produto/quantidade/loja do payload original e grava um recibo
 junto ao carrinho, conservando itens adicionais e evitando novo consumo no replay.
+
+
+## Chat e erros — passo 4
+
+Fontes: `backend-nhac/docs/chat-clientes.md`, `ConversaClienteController`,
+`ChatService` e DTOs de mensagens. O backend existente é suficiente; não há
+nova regra de permissão nesta mudança.
+
+| Capability | Canonical owner | Source of truth | Allowed variants | Verification |
+|---|---|---|---|---|
+| CRUD | ChatRepository / ChatConversaPage | API /conversas e clientMessageId | pessoa / loja / pedido / produto | chat_passo4_test.dart; client_chat_e2e_test.dart |
+| Toast | ErrorUIHelper / AppUiUtils | exceções tipadas da API | banner persistente / notificação | error_ui_helper_test.dart |
+
+- Pessoas e Lojas conservam listas, páginas e posição por aba. Consultar novamente
+  não transforma falha em caixa vazia. Retry repete a operação que falhou.
+- Buscar filtra nome e prévia das conversas carregadas. O texto do campo informa
+  esse alcance; carregar mais continua disponível durante o filtro. A busca é
+  local e temporária, sem enviar conteúdo privado para URLs ou analytics.
+- Tocar em Pessoas abre o ID existente, sem criar uma conversa com loja. O autor
+  é definido por remetenteUsuarioId e pela sessão; CLIENTE não significa “eu”.
+- Loja, pessoa, pedido e produto reutilizam ChatConversaPage. O texto só é limpo
+  após a mensagem confirmada. IDs deduplicam socket, histórico e resposta REST.
+- Socket indisponível usa POST de mensagem por REST. Ausência de confirmação por
+  15 segundos tenta REST uma vez com o mesmo clientMessageId; erro conserva a
+  tentativa e permite reenvio com o mesmo ID. Não afirmar falha definitiva quando
+  a persistência é incerta. Envio pendente bloqueia alterações do mesmo texto.
+- Reconectar restabelece o socket e atualiza o histórico. Em primeiro plano, uma
+  conexão indisponível consulta o histórico a cada 15 segundos sem sobreposição.
+  Sair ou colocar o aplicativo em segundo plano interrompe essas consultas.
+- Falhas persistentes usam BannerErroInline e ErrorUIHelper; textos tipados do
+  backend são preservados. Falhas técnicas desconhecidas não exibem detalhes
+  internos. Não existem botões de busca/menu/criação de conversa sem operação.
+
+Verificação visual: capturas de estados de widgets no job Chat e estados de
+recuperação. Não equivalem a uma certificação de browser/acessibilidade completa.
