@@ -104,6 +104,7 @@ void main() {
             TextButton(onPressed: () => context.pop(), child: const Text('Voltar sem publicar')),
             TextButton(onPressed: () => context.pop(FeedPostModel.fromMap({
               'id': 'novo', 'conteudo': 'Meu prato', 'nomeUsuario': 'Cliente',
+              'curtidas': 0, 'comentarios': 0,
             })), child: const Text('Concluir publicação')),
           ]),
         )),
