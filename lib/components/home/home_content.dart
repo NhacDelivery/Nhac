@@ -207,8 +207,6 @@ class _HomeContentState extends State<HomeContent>
 
   /// Constrói o mapa de status aberta/fechada a partir do campo `lojaAberta`
   /// que já vem em cada produto na resposta de `/produtos`.
-  /// Substitui o antigo `_atualizarStatusLojas` que fazia N chamadas
-  /// `GET /lojas/{id}` em paralelo.
   void _aplicarStatusLojas() {
     if (!mounted) return;
 

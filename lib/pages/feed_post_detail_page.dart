@@ -988,7 +988,6 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     );
   }
 
-  // ─── Post Images ──────────────────────────────────────────────────────────
 
   Widget _buildPostImages(List<String> imagens) {
     if (imagens.length == 1) {
@@ -1042,7 +1041,6 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     );
   }
 
-  // ─── Comment Card ─────────────────────────────────────────────────────────
 
   Widget _buildCommentCard(FeedCommentModel comment) {
     return Container(
@@ -1178,7 +1176,6 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     );
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
 
   Widget _buildAvatar(String? url, double size) {
     return ClipOval(
@@ -1431,7 +1428,6 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   }
 }
 
-// ─── Sticky Tab Delegate ─────────────────────────────────────────────────────
 
 class _StickyTabDelegate extends SliverPersistentHeaderDelegate {
   const _StickyTabDelegate({required this.child});

@@ -248,10 +248,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
     final cidade = (result['cidade'] as String?) ?? '';
     final estado = (result['estado'] as String?) ?? '';
 
-    // BUG CORRIGIDO: validação mais granular para dar feedback específico
-    // ao usuário sobre qual campo está faltando. Isso evita o erro 400
-    // do backend quando o Google Places API não retorna CEP para endereços
-    // genéricos (ex: "Rua Augusta" sem número).
+    // O Google Places API pode não retornar CEP para endereços genéricos.
     final camposFaltando = <String>[];
     if (rua.isEmpty) camposFaltando.add('rua');
     if (bairro.isEmpty) camposFaltando.add('bairro');
@@ -866,10 +863,7 @@ class _BuscaEnderecoOverlayState extends State<_BuscaEnderecoOverlay> {
             }
           }
 
-          // BUG CORRIGIDO: O Google Places API às vezes não retorna CEP
-          // para endereços genéricos (ex: "Rua Augusta" sem número
-          // específico). Tentamos buscar o CEP via Geocoding API usando
-          // as coordenadas do lugar como fallback.
+          // Busca o CEP via Geocoding API usando as coordenadas como fallback.
           if (cep.isEmpty && result['geometry']?['location'] != null) {
             final lat = result['geometry']['location']['lat'];
             final lng = result['geometry']['location']['lng'];

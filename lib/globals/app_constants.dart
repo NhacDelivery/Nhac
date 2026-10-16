@@ -4,9 +4,6 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 @NowaGenerated()
 class AppConstants {
-  // ============================================================
-  // API
-  // ============================================================
 
   static String get apiBaseUrl {
     final value = dotenv.env['API_BASE_URL'];
@@ -18,9 +15,6 @@ class AppConstants {
     return value.trim();
   }
 
-  // ============================================================
-  // E2E
-  // ============================================================
 
   static bool get e2eMode {
     return !kReleaseMode &&
@@ -44,9 +38,6 @@ class AppConstants {
     return double.tryParse(_e2eLongitude) ?? -46.633308;
   }
 
-  // ============================================================
-  // STRIPE
-  // ============================================================
 
   static String get stripePublishableKey {
     return dotenv.env['STRIPE_PUBLISHABLE_KEY']?.trim() ?? '';
@@ -58,17 +49,11 @@ class AppConstants {
         stripePublishableKey.length >= 30;
   }
 
-  // ============================================================
-  // SENTRY
-  // ============================================================
 
   static String get sentryDsn {
     return dotenv.env['SENTRY_DSN']?.trim() ?? '';
   }
 
-  // ============================================================
-  // GOOGLE
-  // ============================================================
 
   static String get googleApiKey {
     return dotenv.env['GOOGLE_API_KEY']?.trim() ?? '';
@@ -87,9 +72,6 @@ class AppConstants {
     return googleApiKey;
   }
 
-  // ============================================================
-  // CACHE LOCAL - SharedPreferences
-  // ============================================================
 
   static const String cacheKeyCarrinho = '@nhac_cart_items';
   static const String cacheKeyUsuario = 'cache_usuario';
@@ -99,9 +81,6 @@ class AppConstants {
   static const String cacheKeySearchHistory =
       'cache_search_history';
 
-  // ============================================================
-  // FlutterSecureStorage
-  // ============================================================
 
   static const String secureKeyToken = 'secure_token';
   static const String secureKeyUsuarioId = 'secure_usuario_id';
@@ -110,9 +89,6 @@ class AppConstants {
   static const String secureKeyLoginTelefone =
       'secure_login_telefone';
 
-  // ============================================================
-  // Validação E2E
-  // ============================================================
 
   static void validateE2EConfiguration() {
     if (!e2eMode) {
