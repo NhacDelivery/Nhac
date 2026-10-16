@@ -245,3 +245,22 @@ mostra o mesmo acompanhamento. Publicar o backend com V1023 antes do app.
 | Capability | Canonical owner | Source of truth | Allowed variants | Verification |
 |---|---|---|---|---|
 | CRUD | PedidoRepository / OperacaoPagamentoCard / confirmarNhac | autorização e fila persistida do backend | solicitação e acompanhamento | test/components/operacao_pagamento_card_test.dart |
+
+
+## Home com catálogo pequeno (16/10/2026)
+
+HomeCategoryChips é o único dono dos atalhos de categorias na home. Os banners
+mostram produtos reais e abrem seus detalhes, usando as próprias imagens e nomes.
+Não fazem outra consulta de categorias e não usam uma foto genérica para sugerir
+conteúdo que não existe. O carrossel pausa fora da rota/app ativo ou com redução
+de movimento e se ajusta quando o catálogo muda.
+
+HomeProductSelection deriva as seções sem filtrar/truncar o catálogo original:
+prioriza lojas abertas, deduplica por ID e limita cada seção a dez itens. A faixa
+abaixo de R$ 20 usa o preço real, inclusive sem desconto. Se nenhum produto atende,
+mostra “Explore o cardápio” com produtos existentes, sem inventar oferta/preço.
+As duas seções podem compartilhar produtos quando o catálogo é pequeno. Lojas
+fechadas continuam visíveis para consulta, com identificação e bloqueio existente
+de adição; o servidor permanece responsável por autorizar a compra. Falhas mantêm
+os produtos carregados e o retry; consulta bem-sucedida sem produtos é o único vazio.
+O catálogo é solicitado com lojas abertas primeiro, antes do limite de 50 itens.

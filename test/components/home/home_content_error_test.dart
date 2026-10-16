@@ -27,6 +27,7 @@ void main() {
     dotenv.testLoad(fileInput: 'E2E_MODE=true\nAPI_BASE_URL=http://localhost:8080');
     final lojas = MockLojaRepository();
     final produtos = MockProdutoRepository();
+    when(() => produtos.buscarCategorias()).thenAnswer((_) async => []);
     final auth = MockAuthService();
     final enderecos = MockEnderecoProvider();
     final connectivity = MockConnectivityService();

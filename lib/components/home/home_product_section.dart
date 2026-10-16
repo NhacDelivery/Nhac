@@ -107,10 +107,19 @@ class HomeProductSection extends StatelessWidget {
                           child: ProductCard(
                             produto: item,
                             lojaFechada:
-                                (lojaAberta[item.lojaId] ?? false) == false,
+                                (lojaAberta[item.lojaId] ?? item.lojaAberta) == false,
                             onFlyToCart: onFlyToCart,
                           ),
                         ),
+                        if (!(lojaAberta[item.lojaId] ?? item.lojaAberta))
+                          Positioned(top: 8, left: 8, right: 24,
+                            child: IgnorePointer(child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(color: Colors.white,
+                                borderRadius: BorderRadius.circular(8)),
+                              child: const Text('Loja fechada', style: TextStyle(
+                                color: Color(0xFF5D201C), fontWeight: FontWeight.w600)),
+                            ))),
                       ],
                     );
                   },

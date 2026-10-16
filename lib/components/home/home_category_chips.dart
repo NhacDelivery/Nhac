@@ -3,13 +3,15 @@ import 'package:go_router/go_router.dart';
 import 'package:nhac/repositories/produto_repository.dart';
 
 class HomeCategoryChips extends StatefulWidget {
-  const HomeCategoryChips({super.key});
+  final ProdutoRepository? repository;
+  const HomeCategoryChips({super.key, this.repository});
   @override
   State<HomeCategoryChips> createState() => _HomeCategoryChipsState();
 }
 
 class _HomeCategoryChipsState extends State<HomeCategoryChips> {
-  late Future<List<String>> _future = ProdutoRepository().buscarCategorias();
+  late final ProdutoRepository _repository = widget.repository ?? ProdutoRepository();
+  late Future<List<String>> _future = _repository.buscarCategorias();
   @override
   Widget build(BuildContext context) => FutureBuilder<List<String>>(
     future: _future,
@@ -17,7 +19,7 @@ class _HomeCategoryChipsState extends State<HomeCategoryChips> {
       if (snapshot.hasError)
         return TextButton.icon(
           onPressed: () => setState(() {
-            _future = ProdutoRepository().buscarCategorias();
+            _future = _repository.buscarCategorias();
           }),
           icon: const Icon(Icons.refresh),
           label: const Text('Tentar carregar categorias'),
