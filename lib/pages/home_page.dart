@@ -230,8 +230,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     ignoring: !(_isScrolledDown && _selectedIndex == 0),
                     child: AnimatedOpacity(
                       duration: const Duration(milliseconds: 200),
-                      opacity:
-                          (_isScrolledDown && _selectedIndex == 0) ? 1.0 : 0.0,
+                      opacity: (_isScrolledDown && _selectedIndex == 0) ? 1.0 : 0.0,
                       child: Semantics(
                         button: true,
                         label: 'Voltar ao topo da página',
@@ -316,106 +315,90 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   Widget _buildDynamicNavBar() {
-    return GestureDetector(
-      onTap: () {
-        if (_isScrolledDown) {
-          if (_selectedIndex == 0) {
-            _scrollToTop();
-          } else {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(50.r),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF5D201C).withValues(alpha: 0.1),
+            blurRadius: 15.r,
+            offset: Offset(0, 9.h),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(50.r),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: (index) {
+            final oldIndex = _selectedIndex;
             setState(() {
-              _isScrolledDown = false;
+              _selectedIndex = index;
             });
-          }
-        }
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOutCubic,
-        constraints: BoxConstraints(minHeight: 75.h),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(50.r),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF5D201C).withValues(alpha: 0.1),
-              blurRadius: 15.r,
-              offset: Offset(0, 9.h),
+            _pageController.animateToPage(
+              index,
+              duration: const Duration(milliseconds: 400),
+              curve: Curves.fastOutSlowIn,
+            );
+
+            if (index == 1) {
+              final cart = context.read<CartProvider>();
+              if (cart.itens.isNotEmpty) {
+                _cartBarController.forward();
+              }
+            } else if (oldIndex == 1) {
+              _cartBarController.animateBack(0,
+                  duration: const Duration(milliseconds: 150));
+            }
+          },
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          selectedItemColor: const Color(0xFFFF6961),
+          unselectedItemColor: const Color(0xFFA0A0A0),
+          selectedLabelStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 12.sp),
+          unselectedLabelStyle: TextStyle(fontSize: 12.sp),
+          items: [
+            const BottomNavigationBarItem(
+              icon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(Icons.house_outlined),
+              ),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Selector<CartProvider, int>(
+                  selector: (context, provider) => provider.totalDeUnidades,
+                  builder: (context, count, child) {
+                    return Badge(
+                      key: _cartIconKey,
+                      label: count > 0 ? Text(count.toString()) : null,
+                      isLabelVisible: count > 0,
+                      backgroundColor: const Color(0xFFFF6961),
+                      child: Icon(Icons.shopping_cart_outlined),
+                    );
+                  },
+                ),
+              ),
+              label: 'Carrinho',
+            ),
+            const BottomNavigationBarItem(
+              icon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(Icons.newspaper_outlined),
+              ),
+              label: 'Feed',
+            ),
+            const BottomNavigationBarItem(
+              icon: Padding(
+                padding: EdgeInsets.only(bottom: 4),
+                child: Icon(Icons.person_outline),
+              ),
+              label: 'Perfil',
             ),
           ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(50.r),
-          child: AnimatedCrossFade(
-            duration: const Duration(milliseconds: 300),
-            crossFadeState: CrossFadeState.showFirst,
-            alignment: Alignment.center,
-            layoutBuilder:
-                (topChild, topChildKey, bottomChild, bottomChildKey) {
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  Positioned(
-                    key: bottomChildKey,
-                    top: 0,
-                    bottom: 0,
-                    child: bottomChild,
-                  ),
-                  Positioned(
-                    key: topChildKey,
-                    child: topChild,
-                  ),
-                ],
-              );
-            },
-            firstChild: ConstrainedBox(
-              constraints: BoxConstraints(
-                minWidth: MediaQuery.of(context).size.width - 48.w,
-                minHeight: 75.h,
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                physics: const NeverScrollableScrollPhysics(),
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    minWidth: MediaQuery.of(context).size.width - 48.w,
-                    minHeight: 75.h,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildNavItem(
-                          icon: Icons.house_outlined, label: 'Home', index: 0),
-                      _buildNavItem(
-                          icon: Icons.shopping_cart_outlined,
-                          label: 'Carrinho',
-                          index: 1),
-                      _buildNavItem(
-                          icon: Icons.newspaper_outlined,
-                          label: 'Feed',
-                          index: 2),
-                      _buildNavItem(
-                          icon: Icons.person_outline,
-                          label: 'Perfil',
-                          index: 3),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            secondChild: ConstrainedBox(
-              constraints: BoxConstraints(
-                minWidth: 75.w,
-                minHeight: 75.h,
-              ),
-              child: Center(
-                child: Icon(
-                  _getIconForIndex(_selectedIndex),
-                  size: 28.sp,
-                  color: const Color(0xFFFF6961),
-                ),
-              ),
-            ),
-          ),
         ),
       ),
     );
@@ -479,8 +462,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         );
                       },
                       child: Selector<CartProvider, int>(
-                        selector: (context, provider) =>
-                            provider.totalDeUnidades,
+                        selector: (context, provider) => provider.totalDeUnidades,
                         builder: (context, count, child) {
                           return Badge(
                             key: _cartIconKey,
