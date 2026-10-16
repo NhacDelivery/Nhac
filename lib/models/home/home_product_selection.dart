@@ -5,7 +5,8 @@ class HomeProductSelection {
   final List<ProdutosModel> principais;
   final List<ProdutosModel> secundarios;
   final String tituloSecundario;
-  HomeProductSelection._(this.principais, this.secundarios, this.tituloSecundario);
+  HomeProductSelection._(
+      this.principais, this.secundarios, this.tituloSecundario);
 
   factory HomeProductSelection.from(
       List<ProdutosModel> catalogo, List<ProdutosModel> promocoes) {
@@ -16,9 +17,9 @@ class HomeProductSelection {
     final todos = porId.values.toList();
     // Partição estável: lojas abertas primeiro, sem embaralhar a cada resposta.
     List<ProdutosModel> priorizar(Iterable<ProdutosModel> itens) => [
-      ...itens.where((p) => p.lojaAberta),
-      ...itens.where((p) => !p.lojaAberta),
-    ];
+          ...itens.where((p) => p.lojaAberta),
+          ...itens.where((p) => !p.lojaAberta),
+        ];
     final ordenados = priorizar(todos);
     final economicos = priorizar(todos.where((p) => p.preco < 20));
     return HomeProductSelection._(

@@ -15,25 +15,35 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MockLojaRepository extends Mock implements LojaRepository {}
+
 class MockProdutoRepository extends Mock implements ProdutoRepository {}
+
 class MockAuthService extends Mock implements AuthService {}
+
 class MockEnderecoProvider extends Mock implements EnderecoProvider {}
+
 class MockConnectivityService extends Mock implements ConnectivityService {}
 
 void main() {
-  testWidgets('Falha de servidor ao iniciar a home é tratada e não salva catálogo vazio', (tester) async {
+  testWidgets(
+      'Falha de servidor ao iniciar a home é tratada e não salva catálogo vazio',
+      (tester) async {
     SharedPreferences.setMockInitialValues({});
     LocalCacheService.limparCacheHome();
-    dotenv.testLoad(fileInput: 'E2E_MODE=true\nAPI_BASE_URL=http://localhost:8080');
+    dotenv.testLoad(
+        fileInput: 'E2E_MODE=true\nAPI_BASE_URL=http://localhost:8080');
     final lojas = MockLojaRepository();
     final produtos = MockProdutoRepository();
     when(() => produtos.buscarCategorias()).thenAnswer((_) async => []);
     final auth = MockAuthService();
     final enderecos = MockEnderecoProvider();
     final connectivity = MockConnectivityService();
-    when(() => lojas.buscarLojas(page: 0, size: 10)).thenAnswer((_) async => throw ServerException('Servidor indisponível'));
-    when(() => produtos.buscarNecessidades()).thenAnswer((_) async => throw ServerException());
-    when(() => produtos.buscarPromocoes()).thenAnswer((_) async => throw ServerException());
+    when(() => lojas.buscarLojas(page: 0, size: 10)).thenAnswer(
+        (_) async => throw ServerException('Servidor indisponível'));
+    when(() => produtos.buscarNecessidades())
+        .thenAnswer((_) async => throw ServerException());
+    when(() => produtos.buscarPromocoes())
+        .thenAnswer((_) async => throw ServerException());
     when(() => auth.usuarioId).thenReturn(null);
     when(() => enderecos.enderecos).thenReturn([]);
     when(() => enderecos.erro).thenReturn(null);
@@ -41,12 +51,24 @@ void main() {
     when(() => connectivity.isOnline).thenReturn(true);
     tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3;
-    addTearDown(() { tester.view.resetPhysicalSize(); tester.view.resetDevicePixelRatio(); });
-    await tester.pumpWidget(MultiProvider(providers: [
-      ChangeNotifierProvider<AuthService>.value(value: auth),
-      ChangeNotifierProvider<EnderecoProvider>.value(value: enderecos),
-      ChangeNotifierProvider<ConnectivityService>.value(value: connectivity),
-    ], child: ScreenUtilInit(designSize: const Size(390, 844), builder: (_, __) => MaterialApp(home: Scaffold(body: HomeContent(lojaRepository: lojas, produtoRepository: produtos))))));
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthService>.value(value: auth),
+          ChangeNotifierProvider<EnderecoProvider>.value(value: enderecos),
+          ChangeNotifierProvider<ConnectivityService>.value(
+              value: connectivity),
+        ],
+        child: ScreenUtilInit(
+            designSize: const Size(390, 844),
+            builder: (_, __) => MaterialApp(
+                home: Scaffold(
+                    body: HomeContent(
+                        lojaRepository: lojas,
+                        produtoRepository: produtos))))));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     expect(tester.takeException(), isNull);

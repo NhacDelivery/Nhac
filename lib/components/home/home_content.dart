@@ -210,10 +210,11 @@ class _HomeContentState extends State<HomeContent>
   /// que já vem em cada produto na resposta de `/produtos`.
   /// Substitui o antigo `_atualizarStatusLojas` que fazia N chamadas
   /// `GET /lojas/{id}` em paralelo.
-  HomeProductSelection get _selecao => HomeProductSelection.from(
-      _produtosNecessidades, _produtosPromocao);
+  HomeProductSelection get _selecao =>
+      HomeProductSelection.from(_produtosNecessidades, _produtosPromocao);
 
-  EstadoConteudo _estadoComProdutos(EstadoConteudo estado, List<ProdutosModel> produtos) {
+  EstadoConteudo _estadoComProdutos(
+      EstadoConteudo estado, List<ProdutosModel> produtos) {
     if (estado == EstadoConteudo.erro) return estado;
     return produtos.isNotEmpty ? EstadoConteudo.conteudo : estado;
   }
@@ -1209,7 +1210,8 @@ class _HomeContentState extends State<HomeContent>
                   child: EstadoComRetry<List<ProdutosModel>>(
                     mensagemErro:
                         'Não foi possível atualizar os produtos. Os dados anteriores podem estar desatualizados.',
-                    estado: _estadoComProdutos(_estadoProdutosNecessidades, _selecao.principais),
+                    estado: _estadoComProdutos(
+                        _estadoProdutosNecessidades, _selecao.principais),
                     dados: _selecao.principais,
                     aoTentarNovamente: () =>
                         _fetchProdutosNecessidades(isRefresh: true),
@@ -1246,7 +1248,8 @@ class _HomeContentState extends State<HomeContent>
                   child: EstadoComRetry<List<ProdutosModel>>(
                     mensagemErro:
                         'Não foi possível atualizar esta seleção. Exibindo os produtos já carregados.',
-                    estado: _estadoComProdutos(_estadoProdutosPromocao, _selecao.secundarios),
+                    estado: _estadoComProdutos(
+                        _estadoProdutosPromocao, _selecao.secundarios),
                     dados: _selecao.secundarios,
                     aoTentarNovamente: () =>
                         _fetchProdutosPromocao(isRefresh: true),

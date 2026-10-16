@@ -82,7 +82,11 @@ class _ProductCardState extends State<ProductCard>
                   borderRadius: BorderRadius.vertical(
                     top: Radius.circular(16.r),
                   ),
-                  child: CachedNetworkImage(
+                  child: widget.produto.imagemUrl.trim().isEmpty
+                      ? Container(color: const Color(0xFFFFF0EE),
+                          child: const Center(child: Icon(Icons.image_not_supported_outlined,
+                            color: Color(0xFF5D201C))))
+                      : CachedNetworkImage(
                     imageUrl: widget.produto.imagemUrl,
                     fit: BoxFit.cover,
                     width: double.infinity,

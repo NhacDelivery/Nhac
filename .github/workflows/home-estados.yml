@@ -44,6 +44,7 @@ jobs:
           path: |
             test/components/home/goldens/*.png
             test/failures/**
+            lib/components/product_card.dart
             lib/components/home/*.dart
             lib/models/home/*.dart
             lib/repositories/produto_repository.dart
