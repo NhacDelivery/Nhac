@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lottie/lottie.dart';
-import 'package:nhac/components/home/home_banner_carousel.dart';
+import 'package:nhac/components/feed_publish_invite.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/pages/search_page.dart';
 import 'package:nhac/repositories/feed_repository.dart';
@@ -156,6 +156,14 @@ class _FeedPageState extends State<FeedPage>
     }
   }
 
+  Future<void> _abrirPublicacao() async {
+    final post = await context.push<FeedPostModel>('/feed-publicar');
+    if (!mounted || post == null) return;
+    context.showSuccess('Publicação criada.');
+    _tabController.index = 0;
+    await _carregarPosts('Destaques');
+  }
+
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -169,34 +177,32 @@ class _FeedPageState extends State<FeedPage>
             refreshIndicatorExtent: 120.h,
             refreshTriggerPullDistance: 160.h,
             onRefresh: () => _carregarPosts(_categorias[_tabController.index]),
-            builder:
-                (
-                  context,
-                  refreshState,
-                  pulledExtent,
-                  refreshTriggerPullDistance,
-                  refreshIndicatorExtent,
-                ) {
-                  return Center(
-                    child: Opacity(
-                      opacity: (pulledExtent / refreshIndicatorExtent).clamp(
-                        0.0,
-                        1.0,
-                      ),
-                      child: Lottie.asset(
-                        'assets/animations/loading_nhac.json',
-                        width: 180.w,
-                        height: 180.h,
-                        animate:
-                            refreshState == RefreshIndicatorMode.refresh ||
-                            refreshState == RefreshIndicatorMode.armed,
-                      ),
-                    ),
-                  );
-                },
+            builder: (
+              context,
+              refreshState,
+              pulledExtent,
+              refreshTriggerPullDistance,
+              refreshIndicatorExtent,
+            ) {
+              return Center(
+                child: Opacity(
+                  opacity: (pulledExtent / refreshIndicatorExtent).clamp(
+                    0.0,
+                    1.0,
+                  ),
+                  child: Lottie.asset(
+                    'assets/animations/loading_nhac.json',
+                    width: 180.w,
+                    height: 180.h,
+                    animate: refreshState == RefreshIndicatorMode.refresh ||
+                        refreshState == RefreshIndicatorMode.armed,
+                  ),
+                ),
+              );
+            },
           ),
 
-          // ── Header: localização + search bar + carrossel ──────────────────
+          // Cabeçalho, busca e convite para publicar no feed.
           SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.fromLTRB(24.w, 16.h, 24.w, 0),
@@ -248,16 +254,7 @@ class _FeedPageState extends State<FeedPage>
                             Icons.edit_square,
                             color: Color(0xFF5D201C),
                           ),
-                          onPressed: () async {
-                            final post = await context.push<FeedPostModel>(
-                              '/feed-publicar',
-                            );
-                            if (!mounted || post == null) return;
-                            if (!context.mounted) return;
-                            context.showSuccess('Publicação criada.');
-                            _tabController.index = 0;
-                            await _carregarPosts('Destaques');
-                          },
+                          onPressed: _abrirPublicacao,
                         ),
                     ],
                   ),
@@ -274,11 +271,11 @@ class _FeedPageState extends State<FeedPage>
                                   const SearchPage(),
                           transitionsBuilder:
                               (context, animation, secondaryAnimation, child) {
-                                return FadeTransition(
-                                  opacity: animation,
-                                  child: child,
-                                );
-                              },
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
                           transitionDuration: const Duration(milliseconds: 300),
                         ),
                       );
@@ -322,8 +319,8 @@ class _FeedPageState extends State<FeedPage>
 
                   SizedBox(height: 24.h),
 
-                  // Carrossel de banners — o mesmo componente da Home
-                  if (!widget.salvos) const HomeBannerCarousel(),
+                  if (!widget.salvos)
+                    FeedPublishInvite(onPublish: _abrirPublicacao),
 
                   SizedBox(height: 24.h),
                 ],
@@ -909,9 +906,8 @@ class _FeedPageState extends State<FeedPage>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13.sp,
-                    color: active
-                        ? const Color(0xFFFF6961)
-                        : Colors.grey.shade600,
+                    color:
+                        active ? const Color(0xFFFF6961) : Colors.grey.shade600,
                   ),
                 ),
               ),

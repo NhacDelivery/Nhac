@@ -1,0 +1,46 @@
+name: Feed - convite e navegação
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/pages/feed_page.dart'
+      - 'lib/components/feed_publish_invite.dart'
+      - 'test/pages/feed*test.dart'
+      - '.github/workflows/feed-estados.yml'
+permissions:
+  contents: read
+concurrency:
+  group: feed-estados-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  estados:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.7'
+          cache: true
+      - uses: ./.github/actions/prepare-flutter-config
+        with:
+          env_file_content: ${{ secrets.ENV_FILE }}
+          google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - run: flutter pub get
+      - name: Formatar arquivos alterados
+        run: dart format lib/pages/feed_page.dart lib/components/feed_publish_invite.dart test/pages/feed_publish_invite_test.dart
+      - name: Feed, navegação, acessibilidade e capturas
+        run: flutter test --update-goldens --dart-define=CAPTURE_UI=true test/pages/feed_publish_invite_test.dart test/pages/feed_design_regression_test.dart test/pages/feed_merge_regression_test.dart test/pages/feed_content_test.dart test/components/feed_timestamp_test.dart
+      - run: flutter build web --release
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: feed-estados-e-fontes
+          path: |
+            test/pages/goldens/feed-*.png
+            test/failures/**
+            lib/pages/feed_page.dart
+            lib/components/feed_publish_invite.dart
+            test/pages/feed_publish_invite_test.dart
+          retention-days: 7

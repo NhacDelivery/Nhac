@@ -264,3 +264,13 @@ fechadas continuam visíveis para consulta, com identificação e bloqueio exist
 de adição; o servidor permanece responsável por autorizar a compra. Falhas mantêm
 os produtos carregados e o retry; consulta bem-sucedida sem produtos é o único vazio.
 O catálogo é solicitado com lojas abertas primeiro, antes do limite de 50 itens.
+
+
+## Entrada do feed
+
+O feed usa FeedPublishInvite para convidar a compartilhar uma experiência com comida.
+A ação reutiliza /feed-publicar e a mesma recuperação de publicação do cabeçalho.
+Voltar sem publicar preserva lista/categoria; publicar recarrega Destaques.
+Salvos não mostra o convite. Não consultar categorias de produtos, usar fotos
+genéricas, autoplay ou prometer promoções nesse espaço. Conteúdo editorial
+permanece disponível mesmo quando a listagem falha.
