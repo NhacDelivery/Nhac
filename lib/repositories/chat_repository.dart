@@ -127,15 +127,19 @@ class ChatRepository {
       throw ArgumentError('Use página >= 0 e tamanho entre 1 e 100.');
     }
     final response = await _dio.get('/conversas', queryParameters: {
-      'tipo': tipo, 'page': pagina, 'size': tamanho,
+      'tipo': tipo,
+      'page': pagina,
+      'size': tamanho,
     });
     final dados = Map<String, dynamic>.from(response.data as Map);
     final conteudo = dados['content'] as List;
     // Filtrar localmente voltaria a produzir páginas curtas e esconder conversas.
     // Falhar explicitamente se um backend antigo ignorar o novo contrato.
-    final conversas = conteudo.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+    final conversas =
+        conteudo.map((item) => Map<String, dynamic>.from(item as Map)).toList();
     if (conversas.any((item) => item['tipo'] != tipo)) {
-      throw StateError('O servidor não aplicou o filtro de conversas. Atualize o backend.');
+      throw StateError(
+          'O servidor não aplicou o filtro de conversas. Atualize o backend.');
     }
     return conversas;
   }

@@ -18,12 +18,17 @@ Map<String, dynamic> conversa(String id, String tipo) => {
       'naoLidas': 3,
     };
 
-void responder(MockChatDio dio, String tipo, int page,
-    List<Map<String, dynamic>> items, {int tamanho = 20}) {
+void responder(
+    MockChatDio dio, String tipo, int page, List<Map<String, dynamic>> items,
+    {int tamanho = 20}) {
   when(() => dio.get('/conversas', queryParameters: {
-    'tipo': tipo, 'page': page, 'size': tamanho,
-  })).thenAnswer((_) async => Response(requestOptions: RequestOptions(path: '/conversas'),
-      data: {'content': items}));
+            'tipo': tipo,
+            'page': page,
+            'size': tamanho,
+          }))
+      .thenAnswer((_) async => Response(
+          requestOptions: RequestOptions(path: '/conversas'),
+          data: {'content': items}));
 }
 
 void main() {
@@ -58,44 +63,63 @@ void main() {
     final result = await ChatRepository(dio: dio).listarConversas();
     expect(result.single.lojaId, 'loja-destino');
     expect(result.single.mensagensNaoLidas, 3);
-    verify(() => dio.get('/conversas', queryParameters: {'tipo': 'LOJA', 'page': 0, 'size': 20})).called(1);
+    verify(() => dio.get('/conversas',
+        queryParameters: {'tipo': 'LOJA', 'page': 0, 'size': 20})).called(1);
     verifyNoMoreInteractions(dio);
   });
   test('lista pessoas diretamente na página do tipo solicitado', () async {
     final dio = MockChatDio();
     responder(dio, 'CLIENTE', 5, [conversa('pessoa', 'CLIENTE')]);
-    final result = await ChatRepository(dio: dio).listarConversasPessoas(pagina: 5);
+    final result =
+        await ChatRepository(dio: dio).listarConversasPessoas(pagina: 5);
     expect(result.single.pessoaNome, 'pessoa nome');
-    verify(() => dio.get('/conversas', queryParameters: {'tipo': 'CLIENTE', 'page': 5, 'size': 20})).called(1);
+    verify(() => dio.get('/conversas',
+        queryParameters: {'tipo': 'CLIENTE', 'page': 5, 'size': 20})).called(1);
     verifyNoMoreInteractions(dio);
   });
   test('paginação não relê páginas anteriores', () async {
     final dio = MockChatDio();
     responder(dio, 'LOJA', 1, [conversa('segunda', 'LOJA')], tamanho: 1);
-    expect((await ChatRepository(dio: dio).listarConversas(pagina: 1, tamanho: 1)).single.id, 'segunda');
-    verify(() => dio.get('/conversas', queryParameters: {'tipo': 'LOJA', 'page': 1, 'size': 1})).called(1);
+    expect(
+        (await ChatRepository(dio: dio).listarConversas(pagina: 1, tamanho: 1))
+            .single
+            .id,
+        'segunda');
+    verify(() => dio.get('/conversas',
+        queryParameters: {'tipo': 'LOJA', 'page': 1, 'size': 1})).called(1);
     verifyNoMoreInteractions(dio);
   });
   test('caixa vazia não dispara varredura de outras páginas', () async {
-    final dio = MockChatDio(); responder(dio, 'CLIENTE', 0, []);
+    final dio = MockChatDio();
+    responder(dio, 'CLIENTE', 0, []);
     expect(await ChatRepository(dio: dio).listarConversasPessoas(), isEmpty);
-    verify(() => dio.get('/conversas', queryParameters: {'tipo': 'CLIENTE', 'page': 0, 'size': 20})).called(1);
+    verify(() => dio.get('/conversas',
+        queryParameters: {'tipo': 'CLIENTE', 'page': 0, 'size': 20})).called(1);
     verifyNoMoreInteractions(dio);
   });
-  test('backend que ignora filtro não pode produzir vazio ou caixa mista silenciosa', () async {
-    final dio = MockChatDio(); responder(dio, 'CLIENTE', 0, [conversa('loja', 'LOJA')]);
-    await expectLater(ChatRepository(dio: dio).listarConversasPessoas(), throwsA(anything));
+  test(
+      'backend que ignora filtro não pode produzir vazio ou caixa mista silenciosa',
+      () async {
+    final dio = MockChatDio();
+    responder(dio, 'CLIENTE', 0, [conversa('loja', 'LOJA')]);
+    await expectLater(
+        ChatRepository(dio: dio).listarConversasPessoas(), throwsA(anything));
   });
   test('parâmetros inválidos não fazem HTTP', () async {
-    final dio = MockChatDio(); final repo = ChatRepository(dio: dio);
+    final dio = MockChatDio();
+    final repo = ChatRepository(dio: dio);
     await expectLater(repo.listarConversas(pagina: -1), throwsA(anything));
     await expectLater(repo.listarConversas(tamanho: 101), throwsA(anything));
     verifyZeroInteractions(dio);
   });
   test('falha HTTP preserva erro sem virar caixa vazia', () async {
     final dio = MockChatDio();
-    when(() => dio.get('/conversas', queryParameters: {'tipo': 'CLIENTE', 'page': 0, 'size': 20}))
-        .thenThrow(DioException.connectionError(requestOptions: RequestOptions(path: '/conversas'), reason: 'offline'));
-    await expectLater(ChatRepository(dio: dio).listarConversasPessoas(), throwsA(isA<Exception>()));
+    when(() => dio.get('/conversas',
+            queryParameters: {'tipo': 'CLIENTE', 'page': 0, 'size': 20}))
+        .thenThrow(DioException.connectionError(
+            requestOptions: RequestOptions(path: '/conversas'),
+            reason: 'offline'));
+    await expectLater(ChatRepository(dio: dio).listarConversasPessoas(),
+        throwsA(isA<Exception>()));
   });
 }
