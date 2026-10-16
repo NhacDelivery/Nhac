@@ -56,7 +56,11 @@ class ProdutoRepository {
   Future<List<ProdutosModel>> buscarNecessidades() async {
     try {
       final response = await SharedGet.forClient(_dio)
-          .get(_dio, '/produtos/cards', queryParameters: {'size': 50});
+          .get(_dio, '/produtos/cards', queryParameters: {
+        'page': 0,
+        'size': 50,
+        'sort': ['loja.isAberto,desc', 'id,asc']
+      });
       final List<dynamic> conteudo = extrairLista(response.data);
       return conteudo.map((map) => ProdutosModel.fromMap(map)).toList();
     } catch (e) {

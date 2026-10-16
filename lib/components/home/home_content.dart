@@ -1,3 +1,4 @@
+import 'package:nhac/models/home/home_product_selection.dart';
 import 'package:nhac/components/estado_enderecos.dart';
 import 'package:nhac/components/selecionar_endereco_padrao.dart';
 import 'dart:async';
@@ -22,7 +23,7 @@ import 'package:lottie/lottie.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nhac/components/home/home_banner_carousel.dart';
+import 'package:nhac/components/home/home_product_banner_carousel.dart';
 import 'package:nhac/components/home/home_product_section.dart';
 import 'package:nhac/pages/search_page.dart';
 import 'package:nhac/controllers/endereco_provider.dart';
@@ -209,58 +210,20 @@ class _HomeContentState extends State<HomeContent>
   /// que já vem em cada produto na resposta de `/produtos`.
   /// Substitui o antigo `_atualizarStatusLojas` que fazia N chamadas
   /// `GET /lojas/{id}` em paralelo.
+  HomeProductSelection get _selecao =>
+      HomeProductSelection.from(_produtosNecessidades, _produtosPromocao);
+
+  EstadoConteudo _estadoComProdutos(
+      EstadoConteudo estado, List<ProdutosModel> produtos) {
+    if (estado == EstadoConteudo.erro) return estado;
+    return produtos.isNotEmpty ? EstadoConteudo.conteudo : estado;
+  }
+
   void _aplicarStatusLojas() {
-    if (!mounted) return;
-
-    {
-      // Constrói o mapa a partir dos próprios produtos — sem requisição HTTP
-      final todos = [..._produtosNecessidades, ..._produtosPromocao];
-      _lojaAbertaMap = {
-        for (final p in todos)
-          if (p.lojaId.isNotEmpty) p.lojaId: p.lojaAberta,
-      };
-
-      _produtosNecessidades.removeWhere((p) {
-        return !p.lojaAberta || !(_lojaAbertaMap[p.lojaId] ?? false);
-      });
-
-      _produtosPromocao.removeWhere((p) {
-        return p.preco >= 20 ||
-            !p.lojaAberta ||
-            !(_lojaAbertaMap[p.lojaId] ?? false);
-      });
-
-      _produtosNecessidades.shuffle();
-      _produtosPromocao.shuffle();
-
-      // Limit the number of products to 10 to not overflow the UI and look nice
-      if (_produtosNecessidades.length > 10) {
-        _produtosNecessidades.removeRange(10, _produtosNecessidades.length);
-      }
-      if (_produtosPromocao.length > 10) {
-        _produtosPromocao.removeRange(10, _produtosPromocao.length);
-      }
-
-      // Sort products to put open stores first.
-      int compareLojas(ProdutosModel a, ProdutosModel b) {
-        final aAberto = _lojaAbertaMap[a.lojaId] ?? false;
-        final bAberto = _lojaAbertaMap[b.lojaId] ?? false;
-        if (aAberto && !bAberto) return -1;
-        if (!aAberto && bAberto) return 1;
-        return 0;
-      }
-
-      _produtosNecessidades.sort(compareLojas);
-      _produtosPromocao.sort(compareLojas);
-      if (_estadoProdutosNecessidades == EstadoConteudo.conteudo &&
-          _produtosNecessidades.isEmpty) {
-        _estadoProdutosNecessidades = EstadoConteudo.vazio;
-      }
-      if (_estadoProdutosPromocao == EstadoConteudo.conteudo &&
-          _produtosPromocao.isEmpty) {
-        _estadoProdutosPromocao = EstadoConteudo.vazio;
-      }
-    }
+    _lojaAbertaMap = {
+      for (final p in [..._produtosPromocao, ..._produtosNecessidades])
+        if (p.lojaId.isNotEmpty) p.lojaId: p.lojaAberta,
+    };
   }
 
   Future<void> _fetchProdutosNecessidades({bool isRefresh = false}) async {
@@ -1206,7 +1169,9 @@ class _HomeContentState extends State<HomeContent>
                               ],
                             ),
                           )
-                        : const HomeBannerCarousel(
+                        : HomeProductBannerCarousel(
+                            products: _selecao.principais,
+                            isActive: widget.isActive,
                             key: ValueKey('carousel_content'),
                           ),
                   ),
@@ -1226,7 +1191,7 @@ class _HomeContentState extends State<HomeContent>
                       ),
                     );
                   },
-                  child: const HomeCategoryChips(),
+                  child: HomeCategoryChips(repository: _produtoRepository),
                 ),
                 SizedBox(height: 28.h),
                 TweenAnimationBuilder<double>(
@@ -1245,8 +1210,9 @@ class _HomeContentState extends State<HomeContent>
                   child: EstadoComRetry<List<ProdutosModel>>(
                     mensagemErro:
                         'Não foi possível atualizar os produtos. Os dados anteriores podem estar desatualizados.',
-                    estado: _estadoProdutosNecessidades,
-                    dados: _produtosNecessidades,
+                    estado: _estadoComProdutos(
+                        _estadoProdutosNecessidades, _selecao.principais),
+                    dados: _selecao.principais,
                     aoTentarNovamente: () =>
                         _fetchProdutosNecessidades(isRefresh: true),
                     builderConteudo: (produtos) => HomeProductSection(
@@ -1281,13 +1247,14 @@ class _HomeContentState extends State<HomeContent>
                   },
                   child: EstadoComRetry<List<ProdutosModel>>(
                     mensagemErro:
-                        'Não foi possível atualizar as promoções. Os dados anteriores podem estar desatualizados.',
-                    estado: _estadoProdutosPromocao,
-                    dados: _produtosPromocao,
+                        'Não foi possível atualizar esta seleção. Exibindo os produtos já carregados.',
+                    estado: _estadoComProdutos(
+                        _estadoProdutosPromocao, _selecao.secundarios),
+                    dados: _selecao.secundarios,
                     aoTentarNovamente: () =>
                         _fetchProdutosPromocao(isRefresh: true),
                     builderConteudo: (produtos) => HomeProductSection(
-                      title: 'Tudo abaixo de R\$ 20',
+                      title: _selecao.tituloSecundario,
                       onSeeAll: () => context.push('/search'),
                       products: produtos,
                       lojaAberta: _lojaAbertaMap,
@@ -1295,8 +1262,8 @@ class _HomeContentState extends State<HomeContent>
                     ),
                     builderLoading: () => _buildSectionSkeleton(),
                     builderVazio: () => _buildEmptySection(
-                      titulo: 'Tudo abaixo de R\$ 20',
-                      mensagem: 'Nenhuma promoção disponível no momento.',
+                      titulo: _selecao.tituloSecundario,
+                      mensagem: 'Nenhum produto disponível no momento.',
                     ),
                     alturaMinima: 280.h,
                   ),
