@@ -84,8 +84,6 @@ class NotificationHelper(private val context: Context) {
 
         // Add progress-centric notification features for Android 16+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            // This would be where we'd add ProgressStyle features when available
-            // For now, we'll use enhanced progress indicators
             builder.setStyle(
                 NotificationCompat.BigTextStyle()
                     .bigText("${status.description}\n\n$etaText\nProgress: ${progressPercentage}%")

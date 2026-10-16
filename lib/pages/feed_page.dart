@@ -469,7 +469,6 @@ class _FeedPageState extends State<FeedPage>
     );
   }
 
-  // ─── Post Card ────────────────────────────────────────────────────────────
 
   Future<void> _abrirPost(FeedPostModel post, {bool comentar = false}) async {
     final removed = await context.push<bool>(
@@ -922,7 +921,6 @@ class _FeedPageState extends State<FeedPage>
     );
   }
 
-  // ─── Skeleton ─────────────────────────────────────────────────────────────
 
   Widget _buildSkeletonCard() {
     return Shimmer.fromColors(
@@ -1008,7 +1006,6 @@ class _FeedPageState extends State<FeedPage>
     );
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
 
   String _formatCount(int count) {
     if (count >= 1000) {
@@ -1018,7 +1015,6 @@ class _FeedPageState extends State<FeedPage>
   }
 }
 
-// ─── Sticky TabBar Delegate ───────────────────────────────────────────────────
 
 class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   const _StickyTabBarDelegate({required this.child});

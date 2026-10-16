@@ -282,7 +282,6 @@ class _SearchPageState extends State<SearchPage>
 
   /// Constrói o mapa de status aberta/fechada a partir do campo `lojaAberta`
   /// que já vem em cada produto na resposta de `/produtos`.
-  /// Substitui a versão anterior que fazia N chamadas `GET /lojas/{id}`.
   Map<String, bool> _statusDasLojas(List<ProdutosModel> produtos) {
     return {
       for (final p in produtos)
