@@ -18,20 +18,12 @@ Map<String, dynamic> conversa(String id, String tipo) => {
       'naoLidas': 3,
     };
 
-void responder(
-  MockChatDio dio,
-  int page,
-  List<Map<String, dynamic>> items, {
-  bool last = true,
-}) {
-  when(
-    () => dio.get('/conversas', queryParameters: {'page': page, 'size': 100}),
-  ).thenAnswer(
-    (_) async => Response(
-      requestOptions: RequestOptions(path: '/conversas'),
-      data: {'content': items, 'last': last},
-    ),
-  );
+void responder(MockChatDio dio, String tipo, int page,
+    List<Map<String, dynamic>> items, {int tamanho = 20}) {
+  when(() => dio.get('/conversas', queryParameters: {
+    'tipo': tipo, 'page': page, 'size': tamanho,
+  })).thenAnswer((_) async => Response(requestOptions: RequestOptions(path: '/conversas'),
+      data: {'content': items}));
 }
 
 void main() {
@@ -60,91 +52,50 @@ void main() {
         data: {'conteudo': 'Olá', 'clientMessageId': id})).called(1);
   });
 
-  test(
-    'lista lojas pelo contrato de conversas, sem misturar pessoas',
-    () async {
-      final dio = MockChatDio();
-      responder(dio, 0, [
-        conversa('pessoa', 'CLIENTE'),
-        conversa('loja', 'LOJA'),
-      ]);
-      final result = await ChatRepository(dio: dio).listarConversas();
-      expect(result.single.id, 'loja');
-      expect(result.single.lojaId, 'loja-destino');
-      expect(result.single.lojaNome, 'loja nome');
-      expect(result.single.ultimaMensagem, 'Mensagem loja');
-      expect(result.single.mensagensNaoLidas, 3);
-      expect(
-        result.single.ultimaMensagemData.toUtc(),
-        DateTime.parse('2026-10-09T22:30:00Z'),
-      );
-      verify(
-        () => dio.get('/conversas', queryParameters: {'page': 0, 'size': 100}),
-      ).called(1);
-      verifyNoMoreInteractions(dio);
-    },
-  );
-
-  test('lista pessoas usando interlocutor e não o catálogo de lojas', () async {
+  test('lista lojas com filtro e uma única consulta', () async {
     final dio = MockChatDio();
-    responder(dio, 0, [
-      conversa('loja', 'LOJA'),
-      conversa('pessoa', 'CLIENTE'),
-    ]);
-    final result = await ChatRepository(dio: dio).listarConversasPessoas();
-    expect(result.single.id, 'pessoa');
-    expect(result.single.pessoaId, 'pessoa-destino');
-    expect(result.single.pessoaNome, 'pessoa nome');
-    expect(result.single.ultimaMensagem, 'Mensagem pessoa');
+    responder(dio, 'LOJA', 0, [conversa('loja', 'LOJA')]);
+    final result = await ChatRepository(dio: dio).listarConversas();
+    expect(result.single.lojaId, 'loja-destino');
     expect(result.single.mensagensNaoLidas, 3);
-    expect(
-      result.single.ultimaMensagemData.toUtc(),
-      DateTime.parse('2026-10-09T22:30:00Z'),
-    );
+    verify(() => dio.get('/conversas', queryParameters: {'tipo': 'LOJA', 'page': 0, 'size': 20})).called(1);
+    verifyNoMoreInteractions(dio);
   });
-
-  test(
-    'não retorna lista vazia quando a primeira página só tem outro tipo',
-    () async {
-      final dio = MockChatDio();
-      responder(dio, 0, [conversa('loja', 'LOJA')], last: false);
-      responder(dio, 1, [conversa('pessoa', 'CLIENTE')]);
-      final result = await ChatRepository(dio: dio).listarConversasPessoas();
-      expect(result.single.id, 'pessoa');
-      verify(
-        () => dio.get('/conversas', queryParameters: {'page': 1, 'size': 100}),
-      ).called(1);
-    },
-  );
-
-  test('pagina as conversas do tipo solicitado sem repetir itens', () async {
+  test('lista pessoas diretamente na página do tipo solicitado', () async {
     final dio = MockChatDio();
-    responder(
-        dio,
-        0,
-        [
-          conversa('primeira', 'LOJA'),
-          conversa('pessoa', 'CLIENTE'),
-        ],
-        last: false);
-    responder(dio, 1, [conversa('segunda', 'LOJA')]);
-    final result =
-        await ChatRepository(dio: dio).listarConversas(pagina: 1, tamanho: 1);
-    expect(result.single.id, 'segunda');
+    responder(dio, 'CLIENTE', 5, [conversa('pessoa', 'CLIENTE')]);
+    final result = await ChatRepository(dio: dio).listarConversasPessoas(pagina: 5);
+    expect(result.single.pessoaNome, 'pessoa nome');
+    verify(() => dio.get('/conversas', queryParameters: {'tipo': 'CLIENTE', 'page': 5, 'size': 20})).called(1);
+    verifyNoMoreInteractions(dio);
   });
-
-  test('propaga falha HTTP sem apresentar a caixa como vazia', () async {
+  test('paginação não relê páginas anteriores', () async {
     final dio = MockChatDio();
-    when(() => dio.get('/conversas', queryParameters: {'page': 0, 'size': 100}))
-        .thenThrow(
-      DioException.connectionError(
-        requestOptions: RequestOptions(path: '/conversas'),
-        reason: 'offline',
-      ),
-    );
-    await expectLater(
-      ChatRepository(dio: dio).listarConversasPessoas(),
-      throwsA(isA<Exception>()),
-    );
+    responder(dio, 'LOJA', 1, [conversa('segunda', 'LOJA')], tamanho: 1);
+    expect((await ChatRepository(dio: dio).listarConversas(pagina: 1, tamanho: 1)).single.id, 'segunda');
+    verify(() => dio.get('/conversas', queryParameters: {'tipo': 'LOJA', 'page': 1, 'size': 1})).called(1);
+    verifyNoMoreInteractions(dio);
+  });
+  test('caixa vazia não dispara varredura de outras páginas', () async {
+    final dio = MockChatDio(); responder(dio, 'CLIENTE', 0, []);
+    expect(await ChatRepository(dio: dio).listarConversasPessoas(), isEmpty);
+    verify(() => dio.get('/conversas', queryParameters: {'tipo': 'CLIENTE', 'page': 0, 'size': 20})).called(1);
+    verifyNoMoreInteractions(dio);
+  });
+  test('backend que ignora filtro não pode produzir vazio ou caixa mista silenciosa', () async {
+    final dio = MockChatDio(); responder(dio, 'CLIENTE', 0, [conversa('loja', 'LOJA')]);
+    await expectLater(ChatRepository(dio: dio).listarConversasPessoas(), throwsA(anything));
+  });
+  test('parâmetros inválidos não fazem HTTP', () async {
+    final dio = MockChatDio(); final repo = ChatRepository(dio: dio);
+    await expectLater(repo.listarConversas(pagina: -1), throwsA(anything));
+    await expectLater(repo.listarConversas(tamanho: 101), throwsA(anything));
+    verifyZeroInteractions(dio);
+  });
+  test('falha HTTP preserva erro sem virar caixa vazia', () async {
+    final dio = MockChatDio();
+    when(() => dio.get('/conversas', queryParameters: {'tipo': 'CLIENTE', 'page': 0, 'size': 20}))
+        .thenThrow(DioException.connectionError(requestOptions: RequestOptions(path: '/conversas'), reason: 'offline'));
+    await expectLater(ChatRepository(dio: dio).listarConversasPessoas(), throwsA(isA<Exception>()));
   });
 }

@@ -1,0 +1,37 @@
+name: Passo 6 - paginação e medição
+on:
+  pull_request:
+    paths:
+      - 'lib/repositories/chat_repository.dart'
+      - 'test/repositories/chat_repository_test.dart'
+      - 'test/benchmarks/**'
+      - '.github/workflows/passo6.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contratos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+          cache: true
+      - uses: ./.github/actions/prepare-flutter-config
+        with:
+          env_file_content: ${{ secrets.ENV_FILE }}
+          google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - run: flutter pub get
+      - run: dart format lib/repositories/chat_repository.dart test/repositories/chat_repository_test.dart test/benchmarks/chat_paginacao_benchmark_test.dart
+      - run: flutter test test/repositories/chat_repository_test.dart test/controllers/lista_conversas_controller_test.dart test/benchmarks/chat_paginacao_benchmark_test.dart
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: passo6-fontes
+          path: |
+            lib/repositories/chat_repository.dart
+            test/repositories/chat_repository_test.dart
+            test/benchmarks/chat_paginacao_benchmark_test.dart
