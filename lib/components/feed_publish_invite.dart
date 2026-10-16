@@ -34,9 +34,9 @@ class FeedPublishInvite extends StatelessWidget {
                   child: Text(
                     'Comeu bem? Conta no feed.',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: ink,
-                      fontWeight: FontWeight.w700,
-                    ),
+                          color: ink,
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                 ),
               ],
@@ -54,7 +54,8 @@ class FeedPublishInvite extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 foregroundColor: ink,
                 minimumSize: const Size(48, 48),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 side: const BorderSide(color: ink),
                 shape: const StadiumBorder(),
               ),

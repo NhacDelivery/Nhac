@@ -177,31 +177,29 @@ class _FeedPageState extends State<FeedPage>
             refreshIndicatorExtent: 120.h,
             refreshTriggerPullDistance: 160.h,
             onRefresh: () => _carregarPosts(_categorias[_tabController.index]),
-            builder:
-                (
-                  context,
-                  refreshState,
-                  pulledExtent,
-                  refreshTriggerPullDistance,
-                  refreshIndicatorExtent,
-                ) {
-                  return Center(
-                    child: Opacity(
-                      opacity: (pulledExtent / refreshIndicatorExtent).clamp(
-                        0.0,
-                        1.0,
-                      ),
-                      child: Lottie.asset(
-                        'assets/animations/loading_nhac.json',
-                        width: 180.w,
-                        height: 180.h,
-                        animate:
-                            refreshState == RefreshIndicatorMode.refresh ||
-                            refreshState == RefreshIndicatorMode.armed,
-                      ),
-                    ),
-                  );
-                },
+            builder: (
+              context,
+              refreshState,
+              pulledExtent,
+              refreshTriggerPullDistance,
+              refreshIndicatorExtent,
+            ) {
+              return Center(
+                child: Opacity(
+                  opacity: (pulledExtent / refreshIndicatorExtent).clamp(
+                    0.0,
+                    1.0,
+                  ),
+                  child: Lottie.asset(
+                    'assets/animations/loading_nhac.json',
+                    width: 180.w,
+                    height: 180.h,
+                    animate: refreshState == RefreshIndicatorMode.refresh ||
+                        refreshState == RefreshIndicatorMode.armed,
+                  ),
+                ),
+              );
+            },
           ),
 
           // Cabeçalho, busca e convite para publicar no feed.
@@ -273,11 +271,11 @@ class _FeedPageState extends State<FeedPage>
                                   const SearchPage(),
                           transitionsBuilder:
                               (context, animation, secondaryAnimation, child) {
-                                return FadeTransition(
-                                  opacity: animation,
-                                  child: child,
-                                );
-                              },
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
                           transitionDuration: const Duration(milliseconds: 300),
                         ),
                       );
@@ -908,9 +906,8 @@ class _FeedPageState extends State<FeedPage>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13.sp,
-                    color: active
-                        ? const Color(0xFFFF6961)
-                        : Colors.grey.shade600,
+                    color:
+                        active ? const Color(0xFFFF6961) : Colors.grey.shade600,
                   ),
                 ),
               ),

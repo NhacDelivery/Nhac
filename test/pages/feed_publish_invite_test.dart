@@ -28,7 +28,9 @@ class _FeedAdapter implements HttpClientAdapter {
     return ResponseBody.fromString(
       jsonEncode(fail ? {'message': 'offline'} : {'content': []}),
       fail ? 503 : 200,
-      headers: {Headers.contentTypeHeader: ['application/json']},
+      headers: {
+        Headers.contentTypeHeader: ['application/json']
+      },
     );
   }
 
@@ -42,7 +44,10 @@ void main() {
   setUpAll(() async {
     final font = FontLoader('Roboto')
       ..addFont(rootBundle.load('assets/fonts/Roboto.ttf'));
+    final icons = FontLoader('MaterialIcons')
+      ..addFont(rootBundle.load('fonts/MaterialIcons-Regular.otf'));
     await font.load();
+    await icons.load();
   });
 
   testWidgets('convite permite teclado e texto ampliado sem cortar a ação',
@@ -98,21 +103,32 @@ void main() {
         api.atualizarTokenCache(null);
       });
       final router = GoRouter(routes: [
-        GoRoute(path: '/', builder: (_, __) => const Scaffold(body: FeedPage())),
-        GoRoute(path: '/feed-publicar', builder: (context, _) => Scaffold(
-          body: Column(children: [
-            TextButton(onPressed: () => context.pop(), child: const Text('Voltar sem publicar')),
-            TextButton(onPressed: () => context.pop(FeedPostModel.fromMap({
-              'id': 'novo', 'conteudo': 'Meu prato', 'nomeUsuario': 'Cliente',
-              'curtidas': 0, 'comentarios': 0,
-            })), child: const Text('Concluir publicação')),
-          ]),
-        )),
+        GoRoute(
+            path: '/', builder: (_, __) => const Scaffold(body: FeedPage())),
+        GoRoute(
+            path: '/feed-publicar',
+            builder: (context, _) => Scaffold(
+                  body: Column(children: [
+                    TextButton(
+                        onPressed: () => context.pop(),
+                        child: const Text('Voltar sem publicar')),
+                    TextButton(
+                        onPressed: () => context.pop(FeedPostModel.fromMap({
+                              'id': 'novo',
+                              'conteudo': 'Meu prato',
+                              'nomeUsuario': 'Cliente',
+                              'curtidas': 0,
+                              'comentarios': 0,
+                            })),
+                        child: const Text('Concluir publicação')),
+                  ]),
+                )),
       ]);
       addTearDown(router.dispose);
       await tester.pumpWidget(ScreenUtilInit(
         designSize: const Size(390, 844),
-        builder: (_, __) => MaterialApp.router(theme: lightTheme, routerConfig: router),
+        builder: (_, __) =>
+            MaterialApp.router(theme: lightTheme, routerConfig: router),
       ));
       Future<void> frames() async {
         for (var i = 0; i < 10; i++) {
@@ -120,22 +136,24 @@ void main() {
         }
         expect(tester.takeException(), isNull);
       }
+
       await frames();
       expect(find.byType(HomeBannerCarousel), findsNothing);
       expect(find.byType(FeedPublishInvite), findsOneWidget);
       expect(adapter.calls, 1);
       if (const bool.fromEnvironment('CAPTURE_UI')) {
-        await expectLater(find.byType(Scaffold), matchesGoldenFile(
-          'goldens/feed-${fail ? 'erro' : 'vazio'}.png'));
+        await expectLater(find.byType(Scaffold),
+            matchesGoldenFile('goldens/feed-${fail ? 'erro' : 'vazio'}.png'));
       }
-      final action = find.byWidgetPredicate((widget) => widget is OutlinedButton);
+      final action =
+          find.byWidgetPredicate((widget) => widget is OutlinedButton);
       await tester.tap(action);
-      await frames();
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Voltar sem publicar'));
-      await frames();
+      await tester.pumpAndSettle();
       expect(adapter.calls, 1);
       await tester.tap(action);
-      await frames();
+      await tester.pumpAndSettle();
       adapter.fail = false;
       await tester.tap(find.text('Concluir publicação'));
       await frames();
