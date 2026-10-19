@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:nhac/components/estado_com_retry.dart';
-import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/controllers/lista_conversas_controller.dart';
 import 'package:nhac/models/chat/conversa_pessoa_resumo.dart';
 import 'package:nhac/models/chat/conversa_resumo.dart';
@@ -11,6 +11,7 @@ import 'package:nhac/repositories/chat_repository.dart';
 class MensagensPage extends StatefulWidget {
   final ChatRepository? repository;
   const MensagensPage({super.key, this.repository});
+
   @override
   State<MensagensPage> createState() => _MensagensPageState();
 }
@@ -30,7 +31,7 @@ class _MensagensPageState extends State<MensagensPage>
   );
   final _busca = TextEditingController();
   final _focoBusca = FocusNode();
-  int _aba = 0;
+  int _currentIndex = 0;
 
   @override
   void initState() {
@@ -44,7 +45,7 @@ class _MensagensPageState extends State<MensagensPage>
     if (state == AppLifecycleState.resumed) _atualizar();
   }
 
-  Future<void> _atualizar() => _aba == 0
+  Future<void> _atualizar() => _currentIndex == 0
       ? _pessoas.carregar(reiniciar: true)
       : _lojas.carregar(reiniciar: true);
 
@@ -59,189 +60,516 @@ class _MensagensPageState extends State<MensagensPage>
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        backgroundColor: Colors.white,
-        appBar: AppBar(
-          title: const Text('Mensagens'),
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF5D201C),
-          actions: [
-            AnimatedBuilder(
-              animation: Listenable.merge([_pessoas, _lojas]),
-              builder: (_, __) => IconButton(
-                tooltip: 'Atualizar conversas',
-                onPressed: (_aba == 0 ? _pessoas.carregando : _lojas.carregando)
-                    ? null
-                    : _atualizar,
-                icon: const Icon(Icons.refresh),
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Top actions (Back button + Refresh/Search + More)
+            Padding(
+              padding: EdgeInsets.only(top: 8.h, right: 8.w, left: 8.w),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: Icon(
+                      Icons.arrow_back,
+                      color: const Color(0xFF5D201C),
+                      size: 24.r,
+                    ),
+                    onPressed: () => context.pop(),
+                  ),
+                  const Spacer(),
+                  AnimatedBuilder(
+                    animation: Listenable.merge([_pessoas, _lojas]),
+                    builder: (_, __) => IconButton(
+                      tooltip: 'Atualizar conversas',
+                      icon: Icon(
+                        Icons.refresh,
+                        color: const Color(0xFF5D201C),
+                        size: 26.r,
+                      ),
+                      onPressed: (_currentIndex == 0
+                              ? _pessoas.carregando
+                              : _lojas.carregando)
+                          ? null
+                          : _atualizar,
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.search,
+                      color: const Color(0xFF5D201C),
+                      size: 28.r,
+                    ),
+                    onPressed: () {
+                      _focoBusca.requestFocus();
+                    },
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      Icons.more_vert,
+                      color: const Color(0xFF5D201C),
+                      size: 28.r,
+                    ),
+                    onPressed: () {},
+                  ),
+                ],
               ),
-            )
+            ),
+
+            // Large Title
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 8.h),
+              child: Text(
+                'Mensagens',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 34.sp,
+                  color: const Color(0xFF5D201C),
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ),
+
+            // Barra de busca integrada com o visual moderno
+            Padding(
+              padding: EdgeInsets.fromLTRB(24.w, 4.h, 24.w, 12.h),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F7F8),
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                child: TextField(
+                  controller: _busca,
+                  focusNode: _focoBusca,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar nas conversas carregadas',
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontSize: 14.sp,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: Colors.grey.shade500,
+                      size: 22.r,
+                    ),
+                    suffixIcon: _busca.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Limpar busca',
+                            icon: Icon(
+                              Icons.close,
+                              color: Colors.grey.shade500,
+                              size: 20.r,
+                            ),
+                            onPressed: () {
+                              _busca.clear();
+                              setState(() {});
+                              _focoBusca.requestFocus();
+                            },
+                          ),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16.w,
+                      vertical: 12.h,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
+            // List
+            Expanded(
+              child: AnimatedBuilder(
+                animation: Listenable.merge([_pessoas, _lojas]),
+                builder: (_, __) => _currentIndex == 0
+                    ? _buildListaPessoas()
+                    : _buildListaLojas(),
+              ),
+            ),
           ],
         ),
-        body: SafeArea(
-            child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: TextField(
-              controller: _busca,
-              focusNode: _focoBusca,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                labelText: 'Buscar nas conversas carregadas',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _busca.text.isEmpty
-                    ? null
-                    : IconButton(
-                        tooltip: 'Limpar busca',
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          _busca.clear();
-                          setState(() {});
-                          _focoBusca.requestFocus();
-                        },
-                      ),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-              ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {},
+        backgroundColor: const Color(0xFFFF6961), // Vermelho do app
+        shape: const CircleBorder(),
+        elevation: 4,
+        child: Icon(Icons.add, color: Colors.white, size: 36.r),
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+          if (index == 0 && !_pessoas.carregou) _pessoas.carregar();
+          if (index == 1 && !_lojas.carregou) _lojas.carregar();
+        },
+        backgroundColor: Colors.white,
+        selectedItemColor: const Color(0xFF5D201C),
+        unselectedItemColor: Colors.grey.shade500,
+        selectedLabelStyle: TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 12.sp,
+        ),
+        unselectedLabelStyle: TextStyle(
+          fontWeight: FontWeight.normal,
+          fontSize: 12.sp,
+        ),
+        items: const [
+          BottomNavigationBarItem(
+            icon: Padding(
+              padding: EdgeInsets.only(bottom: 4),
+              child: Icon(Icons.chat),
             ),
+            label: 'Pessoas',
           ),
-          Row(children: [
-            _tab('Pessoas', Icons.people_outline, 0),
-            _tab('Lojas', Icons.storefront_outlined, 1)
-          ]),
-          Expanded(
-              child: AnimatedBuilder(
-            animation: Listenable.merge([_pessoas, _lojas]),
-            builder: (_, __) => _aba == 0
-                ? _lista<ConversaPessoaResumo>(
-                    _pessoas,
-                    (item) => _combina(item.pessoaNome, item.ultimaMensagem),
-                    (item) => _item(
-                        item.id,
-                        item.pessoaNome,
-                        item.ultimaMensagem,
-                        item.ultimaMensagemData,
-                        item.mensagensNaoLidas,
-                        Icons.person_outline,
-                        () => _abrir('/chat-pessoa', {
-                              'conversaId': item.id,
-                              'pessoaNome': item.pessoaNome
-                            })),
-                    'Ainda não há conversas com pessoas.',
-                  )
-                : _lista<ConversaResumo>(
-                    _lojas,
-                    (item) => _combina(item.lojaNome, item.ultimaMensagem),
-                    (item) => _item(
-                        item.id,
-                        item.lojaNome,
-                        item.ultimaMensagem,
-                        item.ultimaMensagemData,
-                        item.mensagensNaoLidas,
-                        Icons.storefront_outlined,
-                        () => _abrir('/chat-loja', {
-                              'conversaId': item.id,
-                              'lojaId': item.lojaId,
-                              'lojaNome': item.lojaNome
-                            })),
-                    'Ainda não há conversas com lojas.',
-                  ),
-          )),
-        ])),
-      );
-
-  Widget _tab(String nome, IconData icone, int indice) => Expanded(
-        child: Semantics(
-            selected: _aba == indice,
-            child: TextButton.icon(
-              onPressed: () {
-                setState(() => _aba = indice);
-                if (indice == 0 && !_pessoas.carregou) _pessoas.carregar();
-                if (indice == 1 && !_lojas.carregou) _lojas.carregar();
-              },
-              style: TextButton.styleFrom(
-                  foregroundColor: _aba == indice
-                      ? const Color(0xFFFF6961)
-                      : const Color(0xFF5D201C)),
-              icon: Icon(icone),
-              label: Text(nome),
-            )),
-      );
-
-  Widget _lista<T>(ListaConversasController<T> caixa, bool Function(T) filtrar,
-      Widget Function(T) construir, String vazio) {
-    if (caixa.carregando && !caixa.carregou && caixa.itens.isEmpty) {
-      return const Center(child: LoadingNhac(telaCheia: false, tamanho: 80));
-    }
-    final itens = caixa.itens.where(filtrar).toList();
-    return RefreshIndicator(
-      onRefresh: () => caixa.carregar(reiniciar: true),
-      child: ListView(
-        key: PageStorageKey('conversas-$_aba'),
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 24),
-        children: [
-          if (caixa.erro != null)
-            Semantics(
-                liveRegion: true,
-                child: BannerErroInline(
-                  mensagem: caixa.erro!,
-                  aoTentarNovamente:
-                      caixa.carregando ? null : caixa.tentarNovamente,
-                )),
-          if (caixa.carregando) const LinearProgressIndicator(),
-          if (itens.isEmpty && caixa.carregou && caixa.erro == null)
-            Padding(
-              padding: const EdgeInsets.all(32),
-              child: Text(
-                _busca.text.trim().isEmpty
-                    ? vazio
-                    : 'Nenhuma conversa carregada corresponde à busca.',
-                textAlign: TextAlign.center,
+          BottomNavigationBarItem(
+            icon: Padding(
+              padding: EdgeInsets.only(bottom: 4),
+              child: Badge(
+                smallSize: 10,
+                backgroundColor: Color(0xFFFE645C), // Red badge
+                child: Icon(Icons.inventory_2_outlined),
               ),
             ),
-          ...itens.map(construir),
-          if (caixa.temMais && caixa.carregou)
-            Center(
-                child: TextButton(
-              onPressed: caixa.carregando ? null : caixa.carregar,
-              child: Text(caixa.carregando
-                  ? 'Carregando...'
-                  : 'Carregar mais conversas'),
-            )),
+            label: 'Lojas',
+          ),
         ],
       ),
     );
   }
 
-  Widget _item(String id, String nome, String mensagem, DateTime data,
-          int naoLidas, IconData icone, VoidCallback abrir) =>
-      ListTile(
-        key: ValueKey('conversa-$id'),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        leading: CircleAvatar(
-            backgroundColor: const Color(0xFFFFE7E5),
-            child: Icon(icone, color: const Color(0xFF5D201C))),
-        title: Text(nome,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-                color: const Color(0xFF5D201C),
-                fontWeight: naoLidas > 0 ? FontWeight.w700 : FontWeight.w500)),
-        subtitle: Text(mensagem.isEmpty ? 'Conversa iniciada' : mensagem,
-            maxLines: 2, overflow: TextOverflow.ellipsis),
-        trailing: Column(mainAxisSize: MainAxisSize.min, children: [
-          Text(DateFormat('dd/MM', 'pt_BR').format(data)),
-          if (naoLidas > 0)
-            Semantics(
-                label: '$naoLidas mensagens não lidas',
-                child: Text('$naoLidas',
-                    style: const TextStyle(
-                        color: Color(0xFFFF6961),
-                        fontWeight: FontWeight.bold))),
-        ]),
-        onTap: abrir,
+  Widget _buildListaPessoas() {
+    if (_pessoas.carregando && !_pessoas.carregou && _pessoas.itens.isEmpty) {
+      return const Center(
+        child: LoadingNhac(telaCheia: false, tamanho: 40),
       );
+    }
+
+    if (_pessoas.erro != null && _pessoas.itens.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _pessoas.erro!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
+              ),
+              SizedBox(height: 12.h),
+              TextButton(
+                onPressed: _pessoas.tentarNovamente,
+                child: const Text('Tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final itens = _pessoas.itens
+        .where((item) => _combina(item.pessoaNome, item.ultimaMensagem))
+        .toList();
+
+    if (itens.isEmpty && _pessoas.carregou && _pessoas.erro == null) {
+      return Center(
+        child: Text(
+          _busca.text.trim().isEmpty
+              ? 'Ainda não há conversas com pessoas.'
+              : 'Nenhuma conversa carregada corresponde à busca.',
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => _pessoas.carregar(reiniciar: true),
+      child: ListView.builder(
+        key: const PageStorageKey('conversas-pessoas'),
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: itens.length +
+            (_pessoas.erro != null ? 1 : 0) +
+            (_pessoas.temMais && _pessoas.carregou ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (_pessoas.erro != null && index == 0) {
+            return Semantics(
+              liveRegion: true,
+              child: BannerErroInline(
+                mensagem: _pessoas.erro!,
+                aoTentarNovamente:
+                    _pessoas.carregando ? null : _pessoas.tentarNovamente,
+              ),
+            );
+          }
+
+          final adjustedIndex = _pessoas.erro != null ? index - 1 : index;
+
+          if (adjustedIndex == itens.length) {
+            return Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16.h),
+                child: TextButton(
+                  onPressed: _pessoas.carregando ? null : _pessoas.carregar,
+                  child: Text(_pessoas.carregando
+                      ? 'Carregando...'
+                      : 'Carregar mais conversas'),
+                ),
+              ),
+            );
+          }
+
+          final item = itens[adjustedIndex];
+          final dateFormat = DateFormat('dd/MM', 'pt_BR');
+          final dataStr = dateFormat.format(item.ultimaMensagemData);
+
+          return ListTile(
+            key: ValueKey('conversa-${item.id}'),
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 24.w,
+              vertical: 6.h,
+            ),
+            leading: CircleAvatar(
+              radius: 25.r,
+              backgroundColor: Colors.grey.shade300,
+              child: Icon(Icons.person, color: Colors.white, size: 34.r),
+            ),
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    item.pessoaNome,
+                    style: TextStyle(
+                      fontWeight: item.mensagensNaoLidas > 0
+                          ? FontWeight.bold
+                          : FontWeight.w500,
+                      fontSize: 17.sp,
+                      color: const Color(0xFF5D201C),
+                    ),
+                  ),
+                ),
+                Text(
+                  dataStr,
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: item.mensagensNaoLidas > 0
+                        ? const Color(0xFFFF6961)
+                        : Colors.grey.shade500,
+                    fontWeight: item.mensagensNaoLidas > 0
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+            subtitle: Padding(
+              padding: EdgeInsets.only(top: 4.h),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.ultimaMensagem,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: item.mensagensNaoLidas > 0
+                          ? const Color(0xFF5D201C)
+                          : Colors.grey.shade500,
+                      fontWeight: item.mensagensNaoLidas > 0
+                          ? FontWeight.w500
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            onTap: () => _abrir('/chat-pessoa', {
+              'conversaId': item.id,
+              'pessoaNome': item.pessoaNome,
+            }),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildListaLojas() {
+    if (_lojas.carregando && !_lojas.carregou && _lojas.itens.isEmpty) {
+      return const Center(
+        child: LoadingNhac(telaCheia: false, tamanho: 40),
+      );
+    }
+
+    if (_lojas.erro != null && _lojas.itens.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _lojas.erro!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
+              ),
+              SizedBox(height: 12.h),
+              TextButton(
+                onPressed: _lojas.tentarNovamente,
+                child: const Text('Tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final itens = _lojas.itens
+        .where((item) => _combina(item.lojaNome, item.ultimaMensagem))
+        .toList();
+
+    if (itens.isEmpty && _lojas.carregou && _lojas.erro == null) {
+      return Center(
+        child: Text(
+          _busca.text.trim().isEmpty
+              ? 'Ainda não há conversas com lojas.'
+              : 'Nenhuma conversa carregada corresponde à busca.',
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: () => _lojas.carregar(reiniciar: true),
+      child: ListView.builder(
+        key: const PageStorageKey('conversas-lojas'),
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: itens.length +
+            (_lojas.erro != null ? 1 : 0) +
+            (_lojas.temMais && _lojas.carregou ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (_lojas.erro != null && index == 0) {
+            return Semantics(
+              liveRegion: true,
+              child: BannerErroInline(
+                mensagem: _lojas.erro!,
+                aoTentarNovamente:
+                    _lojas.carregando ? null : _lojas.tentarNovamente,
+              ),
+            );
+          }
+
+          final adjustedIndex = _lojas.erro != null ? index - 1 : index;
+
+          if (adjustedIndex == itens.length) {
+            return Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16.h),
+                child: TextButton(
+                  onPressed: _lojas.carregando ? null : _lojas.carregar,
+                  child: Text(_lojas.carregando
+                      ? 'Carregando...'
+                      : 'Carregar mais conversas'),
+                ),
+              ),
+            );
+          }
+
+          final item = itens[adjustedIndex];
+          final dateFormat = DateFormat('dd/MM', 'pt_BR');
+          final dataStr = dateFormat.format(item.ultimaMensagemData);
+
+          return ListTile(
+            key: ValueKey('conversa-${item.id}'),
+            contentPadding: EdgeInsets.symmetric(
+              horizontal: 24.w,
+              vertical: 6.h,
+            ),
+            leading: CircleAvatar(
+              radius: 25.r,
+              backgroundColor: Colors.grey.shade300,
+              child: Icon(Icons.store, color: Colors.white, size: 30.r),
+            ),
+            title: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Text(
+                    item.lojaNome,
+                    style: TextStyle(
+                      fontWeight: item.mensagensNaoLidas > 0
+                          ? FontWeight.bold
+                          : FontWeight.w500,
+                      fontSize: 17.sp,
+                      color: const Color(0xFF5D201C),
+                    ),
+                  ),
+                ),
+                Text(
+                  dataStr,
+                  style: TextStyle(
+                    fontSize: 13.sp,
+                    color: item.mensagensNaoLidas > 0
+                        ? const Color(0xFFFF6961)
+                        : Colors.grey.shade500,
+                    fontWeight: item.mensagensNaoLidas > 0
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                ),
+              ],
+            ),
+            subtitle: Padding(
+              padding: EdgeInsets.only(top: 4.h),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '[Loja Oficial]',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: const Color(0xFFE67E22), // Orange
+                    ),
+                  ),
+                  SizedBox(height: 2.h),
+                  Text(
+                    item.ultimaMensagem,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 14.sp,
+                      color: item.mensagensNaoLidas > 0
+                          ? const Color(0xFF5D201C)
+                          : Colors.grey.shade500,
+                      fontWeight: item.mensagensNaoLidas > 0
+                          ? FontWeight.w500
+                          : FontWeight.normal,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            onTap: () => _abrir('/chat-loja', {
+              'conversaId': item.id,
+              'lojaId': item.lojaId,
+              'lojaNome': item.lojaNome,
+            }),
+          );
+        },
+      ),
+    );
+  }
 
   @override
   void dispose() {
