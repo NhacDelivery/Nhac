@@ -101,6 +101,11 @@ void main() {
 
   testWidgets('Barra da Home recolhe ao rolar, reabre e permite acessar o Feed',
       (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final userProvider = MockUserProvider();
     final cartProvider = MockCartProvider();
     final enderecoProvider = MockEnderecoProvider();
