@@ -1409,8 +1409,8 @@ class _HomeContentState extends State<HomeContent>
     required String titulo,
     required String mensagem,
   }) {
-    return SizedBox(
-      height: 280.h,
+    return ConstrainedBox(
+      constraints: BoxConstraints(minHeight: 280.h),
       child: Center(
         child: Padding(
           padding: EdgeInsets.symmetric(horizontal: 32.w),
