@@ -47,9 +47,14 @@ import 'package:nhac/pages/mensagens_page.dart';
 
 class _SlideRightToLeftPageRoute<T> extends PageRoute<T>
     with MaterialRouteTransitionMixin<T> {
-  _SlideRightToLeftPageRoute({required this.child, required super.settings});
+  _SlideRightToLeftPageRoute({
+    required this.child,
+    required super.settings,
+    this.slideOnExit = true,
+  });
 
   final Widget child;
+  final bool slideOnExit;
 
   @override
   Widget buildContent(BuildContext context) => child;
@@ -100,6 +105,10 @@ class _SlideRightToLeftPageRoute<T> extends PageRoute<T>
       ),
     );
 
+    if (!slideOnExit) {
+      return page;
+    }
+
     return SlideTransition(
       position: exitTween.animate(curvedSecondaryAnimation),
       child: page,
@@ -108,21 +117,158 @@ class _SlideRightToLeftPageRoute<T> extends PageRoute<T>
 }
 
 class SlideRightToLeftPage<T> extends Page<T> {
-  const SlideRightToLeftPage({required super.key, required this.child});
+  const SlideRightToLeftPage({
+    required super.key,
+    required this.child,
+    this.slideOnExit = true,
+  });
 
   final Widget child;
+  final bool slideOnExit;
 
   @override
   Route<T> createRoute(BuildContext context) {
-    return _SlideRightToLeftPageRoute<T>(child: child, settings: this);
+    return _SlideRightToLeftPageRoute<T>(
+      child: child,
+      settings: this,
+      slideOnExit: slideOnExit,
+    );
   }
 }
 
 Page _buildSlideRightToLeftPage({
   required LocalKey key,
   required Widget child,
+  bool slideOnExit = true,
 }) {
-  return SlideRightToLeftPage(key: key, child: child);
+  return SlideRightToLeftPage(
+    key: key,
+    child: child,
+    slideOnExit: slideOnExit,
+  );
+}
+
+class _ChatCardExpandPageRoute<T> extends PageRoute<T>
+    with MaterialRouteTransitionMixin<T> {
+  _ChatCardExpandPageRoute({
+    required this.child,
+    required super.settings,
+    this.cardRect,
+  });
+
+  final Widget child;
+  final Rect? cardRect;
+
+  @override
+  Widget buildContent(BuildContext context) => child;
+
+  @override
+  bool get maintainState => true;
+
+  @override
+  Duration get transitionDuration => const Duration(milliseconds: 460);
+
+  @override
+  Duration get reverseTransitionDuration => const Duration(milliseconds: 380);
+
+  @override
+  Widget buildTransitions(
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final screenSize = MediaQuery.sizeOf(context);
+    final targetRect =
+        Rect.fromLTWH(0, 0, screenSize.width, screenSize.height);
+    final initialRect = cardRect ??
+        Rect.fromLTWH(
+          0,
+          screenSize.height * 0.35,
+          screenSize.width,
+          80,
+        );
+
+    final curvedAnimation = CurvedAnimation(
+      parent: animation,
+      curve: Curves.fastOutSlowIn,
+      reverseCurve: Curves.easeInCubic,
+    );
+
+    return AnimatedBuilder(
+      animation: curvedAnimation,
+      builder: (context, _) {
+        final t = curvedAnimation.value;
+        final currentRect = Rect.lerp(initialRect, targetRect, t)!;
+        final currentRadius =
+            Radius.circular((16.0 * (1.0 - t)).clamp(0.0, 16.0));
+
+        return Stack(
+          children: [
+            Positioned.fromRect(
+              rect: currentRect,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.all(currentRadius),
+                  boxShadow: t < 0.99
+                      ? [
+                          BoxShadow(
+                            color: const Color(0xFF5D201C)
+                                .withValues(alpha: 0.14 * (1.0 - t)),
+                            blurRadius: 18,
+                            spreadRadius: 2,
+                            offset: Offset(0, 6 * (1.0 - t)),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.all(currentRadius),
+                  child: OverflowBox(
+                    alignment: Alignment.topCenter,
+                    minWidth: screenSize.width,
+                    maxWidth: screenSize.width,
+                    minHeight: screenSize.height,
+                    maxHeight: screenSize.height,
+                    child: child,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class ChatCardExpandPage<T> extends Page<T> {
+  const ChatCardExpandPage({
+    required super.key,
+    required this.child,
+    this.cardRect,
+  });
+
+  final Widget child;
+  final Rect? cardRect;
+
+  @override
+  Route<T> createRoute(BuildContext context) {
+    return _ChatCardExpandPageRoute<T>(
+      child: child,
+      settings: this,
+      cardRect: cardRect,
+    );
+  }
+}
+
+Page _buildChatExpandPage({
+  required LocalKey key,
+  required Widget child,
+  Rect? cardRect,
+}) {
+  return ChatCardExpandPage(key: key, child: child, cardRect: cardRect);
 }
 
 final authServiceRoteador = AuthService();
@@ -460,18 +606,23 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (context, state) => _buildSlideRightToLeftPage(
         key: state.pageKey,
         child: const MensagensPage(),
+        slideOnExit: false,
       ),
     ),
     GoRoute(
       path: '/chat-pessoa',
       pageBuilder: (context, state) {
         final dados = state.extra as Map<String, dynamic>? ?? const {};
-        return _buildSlideRightToLeftPage(
+        final cardRect = dados['cardRect'] as Rect?;
+        return _buildChatExpandPage(
           key: state.pageKey,
+          cardRect: cardRect,
           child: ChatConversaPage(
             conversaId: (dados['conversaId'] ?? '').toString(),
             interlocutorNome: (dados['pessoaNome'] ?? 'Pessoa').toString(),
+            interlocutorFotoUrl: dados['fotoUrl']?.toString(),
             conversaPessoa: true,
+            heroTag: dados['heroTag']?.toString(),
           ),
         );
       },
@@ -480,12 +631,17 @@ final GoRouter appRouter = GoRouter(
       path: '/chat-loja',
       pageBuilder: (context, state) {
         final dados = state.extra as Map<String, dynamic>? ?? const {};
-        return _buildSlideRightToLeftPage(
+        final cardRect = dados['cardRect'] as Rect?;
+        return _buildChatExpandPage(
           key: state.pageKey,
+          cardRect: cardRect,
           child: ChatLojaPage(
             conversaId: dados['conversaId']?.toString(),
             lojaId: (dados['lojaId'] ?? '').toString(),
             lojaNome: (dados['lojaNome'] ?? 'Loja').toString(),
+            lojaFotoUrl: dados['lojaFotoUrl']?.toString() ??
+                dados['fotoUrl']?.toString(),
+            heroTag: dados['heroTag']?.toString(),
             produtoReferencia: dados['produto'] is ProdutosModel
                 ? dados['produto'] as ProdutosModel
                 : null,

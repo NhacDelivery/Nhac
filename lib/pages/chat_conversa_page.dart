@@ -25,6 +25,8 @@ import 'package:nhac/repositories/chat_repository.dart';
 import 'package:nhac/services/chat_socket_service.dart';
 import 'package:nhac/models/produto/produtos.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:nhac/services/chat_cache_service.dart';
+import 'package:nhac/repositories/loja_repository.dart';
 
 class ChatConversaPage extends StatefulWidget {
   final String? lojaId;
@@ -32,6 +34,8 @@ class ChatConversaPage extends StatefulWidget {
   final String? usuarioId;
   final bool conversaPessoa;
   final String interlocutorNome;
+  final String? interlocutorFotoUrl;
+  final String? heroTag;
   final ProdutosModel? produtoReferencia;
   final PedidoChatReferencia? pedidoReferencia;
   final ChatRepository? repository;
@@ -44,6 +48,8 @@ class ChatConversaPage extends StatefulWidget {
     this.usuarioId,
     this.conversaPessoa = false,
     required this.interlocutorNome,
+    this.interlocutorFotoUrl,
+    this.heroTag,
     this.produtoReferencia,
     this.pedidoReferencia,
     this.repository,
@@ -65,6 +71,7 @@ class _ChatConversaPageState extends State<ChatConversaPage>
   final List<StreamSubscription> _inscricoes = [];
 
   String? _conversaId;
+  String? _fotoUrl;
   bool _carregando = true;
   bool _conectado = false;
   String? _erroFatal;
@@ -98,13 +105,52 @@ class _ChatConversaPageState extends State<ChatConversaPage>
     _campoController.addListener(() {
       if (mounted) setState(() {});
     });
+
+    _fotoUrl = widget.interlocutorFotoUrl ??
+        (widget.lojaId != null
+            ? ChatCacheService.obterFotoLojaMemoria(widget.lojaId!)
+            : null);
+
+    // Pré-carrega instantaneamente do cache em memória (0ms)
+    final cidInicial = widget.conversaId ??
+        (widget.lojaId != null
+            ? ChatCacheService.obterConversaIdPorLojaMemoria(widget.lojaId!)
+            : null);
+    if (cidInicial != null && cidInicial.isNotEmpty) {
+      _conversaId = cidInicial;
+      final msgsCache = ChatCacheService.obterMemoria(cidInicial);
+      if (msgsCache != null && msgsCache.isNotEmpty) {
+        _mensagens.addAll(msgsCache);
+        _carregando = false;
+        _irParaOFim();
+      }
+    }
+
     _iniciar();
+  }
+
+  Future<void> _carregarFotoLoja(String lojaId) async {
+    final salva = await ChatCacheService.obterFotoLoja(lojaId);
+    if (salva != null && salva.isNotEmpty && mounted) {
+      setState(() => _fotoUrl = salva);
+      return;
+    }
+    try {
+      final loja = await LojaRepository().buscarLoja(lojaId);
+      if (loja != null && loja.imagemUrl.isNotEmpty && mounted) {
+        setState(() => _fotoUrl = loja.imagemUrl);
+        ChatCacheService.salvarFotoLoja(lojaId, loja.imagemUrl);
+      }
+    } catch (_) {}
   }
 
   Future<void> _iniciar() async {
     if (_inicializando) return;
     _inicializando = true;
     try {
+      if (_fotoUrl == null && !widget.conversaPessoa && widget.lojaId != null) {
+        _carregarFotoLoja(widget.lojaId!);
+      }
       if (widget.conversaPessoa) {
         _usuarioId =
             widget.usuarioId ?? await SessionStorageService().obterUsuarioId();
@@ -113,26 +159,79 @@ class _ChatConversaPageState extends State<ChatConversaPage>
               'Sessão expirada. Entre novamente para conversar.');
         }
       }
-      final conversaId = widget.conversaId ??
-          (widget.lojaId?.isNotEmpty == true
-              ? await _repository.abrirConversaComLoja(widget.lojaId!)
-              : throw AppException('Esta conversa não está disponível.'));
-      if (conversaId.isEmpty)
+
+      var conversaId = widget.conversaId;
+      if ((conversaId == null || conversaId.isEmpty) &&
+          widget.lojaId?.isNotEmpty == true) {
+        conversaId =
+            await ChatCacheService.obterConversaIdPorLoja(widget.lojaId!);
+      }
+
+      if (conversaId == null || conversaId.isEmpty) {
+        conversaId = widget.lojaId?.isNotEmpty == true
+            ? await _repository.abrirConversaComLoja(widget.lojaId!)
+            : throw AppException('Esta conversa não está disponível.');
+      }
+      if (conversaId.isEmpty) {
         throw AppException('Esta conversa não está disponível.');
-      final historico = await _repository.historico(conversaId);
+      }
+      final String idFinal = conversaId;
 
-      if (!mounted) return;
-      setState(() {
-        _conversaId = conversaId;
-        _mensagens
-          ..clear()
-          ..addAll(historico);
-        _paginaHistorico = 1;
-        _temMensagensAntigas = historico.length == 30;
-        _carregando = false;
-      });
+      _conversaId = idFinal;
+      if (widget.lojaId?.isNotEmpty == true) {
+        ChatCacheService.associarLojaConversa(widget.lojaId!, idFinal);
+      }
 
-      _repository.marcarComoLida(conversaId);
+      // Se ainda não temos mensagens na tela, tenta carregar do disco (L2)
+      if (_mensagens.isEmpty) {
+        final emDisco = await ChatCacheService.carregarCache(idFinal);
+        if (emDisco != null &&
+            emDisco.isNotEmpty &&
+            _mensagens.isEmpty &&
+            mounted) {
+          setState(() {
+            _mensagens.addAll(emDisco);
+            _carregando = false;
+          });
+          _irParaOFim();
+        }
+      }
+
+      // Busca histórico atualizado no servidor
+      try {
+        final historico = await _repository.historico(idFinal);
+        if (mounted) {
+          final ids = _mensagens.map((m) => m.id).toSet();
+          setState(() {
+            _conversaId = idFinal;
+            for (final m in historico) {
+              if (ids.add(m.id)) {
+                _mensagens.add(m);
+              }
+            }
+            _mensagens.sort((a, b) => a.enviadaEm.compareTo(b.enviadaEm));
+            _paginaHistorico = 1;
+            _temMensagensAntigas = historico.length == 30;
+            _carregando = false;
+          });
+          ChatCacheService.salvar(idFinal, _mensagens);
+        }
+      } catch (e) {
+        // Se já existiam mensagens em cache, não mostra erro fatal na tela
+        if (_mensagens.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _carregando = false;
+              _erroAtualizacao =
+                  'Sem conexão no momento. Exibindo mensagens salvas.';
+            });
+          }
+        } else {
+          rethrow;
+        }
+      }
+
+      _repository.marcarComoLida(idFinal);
 
       if (_inscricoes.isEmpty) {
         _inscricoes.add(_socket.mensagens.listen(_aoReceberMensagem));
@@ -141,7 +240,7 @@ class _ChatConversaPageState extends State<ChatConversaPage>
             if (!mounted) return;
             setState(() => _conectado = valor);
             _configurarPolling();
-            if (valor) _atualizarHistorico(conversaId);
+            if (valor) _atualizarHistorico(idFinal);
           }),
         );
         _inscricoes.add(
@@ -154,11 +253,12 @@ class _ChatConversaPageState extends State<ChatConversaPage>
         );
       }
       try {
-        await _socket.conectar(conversaId);
+        await _socket.conectar(idFinal);
       } catch (_) {
-        if (mounted)
+        if (mounted) {
           setState(() => _erroAtualizacao =
               'O chat está sem atualização em tempo real. Você pode tentar reconectar.');
+        }
       }
       _configurarPolling();
       _irParaOFim();
@@ -181,6 +281,9 @@ class _ChatConversaPageState extends State<ChatConversaPage>
     // reentregar algo que já está na lista.
     if (_mensagens.any((m) => m.id == mensagem.id)) return;
     setState(() => _mensagens.add(mensagem));
+    if (_conversaId != null) {
+      ChatCacheService.salvar(_conversaId!, _mensagens);
+    }
     if (!_minhaMensagem(mensagem) && _conversaId != null) {
       _repository.marcarComoLida(_conversaId!);
     }
@@ -217,6 +320,7 @@ class _ChatConversaPageState extends State<ChatConversaPage>
         }
         _mensagens.sort((a, b) => a.enviadaEm.compareTo(b.enviadaEm));
       });
+      ChatCacheService.salvar(conversaId, _mensagens);
     } catch (e) {
       if (mounted) setState(() => _erroAtualizacao = ErrorUIHelper.mensagem(e));
     } finally {
@@ -240,6 +344,7 @@ class _ChatConversaPageState extends State<ChatConversaPage>
         _paginaHistorico++;
         _temMensagensAntigas = anteriores.length == 30;
       });
+      ChatCacheService.salvar(id, _mensagens);
     } catch (_) {
       if (mounted)
         context.showError(
@@ -380,6 +485,117 @@ class _ChatConversaPageState extends State<ChatConversaPage>
     super.dispose();
   }
 
+  Widget _buildAvatarAppBar() {
+    final foto = _fotoUrl ?? widget.interlocutorFotoUrl;
+    final temFoto = foto != null && foto.isNotEmpty;
+
+    final avatar = CircleAvatar(
+      radius: 20,
+      backgroundColor: Colors.grey.shade300,
+      backgroundImage: temFoto ? CachedNetworkImageProvider(foto) : null,
+      child: !temFoto
+          ? Icon(
+              widget.conversaPessoa ? Icons.person : Icons.store,
+              color: Colors.white,
+              size: widget.conversaPessoa ? 28 : 24,
+            )
+          : null,
+    );
+
+    if (widget.heroTag != null) {
+      return Hero(
+        tag: 'avatar-${widget.heroTag}',
+        child: avatar,
+      );
+    }
+    return avatar;
+  }
+
+  Widget _buildNomeAppBar() {
+    final nomeWidget = Text(
+      widget.interlocutorNome,
+      style: const TextStyle(
+        color: Color(0xFF5D201C),
+        fontSize: 17.0,
+        fontWeight: FontWeight.w700,
+      ),
+    );
+
+    if (widget.heroTag != null) {
+      return Hero(
+        tag: 'nome-${widget.heroTag}',
+        child: Material(
+          color: Colors.transparent,
+          child: nomeWidget,
+        ),
+      );
+    }
+    return nomeWidget;
+  }
+
+  Widget _buildSubtituloFlightShuttle(
+    BuildContext flightContext,
+    Animation<double> animation,
+    HeroFlightDirection flightDirection,
+    BuildContext fromHeroContext,
+    BuildContext toHeroContext,
+  ) {
+    final fromHero = fromHeroContext.widget as Hero;
+    final toHero = toHeroContext.widget as Hero;
+
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        final t = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeInOut,
+        ).value;
+
+        return Material(
+          color: Colors.transparent,
+          child: Stack(
+            alignment: Alignment.topLeft,
+            children: [
+              Opacity(
+                opacity: (1.0 - t).clamp(0.0, 1.0),
+                child: fromHero.child,
+              ),
+              Opacity(
+                opacity: t.clamp(0.0, 1.0),
+                child: toHero.child,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSubtituloAppBar() {
+    final statusWidget = Text(
+      _conectado ? 'Conectado ao chat' : 'Atualização por consulta',
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: _conectado ? const Color(0xFF3BA55D) : Colors.grey,
+        fontSize: 12.0,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+
+    if (widget.heroTag != null) {
+      return Hero(
+        tag: 'subtitulo-${widget.heroTag}',
+        flightShuttleBuilder: _buildSubtituloFlightShuttle,
+        child: Material(
+          color: Colors.transparent,
+          child: statusWidget,
+        ),
+      );
+    }
+    return statusWidget;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -389,23 +605,18 @@ class _ChatConversaPageState extends State<ChatConversaPage>
         surfaceTintColor: Colors.white,
         elevation: 0.5,
         iconTheme: const IconThemeData(color: Color(0xFF5D201C)),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        titleSpacing: 0,
+        title: Row(
           children: [
-            Text(
-              widget.interlocutorNome,
-              style: const TextStyle(
-                color: Color(0xFF5D201C),
-                fontSize: 17.0,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            Text(
-              _conectado ? 'Conectado ao chat' : 'Atualização por consulta',
-              style: TextStyle(
-                color: _conectado ? const Color(0xFF3BA55D) : Colors.grey,
-                fontSize: 12.0,
-                fontWeight: FontWeight.w500,
+            _buildAvatarAppBar(),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildNomeAppBar(),
+                  _buildSubtituloAppBar(),
+                ],
               ),
             ),
           ],

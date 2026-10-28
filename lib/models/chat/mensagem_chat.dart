@@ -40,6 +40,17 @@ class MensagemChat {
     );
   }
 
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'conversaId': conversaId,
+      'remetenteTipo': remetenteTipo,
+      'remetenteUsuarioId': remetenteUsuarioId,
+      'conteudo': conteudo,
+      'enviadaEm': enviadaEm.toUtc().toIso8601String(),
+    };
+  }
+
   @override
   bool operator ==(Object other) =>
       other is MensagemChat && other.id == id && id.isNotEmpty;

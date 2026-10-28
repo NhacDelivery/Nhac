@@ -6,10 +6,16 @@ class ChatLojaPage extends ChatConversaPage {
     super.key,
     required String lojaId,
     required String lojaNome,
+    String? lojaFotoUrl,
     super.conversaId,
+    super.heroTag,
     super.produtoReferencia,
     super.pedidoReferencia,
     super.repository,
     super.socket,
-  }) : super(lojaId: lojaId, interlocutorNome: lojaNome);
+  }) : super(
+          lojaId: lojaId,
+          interlocutorNome: lojaNome,
+          interlocutorFotoUrl: lojaFotoUrl,
+        );
 }
