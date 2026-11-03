@@ -7,6 +7,7 @@ on:
       - eu-e-tu
       - context-ia-migration
       - 'feature/**'
+      - 'feat/**'
       - 'fix/**'
       - 'hotfix/**'
       - 'chore/**'
@@ -91,6 +92,7 @@ jobs:
       github.ref_name == 'eu-e-tu' || github.base_ref == 'eu-e-tu' ||
       github.ref_name == 'context-ia-migration' || github.base_ref == 'context-ia-migration' ||
       startsWith(github.ref_name, 'feature/') || startsWith(github.base_ref || '', 'feature/') ||
+      startsWith(github.ref_name, 'feat/') || startsWith(github.base_ref || '', 'feat/') ||
       startsWith(github.ref_name, 'fix/') || startsWith(github.base_ref || '', 'fix/'))
     runs-on: ubuntu-latest
     timeout-minutes: 25
