@@ -1213,7 +1213,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   }
 
   Widget _buildRichText(String conteudo, List<String> hashTags) {
-    return FeedContent(conteudo: conteudo, tags: hashTags);
+    return FeedContent(conteudo: conteudo, tags: hashTags, expandivel: false);
   }
 
   Widget _buildMentionedStore(MentionedStoreModel store) {
