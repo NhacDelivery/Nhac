@@ -52,6 +52,22 @@ class FeedRepository {
     }
   }
 
+  Future<List<FeedPostModel>> buscarMinhasPublicacoes({int page = 0}) async {
+    try {
+      final response = await _dio.get(
+        '/feed/posts/meus',
+        queryParameters: {'page': page, 'size': 20},
+      );
+      final data = Map<String, dynamic>.from(response.data as Map);
+      final content = data['content'] as List? ?? const [];
+      return content
+          .map((item) => FeedPostModel.fromMap(Map<String, dynamic>.from(item)))
+          .toList();
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
   Future<FeedPostModel> buscarPost(String id) async {
     try {
       final response = await _dio.get('/feed/posts/${Uri.encodeComponent(id)}');

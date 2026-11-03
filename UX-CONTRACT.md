@@ -266,6 +266,18 @@ os produtos carregados e o retry; consulta bem-sucedida sem produtos é o único
 O catálogo é solicitado com lojas abertas primeiro, antes do limite de 50 itens.
 
 
+## Perfil social e publicações próprias
+
+A aba Perfil mostra o nome da conta e um identificador visual no formato
+`@nome`, normalizado a partir do nome cadastrado. Esse identificador é
+apenas de apresentação nesta versão: não é único, editável nem persistido como
+username na API. A grade de publicações consulta
+`GET /api/v1/feed/posts/meus`, cuja autoria é determinada exclusivamente
+pela sessão autenticada. A listagem é paginada e nunca deve ser reconstruída
+filtrando apenas os itens já carregados na timeline. Estados de erro oferecem
+nova tentativa; uma consulta bem-sucedida sem itens mostra o estado vazio e
+atalho para publicar. Abrir um item reutiliza a tela de detalhes existente.
+
 ## Entrada do feed
 
 O feed usa FeedPublishInvite para convidar a compartilhar uma experiência com comida.

@@ -12,6 +12,7 @@ import 'package:nhac/models/usuario/usuario_model.dart';
 import 'package:nhac/repositories/endereco_repository.dart';
 import 'package:nhac/repositories/user_repository.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
+import 'package:nhac/repositories/feed_repository.dart';
 import 'package:nhac/services/auth_service.dart';
 
 class ProfileAuthMock extends Mock implements AuthService {}
@@ -22,9 +23,12 @@ class ProfileEnderecoMock extends Mock implements EnderecoRepository {}
 
 class ProfilePedidoMock extends Mock implements PedidoRepository {}
 
+class ProfileFeedMock extends Mock implements FeedRepository {}
+
 void main() {
   late ProfileAuthMock auth;
   late ProfilePedidoMock pedidos;
+  late ProfileFeedMock feed;
   late ProfileUserMock users;
   late UserProvider user;
   late EnderecoProvider enderecos;
@@ -33,6 +37,9 @@ void main() {
     auth = ProfileAuthMock();
     users = ProfileUserMock();
     pedidos = ProfilePedidoMock();
+    feed = ProfileFeedMock();
+    when(() => feed.buscarMinhasPublicacoes(page: 0))
+        .thenAnswer((_) async => []);
     when(() => auth.usuarioId).thenReturn('cliente');
     when(() => auth.isGoogleUser).thenReturn(false);
     when(() => auth.isPhoneUser).thenReturn(false);
@@ -68,6 +75,7 @@ void main() {
           builder: (_, __) => Scaffold(
               body: ProfileContent(
                   pedidoRepository: pedidos,
+                  feedRepository: feed,
                   autenticarBiometria: () async => false))),
       GoRoute(
           path: '/meus-pedidos',
@@ -90,6 +98,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump();
   }
+
+  testWidgets('perfil mostra um identificador visual derivado do nome', (tester) async {
+    await montar(tester);
+    expect(find.text('@cliente'), findsOneWidget);
+    expect(find.text('Publicações'), findsOneWidget);
+  });
 
   testWidgets('cartão Pedidos abre histórico e opção duplicada não aparece',
       (tester) async {

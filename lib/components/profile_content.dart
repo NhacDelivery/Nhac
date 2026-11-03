@@ -21,15 +21,20 @@ import 'package:nhac/services/local_cache_service.dart';
 import 'package:provider/provider.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
+import 'package:nhac/repositories/feed_repository.dart';
+import 'package:nhac/components/profile/profile_publications_section.dart';
+import 'package:nhac/utils/username_format.dart';
 import 'package:nhac/pages/notificacoes_page.dart';
 
 class ProfileContent extends StatefulWidget {
   final bool isActive;
   final PedidoRepository? pedidoRepository;
+  final FeedRepository? feedRepository;
   final Future<bool> Function()? autenticarBiometria;
   const ProfileContent({
     super.key,
     this.pedidoRepository,
+    this.feedRepository,
     this.autenticarBiometria,
     this.isActive = true,
   });
@@ -757,6 +762,17 @@ class _ProfileContentState extends State<ProfileContent>
                               ),
                             ),
                             SizedBox(height: 4.h),
+                            Text(
+                              usernameFromName(usuario.nome),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: const Color(0xFF8D625F),
+                                fontSize: 13.sp,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            SizedBox(height: 4.h),
                             Row(
                               children: [
                                 Icon(
@@ -836,6 +852,12 @@ class _ProfileContentState extends State<ProfileContent>
                       onPressed: _atualizarPerfil,
                       child: Text(userProvider.erro!),
                     ),
+                  SizedBox(height: 32.h),
+                  ProfilePublicationsSection(
+                    usuarioId: usuario.id,
+                    isActive: widget.isActive,
+                    repository: widget.feedRepository,
+                  ),
                   SizedBox(height: 40.h),
                   Text(
                     'Sua Conta',

@@ -30,6 +30,25 @@ void main() {
     })).called(1);
   });
 
+  test('minhas publicações usam endpoint autenticado e paginação', () async {
+    final dio = MockFeedDio();
+    when(() => dio.get('/feed/posts/meus',
+            queryParameters: any(named: 'queryParameters')))
+        .thenAnswer((_) async => Response(
+              requestOptions: RequestOptions(path: '/feed/posts/meus'),
+              data: {'content': [postData()]},
+            ));
+
+    final posts = await FeedRepository(dio: dio)
+        .buscarMinhasPublicacoes(page: 3);
+
+    expect(posts.single.id, 'post-real');
+    verify(() => dio.get('/feed/posts/meus', queryParameters: {
+      'page': 3,
+      'size': 20,
+    })).called(1);
+  });
+
   test('feed vazio não insere exemplos', () async {
     final dio = MockFeedDio();
     when(() => dio.get('/feed/posts', queryParameters: any(named: 'queryParameters')))
