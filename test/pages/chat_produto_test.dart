@@ -58,10 +58,15 @@ void main() {
               repository: repository,
               socket: socket)));
 
+  Future<void> pumpChatReady(WidgetTester tester) async {
+    await tester.pump();
+    await tester.pump();
+  }
+
   testWidgets('entrada por pedido envia só texto, sem referência automática',
       (tester) async {
     await tester.pumpWidget(page());
-    await tester.pump();
+    await pumpChatReady(tester);
     expect(find.text('Enviar produto à loja'), findsNothing);
     await tester.enterText(find.byType(TextField), 'Meu pedido saiu?');
     await tester.tap(find.byTooltip('Enviar mensagem'));
@@ -76,7 +81,7 @@ void main() {
       'produto anexa cartão e reconexão confirma ID sem duplicar histórico',
       (tester) async {
     await tester.pumpWidget(page(fromProduct: true));
-    await tester.pump();
+    await pumpChatReady(tester);
     await tester.enterText(find.byType(TextField), 'Tem cebola?');
     await tester.tap(find.byTooltip('Enviar mensagem'));
     await tester.pump();
@@ -106,7 +111,7 @@ void main() {
     verifyNever(() => socket.enviar(any(), any()));
     await tester.pumpWidget(const SizedBox());
     await tester.pumpWidget(page());
-    await tester.pump();
+    await pumpChatReady(tester);
     expect(find.text('Pizza'), findsOneWidget);
     expect(find.text('Tem cebola?'), findsOneWidget);
     expect(find.textContaining('ID: p1'), findsNothing);
@@ -115,7 +120,7 @@ void main() {
 
   testWidgets('reenvio conserva identificador e anexo', (tester) async {
     await tester.pumpWidget(page(fromProduct: true));
-    await tester.pump();
+    await pumpChatReady(tester);
     await tester.enterText(find.byType(TextField), 'Tem cebola?');
     await tester.tap(find.byTooltip('Enviar mensagem'));
     await tester.pump();
