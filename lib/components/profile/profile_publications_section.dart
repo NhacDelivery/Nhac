@@ -10,11 +10,13 @@ class ProfilePublicationsSection extends StatefulWidget {
     super.key,
     required this.usuarioId,
     this.isActive = true,
+    this.refreshVersion = 0,
     this.repository,
   });
 
   final String usuarioId;
   final bool isActive;
+  final int refreshVersion;
   final FeedRepository? repository;
 
   @override
@@ -59,7 +61,14 @@ class _ProfilePublicationsSectionState
       _loading = false;
       _loadingMore = false;
     }
-    if (widget.isActive && (!oldWidget.isActive || !_started)) {
+    final atualizar = oldWidget.refreshVersion != widget.refreshVersion;
+    if (atualizar) {
+      _requestVersion++;
+      _loading = false;
+      _loadingMore = false;
+    }
+    if (widget.isActive &&
+        (atualizar || !oldWidget.isActive || !_started)) {
       _carregar();
     }
   }

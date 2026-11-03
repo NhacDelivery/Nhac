@@ -61,7 +61,10 @@ class _ProfileContentState extends State<ProfileContent>
   @override
   void didUpdateWidget(covariant ProfileContent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isActive && !oldWidget.isActive) _carregarEstatisticas();
+    if (widget.isActive && !oldWidget.isActive) {
+      _carregarEstatisticas();
+      setState(() => _profileRefreshVersion++);
+    }
   }
 
   @override
@@ -89,6 +92,7 @@ class _ProfileContentState extends State<ProfileContent>
   }
 
   bool _isUploading = false;
+  int _profileRefreshVersion = 0;
   Map<String, dynamic> _estatisticas = {
     'totalPedidos': 0,
     'lojasFavoritadas': 0,
@@ -192,6 +196,7 @@ class _ProfileContentState extends State<ProfileContent>
   }
 
   Future<void> _atualizarPerfil() async {
+    setState(() => _profileRefreshVersion++);
     await Future.wait([
       context.read<UserProvider>().carregarDadosUsuario(),
       _carregarEstatisticas(),
@@ -856,6 +861,7 @@ class _ProfileContentState extends State<ProfileContent>
                   ProfilePublicationsSection(
                     usuarioId: usuario.id,
                     isActive: widget.isActive,
+                    refreshVersion: _profileRefreshVersion,
                     repository: widget.feedRepository,
                   ),
                   SizedBox(height: 40.h),

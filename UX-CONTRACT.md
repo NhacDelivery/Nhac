@@ -274,7 +274,9 @@ apenas de apresentação nesta versão: não é único, editável nem persistido
 username na API. A grade de publicações consulta
 `GET /api/v1/feed/posts/meus`, cuja autoria é determinada exclusivamente
 pela sessão autenticada. A listagem é paginada e nunca deve ser reconstruída
-filtrando apenas os itens já carregados na timeline. Estados de erro oferecem
+filtrando apenas os itens já carregados na timeline. Ao abrir novamente a aba
+Perfil ou atualizar o perfil com gesto de refresh, a grade deve consultar a API
+outra vez. Estados de erro oferecem
 nova tentativa; uma consulta bem-sucedida sem itens mostra o estado vazio e
 atalho para publicar. Abrir um item reutiliza a tela de detalhes existente.
 
