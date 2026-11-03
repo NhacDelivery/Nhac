@@ -12,7 +12,7 @@ on:
         required: false
         type: string
   push:
-    branches: [main, eu-e-tu]
+    branches: [main, eu-e-tu, 'feat/**']
   pull_request:
   schedule:
     - cron: '0 6 * * *'
