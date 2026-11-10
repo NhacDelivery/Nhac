@@ -10,6 +10,7 @@ import 'package:nhac/models/chat/conversa_resumo.dart';
 import 'package:nhac/repositories/chat_repository.dart';
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/services/chat_cache_service.dart';
+import 'package:nhac/components/seta_voltar.dart';
 
 class MensagensPage extends StatefulWidget {
   final ChatRepository? repository;
@@ -29,11 +30,15 @@ class _MensagensPageState extends State<MensagensPage>
     buscar: (pagina, tamanho) =>
         _repository.listarConversasPessoas(pagina: pagina, tamanho: tamanho),
     identificar: (item) => item.id,
+    carregarCache: ChatCacheService.carregarConversasPessoas,
+    salvarCache: ChatCacheService.salvarConversasPessoas,
   );
   late final _lojas = ListaConversasController<ConversaResumo>(
     buscar: (pagina, tamanho) =>
         _repository.listarConversas(pagina: pagina, tamanho: tamanho),
     identificar: (item) => item.id,
+    carregarCache: ChatCacheService.carregarConversasLojas,
+    salvarCache: ChatCacheService.salvarConversasLojas,
   );
   final _busca = TextEditingController();
   final _focoBusca = FocusNode();
@@ -54,6 +59,8 @@ class _MensagensPageState extends State<MensagensPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _pessoas.carregarCacheInicial();
+    _lojas.carregarCacheInicial();
     _pessoas.carregar();
   }
 
@@ -122,55 +129,12 @@ class _MensagensPageState extends State<MensagensPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top actions (Back button + Refresh/Search + More)
+            // Botão de voltar padrão do app
             Padding(
-              padding: EdgeInsets.only(top: 8.h, right: 8.w, left: 8.w),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.arrow_back,
-                      color: const Color(0xFF5D201C),
-                      size: 24.r,
-                    ),
-                    onPressed: () => context.pop(),
-                  ),
-                  const Spacer(),
-                  AnimatedBuilder(
-                    animation: Listenable.merge([_pessoas, _lojas]),
-                    builder: (_, __) => IconButton(
-                      tooltip: 'Atualizar conversas',
-                      icon: Icon(
-                        Icons.refresh,
-                        color: const Color(0xFF5D201C),
-                        size: 26.r,
-                      ),
-                      onPressed: (_currentIndex == 0
-                              ? _pessoas.carregando
-                              : _lojas.carregando)
-                          ? null
-                          : _atualizar,
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.search,
-                      color: const Color(0xFF5D201C),
-                      size: 28.r,
-                    ),
-                    onPressed: () {
-                      _focoBusca.requestFocus();
-                    },
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.more_vert,
-                      color: const Color(0xFF5D201C),
-                      size: 28.r,
-                    ),
-                    onPressed: () {},
-                  ),
-                ],
+              padding: EdgeInsets.fromLTRB(24.w, 16.h, 24.w, 8.h),
+              child: const Align(
+                alignment: Alignment.centerLeft,
+                child: SetaVoltar(),
               ),
             ),
 
@@ -261,8 +225,8 @@ class _MensagensPageState extends State<MensagensPage>
           setState(() {
             _currentIndex = index;
           });
-          if (index == 0 && !_pessoas.carregou) _pessoas.carregar();
-          if (index == 1 && !_lojas.carregou) _lojas.carregar();
+          if (index == 0) _pessoas.carregar();
+          if (index == 1) _lojas.carregar();
         },
         backgroundColor: Colors.white,
         selectedItemColor: const Color(0xFF5D201C),

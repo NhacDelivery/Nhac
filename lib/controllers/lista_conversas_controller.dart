@@ -6,6 +6,8 @@ import 'package:nhac/utils/error_ui_helper.dart';
 class ListaConversasController<T> extends ChangeNotifier {
   final Future<List<T>> Function(int pagina, int tamanho) buscar;
   final String Function(T item) identificar;
+  final Future<List<T>> Function()? carregarCache;
+  final Future<void> Function(List<T> itens)? salvarCache;
   final int tamanho;
   final List<T> _itens = [];
   List<T> get itens => List.unmodifiable(_itens);
@@ -20,8 +22,26 @@ class ListaConversasController<T> extends ChangeNotifier {
 
   Future<void> tentarNovamente() => carregar(reiniciar: _ultimaReiniciar);
 
-  ListaConversasController(
-      {required this.buscar, required this.identificar, this.tamanho = 20});
+  ListaConversasController({
+    required this.buscar,
+    required this.identificar,
+    this.carregarCache,
+    this.salvarCache,
+    this.tamanho = 20,
+  });
+
+  /// Pré-carrega instantaneamente o cache permanente sem disparar requisição de rede.
+  Future<void> carregarCacheInicial() async {
+    if (carregarCache == null || _itens.isNotEmpty || _disposed) return;
+    try {
+      final emCache = await carregarCache!();
+      if (emCache.isNotEmpty && _itens.isEmpty && !_disposed) {
+        _itens.addAll(emCache);
+        carregou = true;
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
 
   Future<void> carregar({bool reiniciar = false}) {
     if (_disposed) return Future.value();
@@ -34,6 +54,19 @@ class ListaConversasController<T> extends ChangeNotifier {
 
   Future<void> _carregar(bool reiniciar) async {
     _ultimaReiniciar = reiniciar;
+
+    // Se ainda não temos itens e houver cache local permanente, restaura primeiro
+    if (_itens.isEmpty && carregarCache != null) {
+      try {
+        final emCache = await carregarCache!();
+        if (emCache.isNotEmpty && _itens.isEmpty && !_disposed) {
+          _itens.addAll(emCache);
+          carregou = true;
+          notifyListeners();
+        }
+      } catch (_) {}
+    }
+
     carregando = true;
     erro = null;
     notifyListeners();
@@ -47,11 +80,18 @@ class ListaConversasController<T> extends ChangeNotifier {
       _pagina = pagina + 1;
       temMais = novos.length == tamanho;
       carregou = true;
+      if (salvarCache != null && (reiniciar || pagina == 0)) {
+        salvarCache!(List.unmodifiable(_itens));
+      }
     } catch (e) {
-      if (!_disposed)
-        erro = ErrorUIHelper.mensagem(e,
-            fallback:
-                'Não foi possível carregar as conversas. Tente novamente.');
+      if (!_disposed) {
+        // Se a lista já possui itens salvos em cache, mantém visíveis para uso offline
+        if (_itens.isEmpty) {
+          erro = ErrorUIHelper.mensagem(e,
+              fallback:
+                  'Não foi possível carregar as conversas. Tente novamente.');
+        }
+      }
     } finally {
       if (!_disposed) {
         carregando = false;

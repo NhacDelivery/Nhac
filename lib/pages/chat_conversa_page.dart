@@ -23,6 +23,7 @@ import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/models/chat/mensagem_chat.dart';
 import 'package:nhac/repositories/chat_repository.dart';
 import 'package:nhac/services/chat_socket_service.dart';
+import 'package:nhac/components/seta_voltar.dart';
 import 'package:nhac/models/produto/produtos.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:nhac/services/chat_cache_service.dart';
@@ -111,7 +112,7 @@ class _ChatConversaPageState extends State<ChatConversaPage>
             ? ChatCacheService.obterFotoLojaMemoria(widget.lojaId!)
             : null);
 
-    // Pré-carrega instantaneamente do cache em memória (0ms)
+    // Pré-carrega instantaneamente do cache em memória (0ms) e disco
     final cidInicial = widget.conversaId ??
         (widget.lojaId != null
             ? ChatCacheService.obterConversaIdPorLojaMemoria(widget.lojaId!)
@@ -123,6 +124,19 @@ class _ChatConversaPageState extends State<ChatConversaPage>
         _mensagens.addAll(msgsCache);
         _carregando = false;
         _irParaOFim();
+      } else {
+        ChatCacheService.carregarCache(cidInicial).then((emDisco) {
+          if (emDisco != null &&
+              emDisco.isNotEmpty &&
+              mounted &&
+              _mensagens.isEmpty) {
+            setState(() {
+              _mensagens.addAll(emDisco);
+              _carregando = false;
+            });
+            _irParaOFim();
+          }
+        });
       }
     }
 
@@ -217,8 +231,21 @@ class _ChatConversaPageState extends State<ChatConversaPage>
           ChatCacheService.salvar(idFinal, _mensagens);
         }
       } catch (e) {
-        // Se já existiam mensagens em cache, não mostra erro fatal na tela
-        if (_mensagens.isNotEmpty) {
+        // Se já existiam mensagens em cache ou no disco, não mostra erro fatal na tela
+        if (_mensagens.isEmpty) {
+          final emDisco = await ChatCacheService.carregarCache(idFinal);
+          if (emDisco != null && emDisco.isNotEmpty && mounted) {
+            setState(() {
+              _mensagens.addAll(emDisco);
+              _carregando = false;
+              _erroAtualizacao =
+                  'Sem conexão no momento. Exibindo mensagens salvas.';
+            });
+            _irParaOFim();
+          } else {
+            rethrow;
+          }
+        } else {
           if (mounted) {
             setState(() {
               _carregando = false;
@@ -226,8 +253,6 @@ class _ChatConversaPageState extends State<ChatConversaPage>
                   'Sem conexão no momento. Exibindo mensagens salvas.';
             });
           }
-        } else {
-          rethrow;
         }
       }
 
@@ -264,11 +289,19 @@ class _ChatConversaPageState extends State<ChatConversaPage>
       _irParaOFim();
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _carregando = false;
-        _erroFatal = ErrorUIHelper.mensagem(e,
-            fallback: 'Não foi possível abrir a conversa. Tente novamente.');
-      });
+      if (_mensagens.isNotEmpty) {
+        setState(() {
+          _carregando = false;
+          _erroAtualizacao =
+              'Sem conexão no momento. Exibindo mensagens salvas.';
+        });
+      } else {
+        setState(() {
+          _carregando = false;
+          _erroFatal = ErrorUIHelper.mensagem(e,
+              fallback: 'Não foi possível abrir a conversa. Tente novamente.');
+        });
+      }
     } finally {
       _inicializando = false;
     }
@@ -283,6 +316,11 @@ class _ChatConversaPageState extends State<ChatConversaPage>
     setState(() => _mensagens.add(mensagem));
     if (_conversaId != null) {
       ChatCacheService.salvar(_conversaId!, _mensagens);
+      ChatCacheService.atualizarUltimaMensagem(
+        _conversaId!,
+        mensagem.conteudo,
+        mensagem.enviadaEm,
+      );
     }
     if (!_minhaMensagem(mensagem) && _conversaId != null) {
       _repository.marcarComoLida(_conversaId!);
@@ -321,6 +359,14 @@ class _ChatConversaPageState extends State<ChatConversaPage>
         _mensagens.sort((a, b) => a.enviadaEm.compareTo(b.enviadaEm));
       });
       ChatCacheService.salvar(conversaId, _mensagens);
+      if (_mensagens.isNotEmpty) {
+        final ultima = _mensagens.last;
+        ChatCacheService.atualizarUltimaMensagem(
+          conversaId,
+          ultima.conteudo,
+          ultima.enviadaEm,
+        );
+      }
     } catch (e) {
       if (mounted) setState(() => _erroAtualizacao = ErrorUIHelper.mensagem(e));
     } finally {
@@ -605,6 +651,7 @@ class _ChatConversaPageState extends State<ChatConversaPage>
         surfaceTintColor: Colors.white,
         elevation: 0.5,
         iconTheme: const IconThemeData(color: Color(0xFF5D201C)),
+        leading: const Center(child: SetaVoltar()),
         titleSpacing: 0,
         title: Row(
           children: [

@@ -54,4 +54,36 @@ class ConversaResumo {
       mensagensNaoLidas: safeInt(map['naoLidas'] ?? map['mensagensNaoLidas']),
     );
   }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'lojaId': lojaId,
+      'lojaNome': lojaNome,
+      'lojaFotoUrl': lojaFotoUrl,
+      'ultimaMensagem': ultimaMensagem,
+      'ultimaMensagemData': ultimaMensagemData.toUtc().toIso8601String(),
+      'mensagensNaoLidas': mensagensNaoLidas,
+    };
+  }
+
+  ConversaResumo copyWith({
+    String? id,
+    String? lojaId,
+    String? lojaNome,
+    String? lojaFotoUrl,
+    String? ultimaMensagem,
+    DateTime? ultimaMensagemData,
+    int? mensagensNaoLidas,
+  }) {
+    return ConversaResumo(
+      id: id ?? this.id,
+      lojaId: lojaId ?? this.lojaId,
+      lojaNome: lojaNome ?? this.lojaNome,
+      lojaFotoUrl: lojaFotoUrl ?? this.lojaFotoUrl,
+      ultimaMensagem: ultimaMensagem ?? this.ultimaMensagem,
+      ultimaMensagemData: ultimaMensagemData ?? this.ultimaMensagemData,
+      mensagensNaoLidas: mensagensNaoLidas ?? this.mensagensNaoLidas,
+    );
+  }
 }

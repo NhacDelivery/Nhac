@@ -1,5 +1,6 @@
 import 'package:nhac/components/pedido/operacao_pagamento_card.dart';
 import 'package:nhac/components/estado_com_retry.dart';
+import 'package:nhac/components/botoes/botao_largo_nhac.dart';
 import 'dart:async';
 import 'package:nhac/models/chat/pedido_chat_referencia.dart';
 import 'package:nhac/services/shared_get.dart';
@@ -58,7 +59,11 @@ class RastreioPedidoPage extends StatefulWidget {
 }
 
 class _RastreioPedidoPageState extends State<RastreioPedidoPage>
-    with RouteAware, WidgetsBindingObserver {
+    with RouteAware, WidgetsBindingObserver, TickerProviderStateMixin {
+  late final AnimationController _statusAnimationController;
+  late final Animation<Offset> _statusOffsetAnimation;
+  late final AnimationController _ampulhetaController;
+  late final Animation<double> _ampulhetaAnimation;
   String get _cacheKey => '${SharedGet.sessionGeneration}|${widget.pedidoId}';
   bool _visible = true;
   bool _foreground = true;
@@ -188,6 +193,42 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     }
     _carregarDados(silencioso: cached != null);
     _conectarStatus();
+    _statusAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _statusOffsetAnimation = Tween<Offset>(
+      begin: const Offset(0, -2.5),
+      end: const Offset(0, 0),
+    ).animate(CurvedAnimation(
+      parent: _statusAnimationController,
+      curve: Curves.elasticOut,
+    ));
+    _statusAnimationController.forward();
+    _ampulhetaController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )..repeat();
+    _ampulhetaAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 0.5)
+            .chain(CurveTween(curve: Curves.easeInOutBack)),
+        weight: 35.0,
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(0.5),
+        weight: 65.0,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.5, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOutBack)),
+        weight: 35.0,
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(1.0),
+        weight: 65.0,
+      ),
+    ]).animate(_ampulhetaController);
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (ModalRoute.of(context)?.isCurrent == true &&
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
@@ -199,6 +240,8 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
 
   @override
   void dispose() {
+    _ampulhetaController.dispose();
+    _statusAnimationController.dispose();
     _requestVersion++;
     _statusRefreshTimer?.cancel();
     homeOrderRouteObserver.unsubscribe(this);
@@ -547,6 +590,44 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     return _pedido?.statusTexto ?? 'Pedido em andamento';
   }
 
+  IconData _statusIcon() {
+    final status = _pedido?.status;
+    switch (status) {
+      case StatusPedido.pendente:
+        return Icons.hourglass_top_rounded;
+      case StatusPedido.pago:
+        return Icons.check_circle_outline_rounded;
+      case StatusPedido.preparando:
+        return Icons.soup_kitchen_rounded;
+      case StatusPedido.saiuEntrega:
+        return Icons.delivery_dining_rounded;
+      case StatusPedido.entregue:
+        return Icons.task_alt_rounded;
+      case StatusPedido.cancelado:
+        return Icons.cancel_outlined;
+      default:
+        return Icons.fastfood_rounded;
+    }
+  }
+
+  Widget _buildStatusIcon() {
+    final iconData = _statusIcon();
+    final iconWidget = Icon(
+      iconData,
+      color: const Color(0xFFFE645C),
+      size: 22.r,
+    );
+
+    if (iconData == Icons.hourglass_top_rounded) {
+      return RotationTransition(
+        turns: _ampulhetaAnimation,
+        child: iconWidget,
+      );
+    }
+
+    return iconWidget;
+  }
+
   Widget _buildMapa() {
     if (AppConstants.e2eMode) {
       return Container(
@@ -753,47 +834,72 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
             top: MediaQuery.of(context).padding.top + 16.h,
             left: 70.w,
             right: 16.w,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16.r),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 4),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      SizedBox(width: 8.w),
-                      Expanded(
-                        child: Semantics(
-                          key: E2EKeys.trackingStatus,
-                          value: _pedido!.status.apiValue,
-                          child: Text(
-                            _statusPedidoTexto(),
-                            key: const Key('pedido-status-text'),
+            child: SlideTransition(
+              position: _statusOffsetAnimation,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(50.r),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF5D201C).withValues(alpha: 0.1),
+                      blurRadius: 20.r,
+                      offset: Offset(0, 10.h),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40.w,
+                      height: 40.w,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFFFE645C).withValues(alpha: 0.15),
+                      ),
+                      child: Center(
+                        child: _buildStatusIcon(),
+                      ),
+                    ),
+                    SizedBox(width: 12.w),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            key: E2EKeys.trackingStatus,
+                            value: _pedido!.status.apiValue,
+                            child: Text(
+                              _statusPedidoTexto(),
+                              key: const Key('pedido-status-text'),
+                              style: TextStyle(
+                                color: const Color(0xFF5D201C),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14.sp,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          SizedBox(height: 2.h),
+                          Text(
+                            '${_pedido!.enderecoEntrega.rua}, ${_pedido!.enderecoEntrega.numero}',
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16.sp,
+                              color: Colors.grey.shade500,
+                              fontSize: 12.sp,
+                              fontWeight: FontWeight.w500,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    '${_pedido!.enderecoEntrega.rua}, ${_pedido!.enderecoEntrega.numero}',
-                    style: TextStyle(color: Colors.grey, fontSize: 13.sp),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                    ),
+                    SizedBox(width: 6.w),
+                  ],
+                ),
               ),
             ),
           ),
@@ -952,9 +1058,16 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                         onTap: () => _abrirMensagemRestaurante(),
                         child: Container(
                           padding: EdgeInsets.all(12.w),
-                          decoration: const BoxDecoration(
-                            color: Colors.blue,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFE645C),
                             shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFE645C).withValues(alpha: 0.3),
+                                blurRadius: 8.r,
+                                offset: Offset(0, 3.h),
+                              ),
+                            ],
                           ),
                           child: Icon(
                             Icons.message,
@@ -1041,15 +1154,11 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                       ),
                       SizedBox(height: 8.h),
                     ],
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        key: const Key('pedido-cancelar-button'),
-                        onPressed: _cancelando ? null : _cancelarPedido,
-                        child: Text(
-                          _cancelando ? 'Cancelando...' : 'Cancelar pedido',
-                        ),
-                      ),
+                    BotaoLargoNhac(
+                      key: const Key('pedido-cancelar-button'),
+                      texto: 'Cancelar pedido',
+                      carregando: _cancelando,
+                      onPressed: _cancelando ? null : _cancelarPedido,
                     ),
                   ],
                   SizedBox(height: 32.h),

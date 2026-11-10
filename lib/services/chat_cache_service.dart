@@ -1,16 +1,23 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nhac/models/chat/mensagem_chat.dart';
+import 'package:nhac/models/chat/conversa_resumo.dart';
+import 'package:nhac/models/chat/conversa_pessoa_resumo.dart';
 
-/// Serviço de cache de conversas do chat.
+/// Serviço de cache permanente de conversas e mensagens do chat.
 ///
-/// Utiliza estratégia de cache em 2 níveis:
-/// 1. Em memória (L1): Acesso síncrono instantâneo (0ms) para navegações frequentes.
-/// 2. Em disco via SharedPreferences (L2): Persistência entre reinicializações do app.
+/// Utiliza estratégia de cache em 2 níveis (L1 Memória + L2 SharedPreferences/Disco):
+/// - Acesso síncrono instantâneo (0ms) na memória para navegações ativas.
+/// - Persistência permanente em disco para carregamento 100% funcional offline.
 class ChatCacheService {
   static final Map<String, List<MensagemChat>> _cacheMemoria = {};
   static final Map<String, String> _lojaParaConversaMemoria = {};
-  static const int _limiteMaximoMensagens = 60;
+  static List<ConversaResumo>? _conversasLojasMemoria;
+  static List<ConversaPessoaResumo>? _conversasPessoasMemoria;
+  static const int _limiteMaximoMensagens = 250;
+
+  static const String _chaveConversasLojas = 'cache_chat_conversas_lojas_v1';
+  static const String _chaveConversasPessoas = 'cache_chat_conversas_pessoas_v1';
 
   static String _chaveConversa(String conversaId) =>
       'cache_chat_mensagens_$conversaId';
@@ -147,6 +154,124 @@ class ChatCacheService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_chaveLojaFoto(lojaId), fotoUrl);
     } catch (_) {}
+  }
+
+  /// Salva a lista de conversas com lojas em disco e memória.
+  static Future<void> salvarConversasLojas(List<ConversaResumo> conversas) async {
+    _conversasLojasMemoria = List.from(conversas);
+    try {
+      final jsonList = conversas.map((c) => c.toMap()).toList();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_chaveConversasLojas, jsonEncode(jsonList));
+
+      // Indexa lojas para abertura e fotos offline rápidas
+      for (final c in conversas) {
+        if (c.lojaId.isNotEmpty && c.id.isNotEmpty) {
+          _lojaParaConversaMemoria[c.lojaId] = c.id;
+          await prefs.setString(_chaveLoja(c.lojaId), c.id);
+        }
+        if (c.lojaId.isNotEmpty && (c.lojaFotoUrl?.isNotEmpty ?? false)) {
+          _lojaFotosMemoria[c.lojaId] = c.lojaFotoUrl!;
+          await prefs.setString(_chaveLojaFoto(c.lojaId), c.lojaFotoUrl!);
+        }
+      }
+    } catch (_) {}
+  }
+
+  /// Carrega a lista de conversas com lojas (busca na memória e depois em disco).
+  static Future<List<ConversaResumo>> carregarConversasLojas() async {
+    if (_conversasLojasMemoria != null && _conversasLojasMemoria!.isNotEmpty) {
+      return List.unmodifiable(_conversasLojasMemoria!);
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_chaveConversasLojas);
+      if (raw == null || raw.isEmpty) return const [];
+      final list = jsonDecode(raw) as List<dynamic>;
+      final conversas = list
+          .map((item) => ConversaResumo.fromMap(Map<String, dynamic>.from(item as Map)))
+          .toList();
+      _conversasLojasMemoria = List.from(conversas);
+
+      // Restaura indexação offline
+      for (final c in conversas) {
+        if (c.lojaId.isNotEmpty && c.id.isNotEmpty) {
+          _lojaParaConversaMemoria[c.lojaId] = c.id;
+        }
+        if (c.lojaId.isNotEmpty && (c.lojaFotoUrl?.isNotEmpty ?? false)) {
+          _lojaFotosMemoria[c.lojaId] = c.lojaFotoUrl!;
+        }
+      }
+
+      return List.unmodifiable(conversas);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Salva a lista de conversas com pessoas em disco e memória.
+  static Future<void> salvarConversasPessoas(List<ConversaPessoaResumo> conversas) async {
+    _conversasPessoasMemoria = List.from(conversas);
+    try {
+      final jsonList = conversas.map((c) => c.toMap()).toList();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_chaveConversasPessoas, jsonEncode(jsonList));
+    } catch (_) {}
+  }
+
+  /// Carrega a lista de conversas com pessoas (busca na memória e depois em disco).
+  static Future<List<ConversaPessoaResumo>> carregarConversasPessoas() async {
+    if (_conversasPessoasMemoria != null && _conversasPessoasMemoria!.isNotEmpty) {
+      return List.unmodifiable(_conversasPessoasMemoria!);
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_chaveConversasPessoas);
+      if (raw == null || raw.isEmpty) return const [];
+      final list = jsonDecode(raw) as List<dynamic>;
+      final conversas = list
+          .map((item) => ConversaPessoaResumo.fromMap(Map<String, dynamic>.from(item as Map)))
+          .toList();
+      _conversasPessoasMemoria = List.from(conversas);
+      return List.unmodifiable(conversas);
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Atualiza a última mensagem de uma conversa no resumo local (lojas e pessoas).
+  static Future<void> atualizarUltimaMensagem(
+    String conversaId,
+    String conteudo,
+    DateTime enviadaEm,
+  ) async {
+    if (conversaId.isEmpty) return;
+
+    // Atualiza lojas se presente
+    if (_conversasLojasMemoria != null) {
+      final index = _conversasLojasMemoria!.indexWhere((c) => c.id == conversaId);
+      if (index != -1) {
+        final atual = _conversasLojasMemoria![index];
+        _conversasLojasMemoria![index] = atual.copyWith(
+          ultimaMensagem: conteudo,
+          ultimaMensagemData: enviadaEm,
+        );
+        salvarConversasLojas(_conversasLojasMemoria!);
+      }
+    }
+
+    // Atualiza pessoas se presente
+    if (_conversasPessoasMemoria != null) {
+      final index = _conversasPessoasMemoria!.indexWhere((c) => c.id == conversaId);
+      if (index != -1) {
+        final atual = _conversasPessoasMemoria![index];
+        _conversasPessoasMemoria![index] = atual.copyWith(
+          ultimaMensagem: conteudo,
+          ultimaMensagemData: enviadaEm,
+        );
+        salvarConversasPessoas(_conversasPessoasMemoria!);
+      }
+    }
   }
 
   /// Limpa o cache de uma conversa específica.
