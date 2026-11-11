@@ -244,21 +244,6 @@ class _ChatConversaPageState extends State<ChatConversaPage>
         ChatCacheService.associarLojaConversa(widget.lojaId!, idFinal);
       }
 
-      // Se ainda não temos mensagens na tela, tenta carregar do disco (L2)
-      if (_mensagens.isEmpty) {
-        final emDisco = await ChatCacheService.carregarCache(idFinal);
-        if (emDisco != null &&
-            emDisco.isNotEmpty &&
-            _mensagens.isEmpty &&
-            mounted) {
-          setState(() {
-            _mensagens.addAll(emDisco);
-            _carregando = false;
-          });
-          _irParaOFim();
-        }
-      }
-
       // Busca histórico atualizado no servidor
       try {
         final historico = await _repository.historico(idFinal);
@@ -488,7 +473,8 @@ class _ChatConversaPageState extends State<ChatConversaPage>
             : texto);
     if (mensagem.length > 4000) {
       if (!mounted) return;
-      context.showError('Reduza a mensagem para enviar junto com a referência.');
+      context
+          .showError('Reduza a mensagem para enviar junto com a referência.');
       return;
     }
     setState(() {

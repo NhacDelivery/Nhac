@@ -141,14 +141,25 @@ class _MensagensPageState extends State<MensagensPage>
             // Large Title
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 8.h),
-              child: Text(
-                'Mensagens',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 34.sp,
-                  color: const Color(0xFF5D201C),
-                  letterSpacing: -0.5,
-                ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Mensagens',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 34.sp,
+                        color: const Color(0xFF5D201C),
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Atualizar conversas',
+                    onPressed: _atualizar,
+                    icon: const Icon(Icons.refresh),
+                  ),
+                ],
               ),
             ),
 

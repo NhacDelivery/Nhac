@@ -45,7 +45,12 @@ class ListaConversasController<T> extends ChangeNotifier {
 
   Future<void> carregar({bool reiniciar = false}) {
     if (_disposed) return Future.value();
-    if (_consulta != null) return _consulta!;
+    final consultaAtual = _consulta;
+    if (consultaAtual != null) {
+      return reiniciar
+          ? consultaAtual.then((_) => carregar(reiniciar: true))
+          : consultaAtual;
+    }
     if (!reiniciar && !temMais) return Future.value();
     final consulta = _carregar(reiniciar);
     _consulta = consulta;
@@ -54,18 +59,6 @@ class ListaConversasController<T> extends ChangeNotifier {
 
   Future<void> _carregar(bool reiniciar) async {
     _ultimaReiniciar = reiniciar;
-
-    // Se ainda não temos itens e houver cache local permanente, restaura primeiro
-    if (_itens.isEmpty && carregarCache != null) {
-      try {
-        final emCache = await carregarCache!();
-        if (emCache.isNotEmpty && _itens.isEmpty && !_disposed) {
-          _itens.addAll(emCache);
-          carregou = true;
-          notifyListeners();
-        }
-      } catch (_) {}
-    }
 
     carregando = true;
     erro = null;
@@ -86,7 +79,8 @@ class ListaConversasController<T> extends ChangeNotifier {
     } catch (e) {
       if (!_disposed) {
         erro = ErrorUIHelper.mensagem(e,
-            fallback: 'Não foi possível carregar as conversas. Tente novamente.');
+            fallback:
+                'Não foi possível carregar as conversas. Tente novamente.');
         // Mesmo com itens já carregados, a falha precisa ser exibida para a
         // caixa de busca permitir retry e manter o estado explícito.
       }

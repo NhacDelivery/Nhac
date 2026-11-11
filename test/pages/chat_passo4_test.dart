@@ -86,8 +86,8 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     when(() => repository.historico('conversa')).thenAnswer((_) async => [
-          mensagem('1', 'Minha mensagem'),
-          mensagem('2', 'Resposta da Ana', autor: 'ana')
+          mensagem('pessoa-eu', 'Minha mensagem'),
+          mensagem('pessoa-ana', 'Resposta da Ana', autor: 'ana')
         ]);
     await tester.pumpWidget(conversa());
     await tester.pump();
