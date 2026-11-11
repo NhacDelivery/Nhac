@@ -92,7 +92,7 @@ class NotaFiscalDados {
           (i) => NotaFiscalItem(
             nome: i.adicionais.isEmpty
                 ? i.nome
-                : i.nome + '\n' + i.adicionais.join(' • '),
+                : '${i.nome}\n${i.adicionais.join(' • ')}',
             preco: i.preco,
             quantidade: i.quantidade,
           ),

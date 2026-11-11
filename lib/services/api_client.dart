@@ -136,7 +136,8 @@ class ApiClient {
           Exception customError;
           if (errorCode == 'PAGAMENTO_INDISPONIVEL') {
             customError = BusinessRuleException(defaultMessage, code: errorCode);
-          } else switch (statusCode) {
+          } else {
+            switch (statusCode) {
             case 400:
               // Verifica se possui o detalhamento de campos
               if (responseData != null &&
@@ -171,6 +172,7 @@ class ApiClient {
             default:
               customError = ServerException();
               break;
+          }
           }
 
           return handler.reject(DioException(

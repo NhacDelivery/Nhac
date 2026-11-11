@@ -42,11 +42,12 @@ class _AvatarCropPageState extends State<AvatarCropPage> {
       }
       setState(() => _image = frame.image);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error =
               'Não foi possível abrir esta foto. Escolha outra imagem.',
         );
+      }
     }
   }
 
@@ -72,11 +73,12 @@ class _AvatarCropPageState extends State<AvatarCropPage> {
           .writeAsBytes(bytes.buffer.asUint8List(), flush: true);
       if (mounted) Navigator.pop(context, file);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error =
               'Não foi possível salvar o enquadramento. Tente novamente.',
         );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

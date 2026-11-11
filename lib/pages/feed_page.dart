@@ -89,18 +89,20 @@ class _FeedPageState extends State<FeedPage>
     final requestId = ++_requestId;
     final revisoes = Map<String, int>.of(_revisoes);
     if (_categoriaCarregada != categoria) {
-      if (_categoriaCarregada != null)
+      if (_categoriaCarregada != null) {
         _cacheCategorias[_categoriaCarregada!] = List.of(_posts);
+      }
       _posts = List.of(_cacheCategorias[categoria] ?? []);
       _categoriaCarregada = categoria;
       _hasMore = false;
     }
-    if (mounted)
+    if (mounted) {
       setState(() {
         _isLoading = true;
         _error = null;
         _loadingMore = false;
       });
+    }
     try {
       final posts = widget.salvos
           ? await _repository.buscarSalvos()
@@ -123,8 +125,9 @@ class _FeedPageState extends State<FeedPage>
       if (!mounted || requestId != _requestId) return;
       setState(() => _error = 'Não foi possível carregar o feed.');
     } finally {
-      if (mounted && requestId == _requestId)
+      if (mounted && requestId == _requestId) {
         setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -160,8 +163,9 @@ class _FeedPageState extends State<FeedPage>
     } catch (e) {
       if (mounted && requestId == _requestId) ErrorUIHelper.handle(context, e);
     } finally {
-      if (mounted && requestId == _requestId)
+      if (mounted && requestId == _requestId) {
         setState(() => _loadingMore = false);
+      }
     }
   }
 
@@ -498,7 +502,7 @@ class _FeedPageState extends State<FeedPage>
       _confirmados[post.id] = updated;
       _revisoes[post.id] = (_revisoes[post.id] ?? 0) + 1;
       final index = _posts.indexWhere((p) => p.id == post.id);
-      if (index >= 0)
+      if (index >= 0) {
         setState(() {
           if (widget.salvos && !updated.salvo) {
             _posts.removeAt(index);
@@ -506,6 +510,7 @@ class _FeedPageState extends State<FeedPage>
             _posts[index] = updated;
           }
         });
+      }
     } catch (e) {
       if (mounted && recursoExcluido(e)) {
         setState(() => _invalidar(post.id));

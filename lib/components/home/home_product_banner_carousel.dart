@@ -49,7 +49,9 @@ class _HomeProductBannerCarouselState extends State<HomeProductBannerCarousel> {
       if (!_controller.hasClients ||
           ModalRoute.of(context)?.isCurrent != true ||
           WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed ||
-          MediaQuery.of(context).disableAnimations) return;
+          MediaQuery.of(context).disableAnimations) {
+        return;
+      }
       _controller.animateToPage((_pagina + 1) % _produtos.length,
           duration: const Duration(milliseconds: 500),
           curve: Curves.easeInOutCubic);

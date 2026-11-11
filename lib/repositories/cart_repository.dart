@@ -32,10 +32,12 @@ class CartRepository {
       final previous = prefs.getString(_cartKey);
       final current = previous == null ? null : jsonDecode(previous);
       final payload = jsonDecode(jsonString) as Map<String, dynamic>;
-      if (current is Map)
+      if (current is Map) {
         payload['pedidosConsumidos'] = current['pedidosConsumidos'] ?? [];
-      if (!await prefs.setString(_cartKey, jsonEncode(payload)))
+      }
+      if (!await prefs.setString(_cartKey, jsonEncode(payload))) {
         throw StateError('Não foi possível salvar o carrinho.');
+      }
     });
   }
 
@@ -106,8 +108,9 @@ class CartRepository {
         payload['itens'] = items.map((item) => item.toMap()).toList();
         payload['pedidosConsumidos'] = [...consumed, pedidoId];
         if (items.isEmpty) payload['observacao'] = '';
-        if (!await prefs.setString(_cartKey, jsonEncode(payload)))
+        if (!await prefs.setString(_cartKey, jsonEncode(payload))) {
           throw StateError('Não foi possível atualizar o carrinho.');
+        }
       });
 
   Future<void> limparCarrinho() => _gravar(() async {
@@ -123,7 +126,8 @@ class CartRepository {
             ? previous['pedidosConsumidos'] ?? []
             : [],
       }),
-    ))
+    )) {
       throw StateError('Não foi possível limpar o carrinho.');
+    }
   });
 }

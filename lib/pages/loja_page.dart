@@ -4,7 +4,6 @@ import 'package:nhac/components/estado_com_retry.dart';
 import 'package:nhac/repositories/avaliacao_repository.dart';
 import 'package:nhac/models/produto/avaliacoes.dart';
 import 'package:flutter/material.dart';
-import 'package:nhac/components/loading_nhac.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -102,11 +101,12 @@ class _LojaPageState extends State<LojaPage>
         _erroLoja = loja == null;
       });
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _erroLoja = true;
           _lojaConfirmada = false;
         });
+      }
     } finally {
       _consultandoLoja = false;
     }
@@ -392,11 +392,13 @@ class _LojaPageState extends State<LojaPage>
         _temMais = pagina.temMais;
       });
     } catch (e) {
-      if (mounted && consulta == _consultaProduto)
+      if (mounted && consulta == _consultaProduto) {
         setState(() => _erroProdutos = e);
+      }
     } finally {
-      if (mounted && consulta == _consultaProduto)
+      if (mounted && consulta == _consultaProduto) {
         setState(() => _carregandoProdutos = false);
+      }
     }
   }
 

@@ -18,7 +18,8 @@ abstract final class E2EConfig {
     }
     await dotenv.load(fileName: '.env');
     AppConstants.validateE2EConfiguration();
-    if (password.length < 12)
+    if (password.length < 12) {
       throw StateError('E2E_PASSWORD temporária é obrigatória.');
+    }
   }
 }

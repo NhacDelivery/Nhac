@@ -59,7 +59,7 @@ class _AvaliarProdutoPageState extends State<AvaliarProdutoPage> {
       );
       if (!mounted || _uid != uid) return;
       _conferida = true;
-      for (final a in avaliacoes)
+      for (final a in avaliacoes) {
         if (a['produtoId'] == widget.produtoId) {
           _existente = a;
           _nota = (a['nota'] as num).toInt();
@@ -70,9 +70,11 @@ class _AvaliarProdutoPageState extends State<AvaliarProdutoPage> {
           _incerto = false;
           break;
         }
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         _error = 'Não foi possível conferir sua avaliação. Tente novamente. $e';
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -88,8 +90,9 @@ class _AvaliarProdutoPageState extends State<AvaliarProdutoPage> {
     if (_busy ||
         _incerto ||
         _existente != null ||
-        _fotos.length + _urls.length >= 6)
+        _fotos.length + _urls.length >= 6) {
       return;
+    }
     setState(() => _busy = true);
     try {
       final foto = await ImagePicker().pickImage(
@@ -98,16 +101,18 @@ class _AvaliarProdutoPageState extends State<AvaliarProdutoPage> {
       );
       if (foto != null) {
         final size = await foto.length();
-        if (size < 1 || size > 5 * 1024 * 1024)
+        if (size < 1 || size > 5 * 1024 * 1024) {
           throw StateError('Escolha uma foto com até 5 MB.');
+        }
         if (mounted) setState(() => _fotos.add(foto));
       }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error =
               'Não foi possível selecionar a foto. Use uma imagem de até 5 MB.',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -163,12 +168,13 @@ class _AvaliarProdutoPageState extends State<AvaliarProdutoPage> {
         if (uid != null) await _tentativas.concluir(uid, _escopo);
         _incerto = false;
       }
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error = rejeicaoDefinitiva(e)
               ? 'Avaliação rejeitada. Corrija os dados e tente novamente. $e'
               : 'Não foi possível confirmar a avaliação. Tente novamente com o mesmo conteúdo.',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

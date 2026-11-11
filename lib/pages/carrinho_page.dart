@@ -439,9 +439,9 @@ class _CarrinhoPageState extends State<CarrinhoPage> {
                           if (details.reached && !hasVibrated) {
                             HapticFeedback.mediumImpact();
                             hasVibrated = true;
-                            // ignore: curly_braces_in_flow_control_structures
-                          } else if (!details.reached)
+                          } else if (!details.reached) {
                             hasVibrated = false;
+                          }
                         },
                         onDismissed: (direction) {
                           if (!isProgrammaticDeleting) {

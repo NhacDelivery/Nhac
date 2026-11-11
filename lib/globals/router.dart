@@ -280,8 +280,9 @@ final GoRouter appRouter = GoRouter(
   observers: [homeOrderRouteObserver],
   refreshListenable: authServiceRoteador,
   redirect: (BuildContext context, GoRouterState state) {
-    if (state.uri.path.startsWith('/publicacao/'))
+    if (state.uri.path.startsWith('/publicacao/')) {
       pendingFeedPath = state.uri.path;
+    }
     if (estaSessaoProntaParaFeed()) {
       final path = pendingFeedPath!;
       pendingFeedPath = null;

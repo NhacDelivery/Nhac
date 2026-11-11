@@ -16,7 +16,6 @@ import 'package:nhac/models/chat/pedido_chat_referencia.dart';
 import 'package:nhac/models/chat/produto_chat_referencia.dart';
 
 import 'package:flutter/material.dart';
-import 'package:nhac/components/loading_nhac.dart';
 import 'package:intl/intl.dart';
 import 'package:uuid/uuid.dart';
 import 'package:nhac/globals/ui_utils.dart';
@@ -392,10 +391,11 @@ class _ChatConversaPageState extends State<ChatConversaPage>
       });
       ChatCacheService.salvar(id, _mensagens);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         context.showError(
           'Não foi possível carregar mensagens antigas. Tente novamente.',
         );
+      }
     } finally {
       if (mounted) setState(() => _carregandoAntigas = false);
     }
@@ -420,7 +420,9 @@ class _ChatConversaPageState extends State<ChatConversaPage>
     if (texto.isEmpty && !anexar && _pendenteId == null) return;
     if (_enviandoRest ||
         _conversaId == null ||
-        (_pendenteId != null && !_envioIncerto)) return;
+        (_pendenteId != null && !_envioIncerto)) {
+      return;
+    }
     final id = _pendenteId ?? const Uuid().v4();
     final mensagem = _pendenteTexto ??
         (anexar
@@ -463,8 +465,9 @@ class _ChatConversaPageState extends State<ChatConversaPage>
     final id = _pendenteId;
     final texto = _pendenteTexto;
     final conversa = _conversaId;
-    if (_enviandoRest || id == null || texto == null || conversa == null)
+    if (_enviandoRest || id == null || texto == null || conversa == null) {
       return;
+    }
     setState(() => _enviandoRest = true);
     try {
       final mensagem = await _repository.enviarMensagem(conversa,
@@ -472,12 +475,13 @@ class _ChatConversaPageState extends State<ChatConversaPage>
       if (!mounted || _conversaId != conversa) return;
       _aoReceberMensagem(mensagem);
     } catch (e) {
-      if (mounted && _pendenteId == id)
+      if (mounted && _pendenteId == id) {
         setState(() {
           _envioIncerto = true;
           _erroAtualizacao = ErrorUIHelper.mensagem(e,
               fallback: 'A mensagem ainda não foi confirmada. Tente reenviar.');
         });
+      }
     } finally {
       if (mounted) setState(() => _enviandoRest = false);
     }
@@ -812,11 +816,12 @@ class _ChatConversaPageState extends State<ChatConversaPage>
     if (pedidoRef != null) return _cartaoPedido(pedidoRef, doCliente);
     final referencia = ProdutoChatReferencia.ler(conteudo);
     final cor = doCliente ? Colors.white : const Color(0xFF5D201C);
-    if (referencia == null)
+    if (referencia == null) {
       return Text(
         conteudo,
         style: TextStyle(color: cor, fontSize: 15, height: 1.3),
       );
+    }
     final imagem = referencia.imagem;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

@@ -18,22 +18,24 @@ class _FeedLinkPageState extends State<FeedLinkPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (authServiceRoteador.isAuthenticated)
+    if (authServiceRoteador.isAuthenticated) {
       _post ??= FeedRepository().buscarPost(widget.id);
+    }
   }
 
   @override
   void didUpdateWidget(covariant FeedLinkPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.id != widget.id)
+    if (oldWidget.id != widget.id) {
       _post = authServiceRoteador.isAuthenticated
           ? FeedRepository().buscarPost(widget.id)
           : null;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!authServiceRoteador.isAuthenticated)
+    if (!authServiceRoteador.isAuthenticated) {
       return Scaffold(
         appBar: AppBar(title: const Text('Publicação compartilhada')),
         body: Center(
@@ -43,6 +45,7 @@ class _FeedLinkPageState extends State<FeedLinkPage> {
           ),
         ),
       );
+    }
     _post ??= FeedRepository().buscarPost(widget.id);
     return FutureBuilder<FeedPostModel>(
       future: _post,

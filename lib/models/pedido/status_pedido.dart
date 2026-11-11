@@ -74,8 +74,9 @@ enum StatusPedido {
 
   String labelParaPagamento(String? formaPagamento) {
     if (formaPagamento?.trim().toUpperCase() == 'DINHEIRO') {
-      if (this == StatusPedido.pendente)
+      if (this == StatusPedido.pendente) {
         return 'Aguardando confirmação da loja';
+      }
       if (this == StatusPedido.pago) return 'Pedido confirmado';
     }
     return label;

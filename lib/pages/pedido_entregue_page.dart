@@ -46,7 +46,7 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
   Future<void> _conferirAvaliacoes() async {
     try {
       final data = await AvaliacaoRepository().minhasDados(widget.pedidoId);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _avaliacoesProdutos = {
             for (final a in data) a['produtoId'] as String: a,
@@ -54,11 +54,13 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
           _avaliacoesConferidas = true;
           _erroAvaliacoes = null;
         });
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _erroAvaliacoes = 'Não foi possível conferir as avaliações.',
         );
+      }
     }
   }
 
@@ -434,9 +436,7 @@ class _PedidoEntreguePageState extends State<PedidoEntreguePage> {
                                 child: Text(
                                   item.adicionais.isEmpty
                                       ? item.nome
-                                      : item.nome +
-                                          '\n' +
-                                          item.adicionais.join(' • '),
+                                      : '${item.nome}\n${item.adicionais.join(' • ')}',
                                   style: TextStyle(
                                     fontSize: 13.sp,
                                     color: Colors.grey.shade800,

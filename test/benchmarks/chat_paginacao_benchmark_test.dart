@@ -1,6 +1,6 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nhac/repositories/chat_repository.dart';
 
@@ -72,7 +72,7 @@ void main() {
     expect(antes.consultas, 6);
     expect(depois.consultas, 1);
     expect(depois.bytes, lessThan(antes.bytes));
-    print('CHAT_BENCHMARK ${jsonEncode({
+    debugPrint('CHAT_BENCHMARK ${jsonEncode({
           'fixture': '400 lojas + 120 pessoas; página 5, tamanho 20',
           'baseline_requests': antes.consultas,
           'filtered_requests': depois.consultas,

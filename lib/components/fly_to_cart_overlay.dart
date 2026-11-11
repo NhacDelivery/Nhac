@@ -57,6 +57,9 @@ class _FlyToCartOverlayState extends State<FlyToCartOverlay>
   final List<_FlyingItem> _flyingItems = [];
 
   void _fly(Offset origin, String imageUrl) {
+    final stackRenderBox = context.findRenderObject() as RenderBox?;
+    if (stackRenderBox == null || !stackRenderBox.attached) return;
+
     // Calcula o destino: centro do ícone do carrinho na navbar.
     final cartRenderBox =
         widget.cartIconKey.currentContext?.findRenderObject() as RenderBox?;
@@ -66,6 +69,9 @@ class _FlyToCartOverlayState extends State<FlyToCartOverlay>
       cartRenderBox.size.center(Offset.zero),
     );
 
+    final localOrigin = stackRenderBox.globalToLocal(origin);
+    final localDestination = stackRenderBox.globalToLocal(cartPosition);
+
     final controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 550),
@@ -73,8 +79,8 @@ class _FlyToCartOverlayState extends State<FlyToCartOverlay>
 
     final item = _FlyingItem(
       controller: controller,
-      origin: origin,
-      destination: cartPosition,
+      origin: localOrigin,
+      destination: localDestination,
       imageUrl: imageUrl,
     );
 
@@ -102,6 +108,7 @@ class _FlyToCartOverlayState extends State<FlyToCartOverlay>
     return FlyToCartData(
       fly: _fly,
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           widget.child,
           // Camada de animações voando

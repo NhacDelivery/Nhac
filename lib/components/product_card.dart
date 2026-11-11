@@ -233,8 +233,9 @@ class _ProductCardState extends State<ProductCard>
                                         _triggerShake();
                                       }
                                     } finally {
-                                      if (mounted)
+                                      if (mounted) {
                                         setState(() => _adicionando = false);
+                                      }
                                     }
                                   },
                             child: Container(

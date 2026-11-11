@@ -37,7 +37,9 @@ class _OperacaoPagamentoCardState extends State<OperacaoPagamentoCard>
     _timer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (ModalRoute.of(context)?.isCurrent == true &&
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
-          _dados?.concluido != true) _carregar();
+          _dados?.concluido != true) {
+        _carregar();
+      }
     });
   }
 
@@ -58,7 +60,9 @@ class _OperacaoPagamentoCardState extends State<OperacaoPagamentoCard>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed &&
-        ModalRoute.of(context)?.isCurrent == true) _carregar();
+        ModalRoute.of(context)?.isCurrent == true) {
+      _carregar();
+    }
   }
 
   @override
@@ -83,8 +87,9 @@ class _OperacaoPagamentoCardState extends State<OperacaoPagamentoCard>
         _incerto = false;
       });
     } catch (_) {
-      if (mounted && versao == _versao)
+      if (mounted && versao == _versao) {
         setState(() => _erro = 'Não foi possível atualizar o pagamento.');
+      }
     } finally {
       if (mounted && versao == _versao) setState(() => _consultando = false);
     }
@@ -94,7 +99,9 @@ class _OperacaoPagamentoCardState extends State<OperacaoPagamentoCard>
     if (_enviando ||
         _consultando ||
         _incerto ||
-        _dados?.podeSolicitarEstorno != true) return;
+        _dados?.podeSolicitarEstorno != true) {
+      return;
+    }
     final versao = _versao;
     // Inclui o diálogo no bloqueio para impedir duas confirmações simultâneas.
     setState(() => _enviando = true);
@@ -136,7 +143,9 @@ class _OperacaoPagamentoCardState extends State<OperacaoPagamentoCard>
     final dados = _dados;
     if (dados?.regular == true &&
         dados?.podeSolicitarEstorno != true &&
-        _erro == null) return const SizedBox.shrink();
+        _erro == null) {
+      return const SizedBox.shrink();
+    }
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 12),
       color: Colors.white,
