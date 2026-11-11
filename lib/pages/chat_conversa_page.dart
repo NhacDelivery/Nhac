@@ -99,12 +99,57 @@ class _ChatConversaPageState extends State<ChatConversaPage>
       : mensagem.isDoCliente;
 
   @override
+  void didUpdateWidget(covariant ChatConversaPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final mudouConversa = widget.lojaId != oldWidget.lojaId ||
+        widget.conversaId != oldWidget.conversaId ||
+        widget.usuarioId != oldWidget.usuarioId ||
+        widget.conversaPessoa != oldWidget.conversaPessoa;
+    final mudouReferencia =
+        widget.produtoReferencia != oldWidget.produtoReferencia ||
+            widget.pedidoReferencia != oldWidget.pedidoReferencia;
+
+    if (!mudouConversa && !mudouReferencia) return;
+
+    _prazoConfirmacao?.cancel();
+    if (widget.produtoReferencia == null && widget.pedidoReferencia == null) {
+      _pendenteId = null;
+      _pendenteTexto = null;
+      _pendenteComReferencia = false;
+      _referenciaEnviada = false;
+      _envioIncerto = false;
+    }
+
+    if (mounted) _iniciar();
+  }
+
+  @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _campoController.addListener(() {
       if (mounted) setState(() {});
     });
+
+    _inscricoes
+      ..add(_socket.mensagens.listen(_aoReceberMensagem))
+      ..add(
+        _socket.conectado.listen((valor) {
+          if (!mounted) return;
+          setState(() => _conectado = valor);
+          _configurarPolling();
+          if (valor && _conversaId != null) _atualizarHistorico(_conversaId!);
+        }),
+      )
+      ..add(
+        _socket.erros.listen((mensagem) {
+          if (mounted) {
+            if (_pendenteId != null) setState(() => _envioIncerto = true);
+            setState(() => _erroAtualizacao = mensagem);
+          }
+        }),
+      );
 
     _fotoUrl = widget.interlocutorFotoUrl ??
         (widget.lojaId != null
@@ -137,6 +182,10 @@ class _ChatConversaPageState extends State<ChatConversaPage>
           }
         });
       }
+    }
+
+    if (widget.pedidoReferencia != null || widget.produtoReferencia != null) {
+      _carregando = false;
     }
 
     _iniciar();
@@ -257,25 +306,6 @@ class _ChatConversaPageState extends State<ChatConversaPage>
 
       _repository.marcarComoLida(idFinal);
 
-      if (_inscricoes.isEmpty) {
-        _inscricoes.add(_socket.mensagens.listen(_aoReceberMensagem));
-        _inscricoes.add(
-          _socket.conectado.listen((valor) {
-            if (!mounted) return;
-            setState(() => _conectado = valor);
-            _configurarPolling();
-            if (valor) _atualizarHistorico(idFinal);
-          }),
-        );
-        _inscricoes.add(
-          _socket.erros.listen((mensagem) {
-            if (mounted) {
-              if (_pendenteId != null) setState(() => _envioIncerto = true);
-              setState(() => _erroAtualizacao = mensagem);
-            }
-          }),
-        );
-      }
       try {
         await _socket.conectar(idFinal);
       } catch (_) {
@@ -418,10 +448,27 @@ class _ChatConversaPageState extends State<ChatConversaPage>
     final pedido = widget.pedidoReferencia;
     final anexar = (produto != null || pedido != null) && !_referenciaEnviada;
     if (texto.isEmpty && !anexar && _pendenteId == null) return;
-    if (_enviandoRest ||
-        _conversaId == null ||
-        (_pendenteId != null && !_envioIncerto)) {
+    if (_enviandoRest || (_pendenteId != null && !_envioIncerto)) {
       return;
+    }
+
+    if (_conversaId == null) {
+      final conversaFallback = widget.conversaId?.isNotEmpty == true
+          ? widget.conversaId
+          : widget.lojaId != null
+              ? ChatCacheService.obterConversaIdPorLojaMemoria(widget.lojaId!)
+              : null;
+      if (conversaFallback != null && conversaFallback.isNotEmpty) {
+        _conversaId = conversaFallback;
+      } else if (widget.lojaId != null && widget.lojaId!.isNotEmpty) {
+        final conversaNova =
+            await _repository.abrirConversaComLoja(widget.lojaId!);
+        if (conversaNova.isNotEmpty) {
+          _conversaId = conversaNova;
+          ChatCacheService.associarLojaConversa(widget.lojaId!, conversaNova);
+        }
+      }
+      if (_conversaId == null) return;
     }
     final id = _pendenteId ?? const Uuid().v4();
     final mensagem = _pendenteTexto ??
@@ -440,8 +487,8 @@ class _ChatConversaPageState extends State<ChatConversaPage>
                 : pedido!.comMensagem(texto).serializar())
             : texto);
     if (mensagem.length > 4000) {
-      context
-          .showError('Reduza a mensagem para enviar junto com a referência.');
+      if (!mounted) return;
+      context.showError('Reduza a mensagem para enviar junto com a referência.');
       return;
     }
     setState(() {
@@ -678,10 +725,6 @@ class _ChatConversaPageState extends State<ChatConversaPage>
   }
 
   Widget _corpo() {
-    if (_carregando) {
-      return const LoadingNhac(telaCheia: false, tamanho: 120);
-    }
-
     if (_erroFatal != null) {
       return Center(
           child: BannerErroInline(
@@ -697,72 +740,79 @@ class _ChatConversaPageState extends State<ChatConversaPage>
     }
 
     return LayoutBuilder(
-        builder: (context, constraints) => Column(
-              children: [
-                if (_erroAtualizacao != null || !_conectado)
-                  ConstrainedBox(
-                    constraints:
-                        BoxConstraints(maxHeight: constraints.maxHeight * .25),
-                    child: SingleChildScrollView(
-                        child: Semantics(
-                      liveRegion: true,
-                      child: BannerErroInline(
-                        mensagem: _erroAtualizacao ??
-                            'Sem atualização em tempo real. A conversa continua disponível.',
-                        aoTentarNovamente: _reconectando ? null : _reconectar,
-                      ),
-                    )),
+      builder: (context, constraints) => Column(
+        children: [
+          if (_erroAtualizacao != null || !_conectado)
+            ConstrainedBox(
+              constraints:
+                  BoxConstraints(maxHeight: constraints.maxHeight * .25),
+              child: SingleChildScrollView(
+                child: Semantics(
+                  liveRegion: true,
+                  child: BannerErroInline(
+                    mensagem: _erroAtualizacao ??
+                        'Sem atualização em tempo real. A conversa continua disponível.',
+                    aoTentarNovamente: _reconectando ? null : _reconectar,
                   ),
-                Expanded(
-                  child: _mensagens.isEmpty
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(32.0),
-                            child: Text(
-                              'Ainda não há mensagens.\nEnvie a primeira mensagem.',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: Color(0xFF8A8A8A),
-                                fontSize: 15.0,
-                              ),
+                ),
+              ),
+            ),
+          Expanded(
+            child: _mensagens.isEmpty
+                ? (_carregando
+                    ? const Center(
+                        child: LoadingNhac(
+                          telaCheia: false,
+                          tamanho: 120,
+                        ),
+                      )
+                    : const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(32.0),
+                          child: Text(
+                            'Ainda não há mensagens.\nEnvie a primeira mensagem.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Color(0xFF8A8A8A),
+                              fontSize: 15.0,
                             ),
                           ),
-                        )
-                      : ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16.0,
-                            vertical: 12.0,
-                          ),
-                          itemCount: _mensagens.length +
-                              (_temMensagensAntigas ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (_temMensagensAntigas && index == 0) {
-                              return TextButton(
-                                onPressed: _carregandoAntigas
-                                    ? null
-                                    : _carregarMensagensAntigas,
-                                child: Text(
-                                  _carregandoAntigas
-                                      ? 'Carregando...'
-                                      : 'Ver mensagens anteriores',
-                                ),
-                              );
-                            }
-                            return _balao(
-                              _mensagens[
-                                  index - (_temMensagensAntigas ? 1 : 0)],
-                            );
-                          },
                         ),
-                ),
-                ConstrainedBox(
-                  constraints:
-                      BoxConstraints(maxHeight: constraints.maxHeight * .70),
-                  child: SingleChildScrollView(child: _barraDeEnvio()),
-                ),
-              ],
-            ));
+                      ))
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16.0,
+                      vertical: 12.0,
+                    ),
+                    itemCount:
+                        _mensagens.length + (_temMensagensAntigas ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (_temMensagensAntigas && index == 0) {
+                        return TextButton(
+                          onPressed: _carregandoAntigas
+                              ? null
+                              : _carregarMensagensAntigas,
+                          child: Text(
+                            _carregandoAntigas
+                                ? 'Carregando...'
+                                : 'Ver mensagens anteriores',
+                          ),
+                        );
+                      }
+                      return _balao(
+                        _mensagens[index - (_temMensagensAntigas ? 1 : 0)],
+                      );
+                    },
+                  ),
+          ),
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: constraints.maxHeight * .70),
+            child: SingleChildScrollView(child: _barraDeEnvio()),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _balao(MensagemChat mensagem) {

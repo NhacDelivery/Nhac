@@ -85,12 +85,10 @@ class ListaConversasController<T> extends ChangeNotifier {
       }
     } catch (e) {
       if (!_disposed) {
-        // Se a lista já possui itens salvos em cache, mantém visíveis para uso offline
-        if (_itens.isEmpty) {
-          erro = ErrorUIHelper.mensagem(e,
-              fallback:
-                  'Não foi possível carregar as conversas. Tente novamente.');
-        }
+        erro = ErrorUIHelper.mensagem(e,
+            fallback: 'Não foi possível carregar as conversas. Tente novamente.');
+        // Mesmo com itens já carregados, a falha precisa ser exibida para a
+        // caixa de busca permitir retry e manter o estado explícito.
       }
     } finally {
       if (!_disposed) {
