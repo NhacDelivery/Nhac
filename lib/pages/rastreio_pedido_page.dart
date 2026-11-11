@@ -111,6 +111,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
   void didPushNext() {
     _visible = false;
     _statusSocket.desconectar();
+    _sincronizarAmpulheta();
   }
 
   @override
@@ -118,6 +119,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     _visible = true;
     _statusSocket.conectar(widget.pedidoId);
     _carregarDados(silencioso: true);
+    _sincronizarAmpulheta();
   }
 
   @override
@@ -129,6 +131,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     } else {
       _statusSocket.desconectar();
     }
+    _sincronizarAmpulheta();
   }
 
   static final Map<String, _RastreioCacheEntry> _cache = {};
@@ -207,8 +210,8 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     _statusAnimationController.forward();
     _ampulhetaController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2400),
-    )..repeat();
+      duration: const Duration(milliseconds: 1200),
+    );
     _ampulhetaAnimation = TweenSequence<double>([
       TweenSequenceItem(
         tween: Tween<double>(begin: 0.0, end: 0.5)
@@ -229,6 +232,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
         weight: 65.0,
       ),
     ]).animate(_ampulhetaController);
+    _sincronizarAmpulheta();
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (ModalRoute.of(context)?.isCurrent == true &&
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
@@ -340,6 +344,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
         _erro = '';
         _pedidoDesatualizado = false;
       });
+      _sincronizarAmpulheta();
       LojasModel? loja = _loja;
       RotaEntregaModel? rota = _rota;
       String? rotaErro;
@@ -451,6 +456,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
         _erro = '';
         _pedidoDesatualizado = false;
       });
+      _sincronizarAmpulheta();
 
       _cache.remove(_cacheKey);
       _cache[_cacheKey] = _RastreioCacheEntry(
@@ -492,6 +498,27 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
           () => _carregarDados(silencioso: true),
         );
       }
+    }
+  }
+
+  void _sincronizarAmpulheta() {
+    final deveAnimar = _pedido?.status == StatusPedido.pendente && _active;
+    if (!deveAnimar) {
+      if (_ampulhetaController.isAnimating) {
+        _ampulhetaController.stop();
+      }
+      _ampulhetaController.value = 0.0;
+      return;
+    }
+
+    if (!_ampulhetaController.isAnimating &&
+        _ampulhetaController.value >= 0.99) {
+      _ampulhetaController.forward(from: 0.0);
+      return;
+    }
+
+    if (!_ampulhetaController.isAnimating) {
+      _ampulhetaController.forward(from: 0.0);
     }
   }
 
