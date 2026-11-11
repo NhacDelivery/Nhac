@@ -8,7 +8,8 @@ class MensagemChat {
   final String id;
   final String conversaId;
 
-  /// 'CLIENTE' ou 'LOJA'. Do lado do app, CLIENTE é sempre o próprio usuário.
+  /// 'CLIENTE' ou 'LOJA'. Em chats diretos, ambos são CLIENTE; a autoria
+  /// depende de remetenteUsuarioId e da sessão autenticada.
   final String remetenteTipo;
   final String? remetenteUsuarioId;
   final String conteudo;
@@ -37,6 +38,17 @@ class MensagemChat {
           DateTime.tryParse(map['enviadaEm']?.toString() ?? '')?.toLocal() ??
               DateTime.now(),
     );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'conversaId': conversaId,
+      'remetenteTipo': remetenteTipo,
+      'remetenteUsuarioId': remetenteUsuarioId,
+      'conteudo': conteudo,
+      'enviadaEm': enviadaEm.toUtc().toIso8601String(),
+    };
   }
 
   @override

@@ -137,8 +137,9 @@ class CartProvider extends ChangeNotifier {
 
     if (_itens[idProduto]!.quantidade > 1) {
       _itens[idProduto]!.quantidade -= 1;
-      if (_itens[idProduto]!.unidades.isNotEmpty)
+      if (_itens[idProduto]!.unidades.isNotEmpty) {
         _itens[idProduto]!.unidades.removeLast();
+      }
     } else {
       _itens.remove(idProduto);
     }

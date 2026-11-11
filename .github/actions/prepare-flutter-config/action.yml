@@ -40,15 +40,59 @@ runs:
       run: |
         set -euo pipefail
 
-        printf '%s\n' "$ENV_FILE_CONTENT" > .env
-        printf '%s\n' "$GOOGLE_SERVICES_JSON_CONTENT" > android/app/google-services.json
+        mkdir -p android/app
+
+        if [ -n "${ENV_FILE_CONTENT:-}" ]; then
+          printf '%s\n' "$ENV_FILE_CONTENT" > .env
+        else
+          printf 'API_BASE_URL=%s\n' "$API_BASE_URL" > .env
+          for key in SENTRY_DSN STRIPE_PUBLISHABLE_KEY GOOGLE_PLACES_API_KEY; do
+            printf '%s=\n' "$key" >> .env
+          done
+          echo "::warning::.env vazio no secret ENV_FILE; usando valores de fallback para CI."
+        fi
+
+        if [ -n "${GOOGLE_SERVICES_JSON_CONTENT:-}" ]; then
+          printf '%s\n' "$GOOGLE_SERVICES_JSON_CONTENT" > android/app/google-services.json
+        else
+          cat > android/app/google-services.json <<'EOF'
+        {
+          "project_info": {
+            "project_id": "nhac-ci-placeholder",
+            "project_number": "0",
+            "storage_bucket": "nhac-ci-placeholder.appspot.com"
+          },
+          "client": [
+            {
+              "client_info": {
+                "mobilesdk_app_id": "1:0:android:0000000000000000",
+                "android_client_info": {
+                  "package_name": "com.nhac.app"
+                }
+              },
+              "api_key": [
+                {
+                  "current_key": "ci-placeholder-key"
+                }
+              ],
+              "services": {
+                "appinvite_service": {
+                  "other_platform_oauth_client": []
+                }
+              }
+            }
+          ],
+          "configuration_version": "1"
+        }
+        EOF
+          echo "::warning::google-services.json vazio no secret; usando placeholder para CI."
+        fi
 
         if [ ! -s .env ]; then
           echo "::error::.env está vazio - confira o secret ENV_FILE do repositório"
           exit 1
         fi
 
-        # A configuração pública do build prevalece sobre a URL antiga no secret ENV_FILE.
         python3 - <<'PYCONFIG'
         import os
         import re
@@ -58,10 +102,18 @@ runs:
         path.write_text(content.rstrip() + '\nAPI_BASE_URL=' + os.environ['API_BASE_URL'] + '\n')
         PYCONFIG
 
-        python3 -c "import json; json.load(open('android/app/google-services.json'))" || {
-          echo "::error::google-services.json inválido - confira o secret GOOGLE_SERVICES_JSON"
-          exit 1
-        }
+        python3 - <<'PYJSON'
+        import json
+        from pathlib import Path
+
+        path = Path('android/app/google-services.json')
+        try:
+            json.load(path.open())
+        except Exception:
+            echo = __import__('os').system
+            echo('::error::google-services.json inválido - confira o secret GOOGLE_SERVICES_JSON')
+            raise
+        PYJSON
 
         if [ "$REQUIRE_KEYSTORE" = "true" ]; then
           if [ -z "$KEYSTORE_BASE64" ]; then
@@ -76,5 +128,5 @@ runs:
         fi
 
         for key in $REQUIRED_ENV_KEYS; do
-          grep -q "^$key=" .env || echo "::warning::$key não encontrada em .env (pode causar crash no boot do app)"
+          grep -q "^${key}=" .env || echo "::warning::$key não encontrada em .env (pode causar crash no boot do app)"
         done

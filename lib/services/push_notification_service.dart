@@ -42,8 +42,9 @@ class PushNotificationService {
       final pedido = await PedidoRepository().buscarPedidoPorId(pedidoId);
       if (uid == null ||
           uid != _authService.usuarioId ||
-          pedido.usuarioId != uid)
+          pedido.usuarioId != uid) {
         return;
+      }
     } catch (_) {
       return;
     }
@@ -89,8 +90,9 @@ class PushNotificationService {
     _authService.addListener(_abrirPedidoPendenteAposLogin);
     _nativeChannel.setMethodCallHandler((call) async {
       // Native legacy intents contain no recipient; opening requires a signed-in order lookup.
-      if (call.method == 'openOrder' && _authService.isAuthenticated)
+      if (call.method == 'openOrder' && _authService.isAuthenticated) {
         _abrirPedido(call.arguments?.toString());
+      }
     });
     try {
       _abrirPedido(
@@ -127,11 +129,13 @@ class PushNotificationService {
                 await _fcm.deleteToken();
               }
               if (currentUserId == null ||
-                  currentUserId != _authService.usuarioId)
+                  currentUserId != _authService.usuarioId) {
                 return;
+              }
               final token = await _fcm.getToken();
-              if (token != null && currentUserId == _authService.usuarioId)
+              if (token != null && currentUserId == _authService.usuarioId) {
                 await _guardarTokenNoBancoDeDados(token);
+              }
             })
             .catchError((Object e) {
               debugPrint(

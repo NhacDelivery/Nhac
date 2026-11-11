@@ -15,6 +15,23 @@ void main() {
     repository = ProdutoRepository(dio: dio);
   });
 
+  test('destaques pedem lojas abertas antes do limite da página', () async {
+    when(() => dio.get('/produtos/cards', queryParameters: {
+          'page': 0,
+          'size': 50,
+          'sort': ['loja.isAberto,desc', 'id,asc'],
+        })).thenAnswer((_) async => Response(
+            requestOptions: RequestOptions(path: '/produtos/cards'),
+            data: {
+              'content': [
+                {'id': 'p1', 'lojaAberta': false}
+              ]
+            }));
+    final produtos = await repository.buscarNecessidades();
+    expect(produtos.single.id, 'p1');
+    expect(produtos.single.lojaAberta, isFalse);
+  });
+
   void responderPagina(int pagina, Map<String, dynamic> data) {
     when(
       () => dio.get(

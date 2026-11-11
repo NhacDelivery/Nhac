@@ -48,8 +48,9 @@ class LocalCacheService {
     if (!await prefs.setStringList(
       _keyPreferenciasComida(usuarioId),
       preferencias.toList()..sort(),
-    ))
+    )) {
       throw StateError('Falha ao salvar preferências.');
+    }
   }
 
   static String _keyPedidoAtivo(String usuarioId) => 'pedido_ativo_$usuarioId';

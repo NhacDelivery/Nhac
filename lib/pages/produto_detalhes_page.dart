@@ -45,19 +45,21 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
   Future<void> _carregarAdicionais() async {
     try {
       final p = await _produtoRepository.buscarPorId(widget.produto.id);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _produtoCompleto = p;
           _carregandoAdicionais = false;
           _erroAdicionais = null;
         });
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _carregandoAdicionais = false;
           _erroAdicionais =
               'Não foi possível conferir os adicionais. Tente novamente.';
         });
+      }
     }
   }
 
@@ -216,8 +218,9 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
         }
       }(),
     ]);
-    if (consulta == _consultaAvaliacao && resumo != null)
+    if (consulta == _consultaAvaliacao && resumo != null) {
       _ultimoResumo = resumo;
+    }
     if (consulta == _consultaAvaliacao) _carregandoAvaliacoes = false;
     return (resumo: resumo, comentarios: comentarios);
   }
@@ -593,8 +596,9 @@ class _ProdutoDetalhesPageState extends State<ProdutoDetalhesPage> {
                                       // backend). Deixamos isso explícito em
                                       // vez de manter o placeholder genérico
                                       // indefinidamente.
-                                      if (widget.produto.lojaNome.isEmpty)
+                                      if (widget.produto.lojaNome.isEmpty) {
                                         nomeLoja = 'indisponível no momento';
+                                      }
                                     }
                                   }
                                   return InkWell(

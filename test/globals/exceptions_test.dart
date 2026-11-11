@@ -11,7 +11,9 @@ void main() {
     });
 
     group('mapException', () {
-      test('deve retornar a mensagem do backend se DioException tiver response com message', () {
+      test(
+          'deve retornar a mensagem do backend se DioException tiver response com message',
+          () {
         final options = RequestOptions(path: '/');
         final response = Response(
           requestOptions: options,
@@ -47,9 +49,11 @@ void main() {
         expect(result.toString(), 'Sessão expirada. Faça login novamente.');
       });
 
-      test('deve retornar NetworkException para timeouts ou connectionError do Dio', () {
+      test(
+          'deve retornar NetworkException para timeouts ou connectionError do Dio',
+          () {
         final options = RequestOptions(path: '/');
-        
+
         final errors = [
           DioExceptionType.connectionTimeout,
           DioExceptionType.receiveTimeout,
@@ -67,7 +71,9 @@ void main() {
         }
       });
 
-      test('deve retornar erro generico de servidor se DioException for badResponse sem message', () {
+      test(
+          'deve retornar erro generico de servidor se DioException for badResponse sem message',
+          () {
         final options = RequestOptions(path: '/');
         final response = Response(
           requestOptions: options,
@@ -81,7 +87,8 @@ void main() {
         );
 
         final result = mapException(dioError);
-        expect(result.toString(), 'Ocorreu um erro no servidor: 500');
+        expect(result.toString(),
+            'Não foi possível concluir a solicitação. Tente novamente mais tarde.');
       });
 
       test('deve mapear FirebaseAuthException corretamente', () {
@@ -93,7 +100,8 @@ void main() {
           'weak-password': 'A senha deve ter no mínimo 6 caracteres.',
           'user-disabled': 'Esta conta foi desativada.',
           'operation-not-allowed': 'Operação não permitida pelo servidor.',
-          'account-exists-with-different-credential': 'Este e-mail já está associado a outra conta.',
+          'account-exists-with-different-credential':
+              'Este e-mail já está associado a outra conta.',
           'invalid-credential': 'Credenciais inválidas. Tente novamente.',
         };
 
@@ -106,7 +114,8 @@ void main() {
       });
 
       test('deve retornar default para FirebaseAuthException desconhecida', () {
-        final fbError = FirebaseAuthException(code: 'unknown', message: 'Mensagem original');
+        final fbError = FirebaseAuthException(
+            code: 'unknown', message: 'Mensagem original');
         final result = mapException(fbError);
         expect(result, isA<AuthException>());
         expect(result.toString(), 'Mensagem original');
@@ -118,7 +127,9 @@ void main() {
         expect(result, ex);
       });
 
-      test('deve retornar NetworkException se toString contiver SocketException', () {
+      test(
+          'deve retornar NetworkException se toString contiver SocketException',
+          () {
         final error = Exception('SocketException: failed to connect');
         final result = mapException(error);
         expect(result, isA<NetworkException>());
@@ -129,7 +140,8 @@ void main() {
         final error = Exception('Algo quebrou');
         final result = mapException(error);
         expect(result, isA<AppException>());
-        expect(result.toString(), contains('Ocorreu um erro inesperado: Exception: Algo quebrou'));
+        expect(result.toString(),
+            'Não foi possível concluir a solicitação. Tente novamente.');
       });
     });
   });

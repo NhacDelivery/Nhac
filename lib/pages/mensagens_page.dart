@@ -1,21 +1,125 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:nhac/models/chat/conversa_resumo.dart';
+import 'package:nhac/components/estado_com_retry.dart';
+import 'package:nhac/controllers/lista_conversas_controller.dart';
 import 'package:nhac/models/chat/conversa_pessoa_resumo.dart';
+import 'package:nhac/models/chat/conversa_resumo.dart';
 import 'package:nhac/repositories/chat_repository.dart';
-import 'package:nhac/components/loading_nhac.dart';
+import 'package:nhac/repositories/loja_repository.dart';
+import 'package:nhac/services/chat_cache_service.dart';
+import 'package:nhac/components/seta_voltar.dart';
 
 class MensagensPage extends StatefulWidget {
-  const MensagensPage({super.key});
+  final ChatRepository? repository;
+  const MensagensPage({super.key, this.repository});
 
   @override
   State<MensagensPage> createState() => _MensagensPageState();
 }
 
-class _MensagensPageState extends State<MensagensPage> {
+class _MensagensPageState extends State<MensagensPage>
+    with WidgetsBindingObserver {
+  late final _repository = widget.repository ?? ChatRepository();
+  final _lojaRepository = LojaRepository();
+  final Set<String> _lojasBuscandoFoto = {};
+
+  late final _pessoas = ListaConversasController<ConversaPessoaResumo>(
+    buscar: (pagina, tamanho) =>
+        _repository.listarConversasPessoas(pagina: pagina, tamanho: tamanho),
+    identificar: (item) => item.id,
+    carregarCache: ChatCacheService.carregarConversasPessoas,
+    salvarCache: ChatCacheService.salvarConversasPessoas,
+  );
+  late final _lojas = ListaConversasController<ConversaResumo>(
+    buscar: (pagina, tamanho) =>
+        _repository.listarConversas(pagina: pagina, tamanho: tamanho),
+    identificar: (item) => item.id,
+    carregarCache: ChatCacheService.carregarConversasLojas,
+    salvarCache: ChatCacheService.salvarConversasLojas,
+  );
+  final _busca = TextEditingController();
+  final _focoBusca = FocusNode();
   int _currentIndex = 0;
+
+  void _buscarFotoLojaSeNecessario(String lojaId) {
+    if (lojaId.isEmpty || _lojasBuscandoFoto.contains(lojaId)) return;
+    _lojasBuscandoFoto.add(lojaId);
+    _lojaRepository.buscarLoja(lojaId).then((loja) {
+      if (loja != null && loja.imagemUrl.isNotEmpty && mounted) {
+        ChatCacheService.salvarFotoLoja(lojaId, loja.imagemUrl);
+        setState(() {});
+      }
+    }).catchError((_) {});
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _pessoas.carregarCacheInicial();
+    _lojas.carregarCacheInicial();
+    _pessoas.carregar();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _atualizar();
+  }
+
+  Future<void> _atualizar() => _currentIndex == 0
+      ? _pessoas.carregar(reiniciar: true)
+      : _lojas.carregar(reiniciar: true);
+
+  bool _combina(String nome, String mensagem) {
+    final termo = _busca.text.trim().toLowerCase();
+    return termo.isEmpty || '$nome $mensagem'.toLowerCase().contains(termo);
+  }
+
+  Widget _buildSubtituloFlightShuttle(
+    BuildContext flightContext,
+    Animation<double> animation,
+    HeroFlightDirection flightDirection,
+    BuildContext fromHeroContext,
+    BuildContext toHeroContext,
+  ) {
+    final fromHero = fromHeroContext.widget as Hero;
+    final toHero = toHeroContext.widget as Hero;
+
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        final t = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeInOut,
+        ).value;
+
+        return Material(
+          color: Colors.transparent,
+          child: Stack(
+            alignment: Alignment.topLeft,
+            children: [
+              Opacity(
+                opacity: (1.0 - t).clamp(0.0, 1.0),
+                child: fromHero.child,
+              ),
+              Opacity(
+                opacity: t.clamp(0.0, 1.0),
+                child: toHero.child,
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _abrir(String rota, Map<String, dynamic> dados) async {
+    await context.push(rota, extra: dados);
+    if (mounted) await _atualizar();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,55 +129,96 @@ class _MensagensPageState extends State<MensagensPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Top actions (Back button + Search + More)
+            // Botão de voltar padrão do app
             Padding(
-              padding: EdgeInsets.only(top: 8.h, right: 8.w, left: 8.w),
+              padding: EdgeInsets.fromLTRB(24.w, 16.h, 24.w, 8.h),
+              child: const Align(
+                alignment: Alignment.centerLeft,
+                child: SetaVoltar(),
+              ),
+            ),
+
+            // Large Title
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 8.h),
               child: Row(
                 children: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.arrow_back,
-                      color: const Color(0xFF5D201C),
-                      size: 24.r,
+                  Expanded(
+                    child: Text(
+                      'Mensagens',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 34.sp,
+                        color: const Color(0xFF5D201C),
+                        letterSpacing: -0.5,
+                      ),
                     ),
-                    onPressed: () => context.pop(),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: Icon(
-                      Icons.search,
-                      color: const Color(0xFF5D201C),
-                      size: 28.r,
-                    ),
-                    onPressed: () {},
                   ),
                   IconButton(
-                    icon: Icon(
-                      Icons.more_vert,
-                      color: const Color(0xFF5D201C),
-                      size: 28.r,
-                    ),
-                    onPressed: () {},
+                    tooltip: 'Atualizar conversas',
+                    onPressed: _atualizar,
+                    icon: const Icon(Icons.refresh),
                   ),
                 ],
               ),
             ),
-            // Large Title
+
+            // Barra de busca integrada com o visual moderno
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 8.h),
-              child: Text(
-                'Mensagens',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  fontSize: 34.sp,
-                  color: const Color(0xFF5D201C),
-                  letterSpacing: -0.5,
+              padding: EdgeInsets.fromLTRB(24.w, 4.h, 24.w, 12.h),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF7F7F8),
+                  borderRadius: BorderRadius.circular(16.r),
+                ),
+                child: TextField(
+                  controller: _busca,
+                  focusNode: _focoBusca,
+                  onChanged: (_) => setState(() {}),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar nas conversas carregadas',
+                    hintStyle: TextStyle(
+                      color: Colors.grey.shade400,
+                      fontSize: 14.sp,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: Colors.grey.shade500,
+                      size: 22.r,
+                    ),
+                    suffixIcon: _busca.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Limpar busca',
+                            icon: Icon(
+                              Icons.close,
+                              color: Colors.grey.shade500,
+                              size: 20.r,
+                            ),
+                            onPressed: () {
+                              _busca.clear();
+                              setState(() {});
+                              _focoBusca.requestFocus();
+                            },
+                          ),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16.w,
+                      vertical: 12.h,
+                    ),
+                  ),
                 ),
               ),
             ),
+
             // List
             Expanded(
-              child: _currentIndex == 0 ? _buildPessoasTab() : _buildLojasTab(),
+              child: AnimatedBuilder(
+                animation: Listenable.merge([_pessoas, _lojas]),
+                builder: (_, __) => _currentIndex == 0
+                    ? _buildListaPessoas()
+                    : _buildListaLojas(),
+              ),
             ),
           ],
         ),
@@ -91,6 +236,8 @@ class _MensagensPageState extends State<MensagensPage> {
           setState(() {
             _currentIndex = index;
           });
+          if (index == 0) _pessoas.carregar();
+          if (index == 1) _lojas.carregar();
         },
         backgroundColor: Colors.white,
         selectedItemColor: const Color(0xFF5D201C),
@@ -127,66 +274,125 @@ class _MensagensPageState extends State<MensagensPage> {
     );
   }
 
-  Widget _buildPessoasTab() {
-    return FutureBuilder<List<ConversaPessoaResumo>>(
-      future: ChatRepository().listarConversasPessoas(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: LoadingNhac(telaCheia: false, tamanho: 40),
-          );
-        }
+  Widget _buildListaPessoas() {
+    if (_pessoas.carregando && !_pessoas.carregou && _pessoas.itens.isEmpty) {
+      return const Center(
+        child: LoadingNhac(telaCheia: false, tamanho: 40),
+      );
+    }
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              'Ainda não há conversas com pessoas.',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
-            ),
-          );
-        }
+    if (_pessoas.erro != null && _pessoas.itens.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _pessoas.erro!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
+              ),
+              SizedBox(height: 12.h),
+              TextButton(
+                onPressed: _pessoas.tentarNovamente,
+                child: const Text('Tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
-        final conversas = snapshot.data ?? [];
+    final itens = _pessoas.itens
+        .where((item) => _combina(item.pessoaNome, item.ultimaMensagem))
+        .toList();
 
-        if (conversas.isEmpty) {
-          return Center(
-            child: Text(
-              'Ainda não há conversas com pessoas.',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
-            ),
-          );
-        }
+    if (itens.isEmpty && _pessoas.carregou && _pessoas.erro == null) {
+      return Center(
+        child: Text(
+          _busca.text.trim().isEmpty
+              ? 'Ainda não há conversas com pessoas.'
+              : 'Nenhuma conversa carregada corresponde à busca.',
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
+        ),
+      );
+    }
 
-        return ListView.builder(
-          itemCount: conversas.length,
-          itemBuilder: (context, index) {
-            final item = conversas[index];
-            final dateFormat = DateFormat('dd/MM', 'pt_BR');
-            final dataStr = dateFormat.format(item.ultimaMensagemData);
+    return RefreshIndicator(
+      onRefresh: () => _pessoas.carregar(reiniciar: true),
+      child: ListView.builder(
+        key: const PageStorageKey('conversas-pessoas'),
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: itens.length +
+            (_pessoas.erro != null ? 1 : 0) +
+            (_pessoas.temMais && _pessoas.carregou ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (_pessoas.erro != null && index == 0) {
+            return Semantics(
+              liveRegion: true,
+              child: BannerErroInline(
+                mensagem: _pessoas.erro!,
+                aoTentarNovamente:
+                    _pessoas.carregando ? null : _pessoas.tentarNovamente,
+              ),
+            );
+          }
 
-            return ListTile(
+          final adjustedIndex = _pessoas.erro != null ? index - 1 : index;
+
+          if (adjustedIndex == itens.length) {
+            return Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16.h),
+                child: TextButton(
+                  onPressed: _pessoas.carregando ? null : _pessoas.carregar,
+                  child: Text(_pessoas.carregando
+                      ? 'Carregando...'
+                      : 'Carregar mais conversas'),
+                ),
+              ),
+            );
+          }
+
+          final item = itens[adjustedIndex];
+          final dateFormat = DateFormat('dd/MM', 'pt_BR');
+          final dataStr = dateFormat.format(item.ultimaMensagemData);
+
+          return Builder(
+            builder: (itemContext) => ListTile(
+              key: ValueKey('conversa-${item.id}'),
               contentPadding: EdgeInsets.symmetric(
                 horizontal: 24.w,
                 vertical: 6.h,
               ),
-              leading: CircleAvatar(
-                radius: 25.r,
-                backgroundColor: Colors.grey.shade300,
-                child: Icon(Icons.person, color: Colors.white, size: 34.r),
+              leading: Hero(
+                tag: 'avatar-${item.id}',
+                child: CircleAvatar(
+                  radius: 25.r,
+                  backgroundColor: Colors.grey.shade300,
+                  child: Icon(Icons.person, color: Colors.white, size: 34.r),
+                ),
               ),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    child: Text(
-                      item.pessoaNome,
-                      style: TextStyle(
-                        fontWeight: item.mensagensNaoLidas > 0
-                            ? FontWeight.bold
-                            : FontWeight.w500,
-                        fontSize: 17.sp,
-                        color: const Color(0xFF5D201C),
+                    child: Hero(
+                      tag: 'nome-${item.id}',
+                      child: Material(
+                        color: Colors.transparent,
+                        child: Text(
+                          item.pessoaNome,
+                          style: TextStyle(
+                            fontWeight: item.mensagensNaoLidas > 0
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            fontSize: 17.sp,
+                            color: const Color(0xFF5D201C),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -209,93 +415,184 @@ class _MensagensPageState extends State<MensagensPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      item.ultimaMensagem,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14.sp,
-                        color: item.mensagensNaoLidas > 0
-                            ? const Color(0xFF5D201C)
-                            : Colors.grey.shade500,
-                        fontWeight: item.mensagensNaoLidas > 0
-                            ? FontWeight.w500
-                            : FontWeight.normal,
+                    Hero(
+                      tag: 'subtitulo-${item.id}',
+                      flightShuttleBuilder: _buildSubtituloFlightShuttle,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: Text(
+                          item.ultimaMensagem,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14.sp,
+                            color: item.mensagensNaoLidas > 0
+                                ? const Color(0xFF5D201C)
+                                : Colors.grey.shade500,
+                            fontWeight: item.mensagensNaoLidas > 0
+                                ? FontWeight.w500
+                                : FontWeight.normal,
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
               onTap: () {
-                // Future route for chat-pessoa
+                final box = itemContext.findRenderObject() as RenderBox?;
+                Rect? cardRect;
+                if (box != null && box.hasSize) {
+                  final pos = box.localToGlobal(Offset.zero);
+                  cardRect = pos & box.size;
+                }
+                _abrir('/chat-pessoa', {
+                  'conversaId': item.id,
+                  'pessoaNome': item.pessoaNome,
+                  'heroTag': item.id.toString(),
+                  'cardRect': cardRect,
+                });
               },
-            );
-          },
-        );
-      },
+            ),
+          );
+        },
+      ),
     );
   }
 
-  Widget _buildLojasTab() {
-    return FutureBuilder<List<ConversaResumo>>(
-      future: ChatRepository().listarConversas(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: LoadingNhac(telaCheia: false, tamanho: 40),
-          );
-        }
+  Widget _buildListaLojas() {
+    if (_lojas.carregando && !_lojas.carregou && _lojas.itens.isEmpty) {
+      return const Center(
+        child: LoadingNhac(telaCheia: false, tamanho: 40),
+      );
+    }
 
-        if (snapshot.hasError) {
-          return Center(
-            child: Text(
-              'Ainda não há conversas com lojas.',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
-            ),
-          );
-        }
+    if (_lojas.erro != null && _lojas.itens.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: EdgeInsets.all(24.w),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _lojas.erro!,
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
+              ),
+              SizedBox(height: 12.h),
+              TextButton(
+                onPressed: _lojas.tentarNovamente,
+                child: const Text('Tentar novamente'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
-        final conversas = snapshot.data ?? [];
+    final itens = _lojas.itens
+        .where((item) => _combina(item.lojaNome, item.ultimaMensagem))
+        .toList();
 
-        if (conversas.isEmpty) {
-          return Center(
-            child: Text(
-              'Ainda não há conversas com lojas.',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
-            ),
-          );
-        }
+    if (itens.isEmpty && _lojas.carregou && _lojas.erro == null) {
+      return Center(
+        child: Text(
+          _busca.text.trim().isEmpty
+              ? 'Ainda não há conversas com lojas.'
+              : 'Nenhuma conversa carregada corresponde à busca.',
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 16.sp),
+        ),
+      );
+    }
 
-        return ListView.builder(
-          itemCount: conversas.length,
-          itemBuilder: (context, index) {
-            final item = conversas[index];
-            final dateFormat = DateFormat('dd/MM', 'pt_BR');
-            final dataStr = dateFormat.format(item.ultimaMensagemData);
+    return RefreshIndicator(
+      onRefresh: () => _lojas.carregar(reiniciar: true),
+      child: ListView.builder(
+        key: const PageStorageKey('conversas-lojas'),
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: itens.length +
+            (_lojas.erro != null ? 1 : 0) +
+            (_lojas.temMais && _lojas.carregou ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (_lojas.erro != null && index == 0) {
+            return Semantics(
+              liveRegion: true,
+              child: BannerErroInline(
+                mensagem: _lojas.erro!,
+                aoTentarNovamente:
+                    _lojas.carregando ? null : _lojas.tentarNovamente,
+              ),
+            );
+          }
 
-            return ListTile(
+          final adjustedIndex = _lojas.erro != null ? index - 1 : index;
+
+          if (adjustedIndex == itens.length) {
+            return Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 16.h),
+                child: TextButton(
+                  onPressed: _lojas.carregando ? null : _lojas.carregar,
+                  child: Text(_lojas.carregando
+                      ? 'Carregando...'
+                      : 'Carregar mais conversas'),
+                ),
+              ),
+            );
+          }
+
+          final item = itens[adjustedIndex];
+          final dateFormat = DateFormat('dd/MM', 'pt_BR');
+          final dataStr = dateFormat.format(item.ultimaMensagemData);
+
+          var fotoUrl = item.lojaFotoUrl;
+          if (fotoUrl == null || fotoUrl.isEmpty) {
+            fotoUrl = ChatCacheService.obterFotoLojaMemoria(item.lojaId);
+          }
+          if ((fotoUrl == null || fotoUrl.isEmpty) && item.lojaId.isNotEmpty) {
+            _buscarFotoLojaSeNecessario(item.lojaId);
+          }
+          final temFoto = fotoUrl != null && fotoUrl.isNotEmpty;
+
+          return Builder(
+            builder: (itemContext) => ListTile(
+              key: ValueKey('conversa-${item.id}'),
               contentPadding: EdgeInsets.symmetric(
                 horizontal: 24.w,
                 vertical: 6.h,
               ),
-              leading: CircleAvatar(
-                radius: 25.r,
-                backgroundColor: Colors.grey.shade300,
-                child: Icon(Icons.store, color: Colors.white, size: 30.r),
+              leading: Hero(
+                tag: 'avatar-${item.id}',
+                child: CircleAvatar(
+                  radius: 25.r,
+                  backgroundColor: Colors.grey.shade200,
+                  backgroundImage:
+                      temFoto ? CachedNetworkImageProvider(fotoUrl!) : null,
+                  child: !temFoto
+                      ? Icon(Icons.store,
+                          color: Colors.grey.shade400, size: 30.r)
+                      : null,
+                ),
               ),
               title: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
-                    child: Text(
-                      item.lojaNome,
-                      style: TextStyle(
-                        fontWeight: item.mensagensNaoLidas > 0
-                            ? FontWeight.bold
-                            : FontWeight.w500,
-                        fontSize: 17.sp,
-                        color: const Color(0xFF5D201C),
+                    child: Hero(
+                      tag: 'nome-${item.id}',
+                      child: Material(
+                        color: Colors.transparent,
+                        child: Text(
+                          item.lojaNome,
+                          style: TextStyle(
+                            fontWeight: item.mensagensNaoLidas > 0
+                                ? FontWeight.bold
+                                : FontWeight.w500,
+                            fontSize: 17.sp,
+                            color: const Color(0xFF5D201C),
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -318,43 +615,60 @@ class _MensagensPageState extends State<MensagensPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '[Loja Oficial]', // Placeholder for store context tag
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14.sp,
-                        color: const Color(0xFFE67E22), // Orange
-                      ),
-                    ),
-                    SizedBox(height: 2.h),
-                    Text(
-                      item.ultimaMensagem,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 14.sp,
-                        color: item.mensagensNaoLidas > 0
-                            ? const Color(0xFF5D201C)
-                            : Colors.grey.shade500,
-                        fontWeight: item.mensagensNaoLidas > 0
-                            ? FontWeight.w500
-                            : FontWeight.normal,
+                    Hero(
+                      tag: 'subtitulo-${item.id}',
+                      flightShuttleBuilder: _buildSubtituloFlightShuttle,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: Text(
+                          item.ultimaMensagem,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 14.sp,
+                            color: item.mensagensNaoLidas > 0
+                                ? const Color(0xFF5D201C)
+                                : Colors.grey.shade500,
+                            fontWeight: item.mensagensNaoLidas > 0
+                                ? FontWeight.w500
+                                : FontWeight.normal,
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
               onTap: () {
-                context.push(
-                  '/chat-loja',
-                  extra: {'lojaId': item.lojaId, 'lojaNome': item.lojaNome},
-                );
+                final box = itemContext.findRenderObject() as RenderBox?;
+                Rect? cardRect;
+                if (box != null && box.hasSize) {
+                  final pos = box.localToGlobal(Offset.zero);
+                  cardRect = pos & box.size;
+                }
+                _abrir('/chat-loja', {
+                  'conversaId': item.id,
+                  'lojaId': item.lojaId,
+                  'lojaNome': item.lojaNome,
+                  'lojaFotoUrl': fotoUrl,
+                  'heroTag': item.id.toString(),
+                  'cardRect': cardRect,
+                });
               },
-            );
-          },
-        );
-      },
+            ),
+          );
+        },
+      ),
     );
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _pessoas.dispose();
+    _lojas.dispose();
+    _busca.dispose();
+    _focoBusca.dispose();
+    super.dispose();
   }
 }

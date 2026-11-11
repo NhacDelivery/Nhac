@@ -569,54 +569,21 @@ class BannerErroInline extends StatelessWidget {
           width: 1,
         ),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.warning_amber_rounded,
-            size: 20.r,
-            color: const Color(0xFFFF6961),
-          ),
-          SizedBox(width: 12.w),
-          Expanded(
-            child: Text(
-              mensagem,
-              style: TextStyle(
-                fontSize: 13.sp,
-                color: corTexto ?? const Color(0xFF5D201C),
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          if (aoTentarNovamente != null) ...[
-            TextButton(
-              onPressed: aoTentarNovamente,
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.symmetric(horizontal: 12.w, vertical: 6.h),
-                minimumSize: Size(0, 32.h),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Text(
-                'Tentar novamente',
-                style: TextStyle(
-                  fontSize: 12.sp,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFFFF6961),
-                ),
-              ),
-            ),
-          ],
-          if (aoDispensar != null) ...[
-            IconButton(
-              onPressed: aoDispensar,
-              icon: Icon(
-                Icons.close_rounded,
-                size: 18.r,
-                color: const Color(0xFFFF6961),
-              ),
-              padding: EdgeInsets.zero,
-              constraints: BoxConstraints(minWidth: 32.w, minHeight: 32.h),
-            ),
-          ],
+          Row(children: [
+            Icon(Icons.warning_amber_rounded, size: 20.r, color: const Color(0xFFFF6961)),
+            SizedBox(width: 12.w),
+            Expanded(child: Text(mensagem, style: TextStyle(fontSize: 13.sp,
+              color: corTexto ?? const Color(0xFF5D201C), fontWeight: FontWeight.w500))),
+            if (aoDispensar != null) IconButton(onPressed: aoDispensar,
+              tooltip: 'Dispensar aviso', icon: const Icon(Icons.close_rounded)),
+          ]),
+          if (aoTentarNovamente != null) Align(alignment: Alignment.centerRight,
+            child: TextButton(onPressed: aoTentarNovamente,
+              child: const Text('Tentar novamente'))),
         ],
       ),
     );

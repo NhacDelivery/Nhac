@@ -111,8 +111,9 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       if (widget.initialPedido == null &&
           _active &&
           _activePedido != null &&
-          !_socketConectado)
+          !_socketConectado) {
         _loadActiveOrder();
+      }
     });
     _connectivity = context.read<ConnectivityService>();
     _wasOnline = _connectivity!.isOnline;
@@ -225,11 +226,12 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
     }
     final generation = _generation;
     _refreshing = true;
-    if (mounted)
+    if (mounted) {
       setState(() {
         _error = null;
         _loading = _activePedido == null;
       });
+    }
     try {
       final full = widget.initialPedido == null
           ? await _repository.buscarPedidoAtivo()
@@ -237,8 +239,9 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       if (!mounted ||
           !_active ||
           generation != _generation ||
-          context.read<AuthService>().usuarioId != usuarioId)
+          context.read<AuthService>().usuarioId != usuarioId) {
         return;
+      }
       final anterior = _activePedido;
       if (full != null &&
           (!full.status.terminal ||
@@ -266,13 +269,15 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       if (!mounted ||
           !_active ||
           generation != _generation ||
-          context.read<AuthService>().usuarioId != usuarioId)
+          context.read<AuthService>().usuarioId != usuarioId) {
         return;
+      }
       if (full != null) widget.onPedidoChanged?.call(full);
       if (full != null && !full.status.terminal) {
         _showOrder(full);
-        if (widget.initialPedido == null)
+        if (widget.initialPedido == null) {
           await LocalCacheService.salvarPedidoAtivo(usuarioId, full.id);
+        }
       } else {
         if (widget.initialPedido == null &&
             full?.status == StatusPedido.entregue) {
@@ -319,8 +324,9 @@ class _HomeOrderTrackingCardState extends State<HomeOrderTrackingCard>
       _error = null;
     });
     final usuarioId = _usuarioId;
-    if (usuarioId != null && persistir && widget.initialPedido == null)
+    if (usuarioId != null && persistir && widget.initialPedido == null) {
       LocalCacheService.salvarSnapshotPedido(usuarioId, pedido);
+    }
     if (_active && _socketPedidoId != pedido.id) {
       _socketPedidoId = pedido.id;
       _socket.desconectar().then((_) {

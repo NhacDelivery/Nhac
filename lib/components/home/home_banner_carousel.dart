@@ -51,11 +51,12 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
       });
       _startAutoPlay();
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _erro = 'Não foi possível carregar as sugestões.';
         });
+      }
     }
   }
 
@@ -92,17 +93,19 @@ class _HomeBannerCarouselState extends State<HomeBannerCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading)
+    if (_loading) {
       return const SizedBox(
         height: 32,
         child: Center(child: LoadingNhac(telaCheia: false, tamanho: 40)),
       );
-    if (_erro != null)
+    }
+    if (_erro != null) {
       return TextButton.icon(
         onPressed: _carregar,
         icon: const Icon(Icons.refresh),
         label: Text(_erro!),
       );
+    }
     if (_banners.isEmpty) return const SizedBox.shrink();
     return Column(
       children: [

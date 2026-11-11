@@ -121,14 +121,15 @@ class _ProfileContentState extends State<ProfileContent>
               'Usando as preferências deste aparelho. Atualize o perfil para tentar sincronizar.');
         }
       }
-      if (mounted && context.read<AuthService>().usuarioId == usuarioId)
+      if (mounted && context.read<AuthService>().usuarioId == usuarioId) {
         setState(() {
           _preferencias = salvas;
           _contaPreferencias = usuarioId;
           _preferenciasCarregadas = true;
         });
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -136,6 +137,7 @@ class _ProfileContentState extends State<ProfileContent>
             ),
           ),
         );
+      }
     }
   }
 
@@ -144,7 +146,9 @@ class _ProfileContentState extends State<ProfileContent>
     if (!_preferenciasCarregadas ||
         _salvandoPreferencias ||
         usuarioId == null ||
-        usuarioId != _contaPreferencias) return;
+        usuarioId != _contaPreferencias) {
+      return;
+    }
     final novas = {..._preferencias};
     if (!novas.remove(nome)) novas.add(nome);
     setState(() => _salvandoPreferencias = true);
@@ -155,17 +159,20 @@ class _ProfileContentState extends State<ProfileContent>
         final salvas = await LocalCacheService.carregarPreferenciasComida(
           usuarioId,
         );
-        if (salvas.length != novas.length || !salvas.containsAll(novas))
+        if (salvas.length != novas.length || !salvas.containsAll(novas)) {
           rethrow;
-        if (mounted)
+        }
+        if (mounted) {
           context.showError(
             'Preferências salvas neste aparelho. Sincronização pendente; reabra o perfil quando estiver conectado.',
           );
+        }
       }
-      if (mounted && context.read<AuthService>().usuarioId == usuarioId)
+      if (mounted && context.read<AuthService>().usuarioId == usuarioId) {
         setState(() => _preferencias = novas);
+      }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
@@ -173,6 +180,7 @@ class _ProfileContentState extends State<ProfileContent>
             ),
           ),
         );
+      }
     } finally {
       if (mounted) setState(() => _salvandoPreferencias = false);
     }

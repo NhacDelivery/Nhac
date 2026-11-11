@@ -42,6 +42,27 @@ void main() {
         ],
       );
 
+  test('operação consulta estado sem cache e estorno usa POST do mesmo pedido',
+      () async {
+    when(() => dio.get('/pedidos/p1/operacao-pagamento')).thenAnswer(
+        (_) async => Response(
+            requestOptions:
+                RequestOptions(path: '/pedidos/p1/operacao-pagamento'),
+            data: {
+              'estado': 'ESTORNO_PROCESSANDO',
+              'podeSolicitarEstorno': false
+            },
+            statusCode: 200));
+    when(() => dio.post('/pedidos/p1/estorno')).thenAnswer((_) async =>
+        Response(
+            requestOptions: RequestOptions(path: '/pedidos/p1/estorno'),
+            statusCode: 202));
+    expect((await repository.buscarOperacaoPagamento('p1')).estado,
+        'ESTORNO_PROCESSANDO');
+    await repository.solicitarEstorno('p1');
+    verify(() => dio.post('/pedidos/p1/estorno')).called(1);
+  });
+
   test('pedido envia coordenadas do endereço usadas no frete', () {
     final pedido = CriarPedidoRequest(
       lojaId: 'loja1',
@@ -232,6 +253,51 @@ void main() {
     expect(pagamento.valorTotal, 25.5);
     expect(pagamento.simulacaoDisponivel, isTrue);
   });
+
+  test(
+    'retomada consulta o servidor mesmo logo após obter uma cobrança',
+    () async {
+      var calls = 0;
+      final options = RequestOptions(path: '/pedidos/ped1/pagamento');
+      when(() => dio.get('/pedidos/ped1/pagamento')).thenAnswer((_) async {
+        calls++;
+        if (calls > 1) {
+          // Confirmação assíncrona entre duas aberturas rápidas da tela.
+          throw DioException(
+            requestOptions: options,
+            response: Response(
+              requestOptions: options,
+              statusCode: 409,
+              data: {
+                'error': 'PAGAMENTO_INDISPONIVEL',
+                'message': 'Este pedido já foi pago.',
+              },
+            ),
+          );
+        }
+        return Response(
+          requestOptions: options,
+          statusCode: 200,
+          data: {
+            'pedidoId': 'ped1',
+            'formaPagamento': 'CARTAO',
+            'status': 'PENDENTE',
+            'valorTotal': 30,
+            'clientSecret': 'secret-pendente',
+          },
+        );
+      });
+      expect(
+        (await repository.buscarPagamento('ped1')).clientSecret,
+        'secret-pendente',
+      );
+      await expectLater(
+        repository.buscarPagamento('ped1'),
+        throwsA(isA<AppException>()),
+      );
+      verify(() => dio.get('/pedidos/ped1/pagamento')).called(2);
+    },
+  );
 
   test('409 PEDIDO_ATIVO expõe o pedido para recuperar o fluxo', () async {
     when(() => dio.post('/pedidos',

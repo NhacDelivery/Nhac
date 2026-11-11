@@ -19,14 +19,16 @@ class PreferenciasAdapter implements HttpClientAdapter {
   @override
   Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? body,
       Future<void>? cancel) async {
-    if (falha)
+    if (falha) {
       throw DioException.connectionError(
           requestOptions: options, reason: 'offline');
+    }
     if (options.method == 'PUT') {
       envios++;
-      if (envios == 2 && falharSegundo)
+      if (envios == 2 && falharSegundo) {
         throw DioException.connectionError(
             requestOptions: options, reason: 'offline');
+      }
       servidor = List<String>.from(options.data['preferencias']);
       if (envios == 1 && primeiroEnvio != null) await primeiroEnvio!.future;
     }

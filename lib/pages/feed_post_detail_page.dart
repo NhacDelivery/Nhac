@@ -159,13 +159,15 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
         _hasMoreComments = comments.length == 20;
       });
     } catch (_) {
-      if (mounted && requestId == _commentRequestId)
+      if (mounted && requestId == _commentRequestId) {
         setState(
           () => _commentError = 'Não foi possível carregar os comentários.',
         );
+      }
     } finally {
-      if (mounted && requestId == _commentRequestId)
+      if (mounted && requestId == _commentRequestId) {
         setState(() => _loadingComments = false);
+      }
     }
   }
 
@@ -192,12 +194,13 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
         respostaAId: _respostaAId,
       );
       await _tentativas.concluir(uid, 'comentario:${_post.id}');
-      if (mounted)
+      if (mounted) {
         setState(() {
           _commentPending = false;
           _respostaAId = null;
           _respostaANome = null;
         });
+      }
       if (!mounted) return;
       if (_commentController.text.trim() == text) _commentController.clear();
       _commentFocus.unfocus();
@@ -206,8 +209,9 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
     } catch (e) {
       if (rejeicaoDefinitiva(e)) {
         final uid = _uid;
-        if (uid != null)
+        if (uid != null) {
           await _tentativas.concluir(uid, 'comentario:${_post.id}');
+        }
         if (mounted) setState(() => _commentPending = false);
       }
       if (mounted) ErrorUIHelper.handle(context, e);
@@ -258,8 +262,9 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
         ativo: salvar ? !_post.salvo : !_post.curtido,
         salvar: salvar,
       );
-      if (mounted && postRequestId == _postRequestId)
+      if (mounted && postRequestId == _postRequestId) {
         setState(() => _post = post);
+      }
     } catch (e) {
       if (mounted) ErrorUIHelper.handle(context, e);
     } finally {
@@ -282,10 +287,11 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
       if (mounted && request == _postRequestId) setState(() => _post = post);
     } catch (e) {
       if (mounted && recursoExcluido(e)) {
-        if (context.canPop())
+        if (context.canPop()) {
           context.pop(true);
-        else
+        } else {
           context.go('/');
+        }
         return;
       }
       if (mounted) ErrorUIHelper.handle(context, e);
@@ -378,10 +384,11 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
         motivo,
         comentarioId: comentario?.id,
       );
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Denúncia registrada para análise.')),
         );
+      }
     } catch (e) {
       if (mounted) ErrorUIHelper.handle(context, e);
     }
@@ -449,8 +456,9 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
         !await _confirmar(
           'Excluir comentário?',
           'O comentário será removido desta publicação.',
-        ))
+        )) {
       return;
+    }
     if (!mounted) return;
     setState(() => _alterando = true);
     try {
@@ -469,8 +477,9 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
         !await _confirmar(
           'Excluir publicação?',
           'A publicação e seus comentários serão removidos.',
-        ))
+        )) {
       return;
+    }
     if (!mounted) return;
     setState(() => _alterando = true);
     try {
@@ -1213,7 +1222,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   }
 
   Widget _buildRichText(String conteudo, List<String> hashTags) {
-    return FeedContent(conteudo: conteudo, tags: hashTags);
+    return FeedContent(conteudo: conteudo, tags: hashTags, expandivel: false);
   }
 
   Widget _buildMentionedStore(MentionedStoreModel store) {

@@ -1,0 +1,57 @@
+name: Operação de pagamentos e estados
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/components/pedido/operacao_pagamento_card.dart'
+      - 'lib/models/pedido/operacao_pagamento_model.dart'
+      - 'lib/repositories/pedido_repository.dart'
+      - 'lib/pages/**pedido**'
+      - 'test/components/operacao_pagamento_card_test.dart'
+      - '.github/workflows/pagamentos-estados.yml'
+permissions:
+  contents: read
+jobs:
+  estados:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+          cache: true
+      - uses: ./.github/actions/prepare-flutter-config
+        with:
+          env_file_content: ${{ secrets.ENV_FILE }}
+          google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - run: flutter pub get
+      - name: Formatar os arquivos alterados
+        env:
+          BASE_REF: ${{ github.base_ref || 'eu-e-tu' }}
+        run: |
+          git diff --name-only --diff-filter=ACM "origin/$BASE_REF...HEAD" -- '*.dart' > /tmp/pagamento-files
+          if [ -s /tmp/pagamento-files ]; then xargs dart format < /tmp/pagamento-files; fi
+      - run: flutter test --update-goldens --dart-define=CAPTURE_UI=true test/components/operacao_pagamento_card_test.dart test/repositories/pedido_repository_test.dart test/pages/rastreio_entregador_test.dart test/pages/rastreio_codigo_entrega_test.dart
+      - run: flutter build web --release
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: operacao-pagamentos-estados
+          path: |
+            test/components/goldens/*.png
+            test/failures/**
+            lib/components/pedido/operacao_pagamento_card.dart
+            lib/models/pedido/operacao_pagamento_model.dart
+            lib/repositories/pedido_repository.dart
+            lib/pages/rastreio_pedido_page.dart
+            lib/pages/pedido_entregue_page.dart
+            test/components/operacao_pagamento_card_test.dart
+            test/repositories/pedido_repository_test.dart
+            lib/components/estado_com_retry.dart
+            test/pages/rastreio_entregador_test.dart
+            test/pages/rastreio_codigo_entrega_test.dart
+          retention-days: 7

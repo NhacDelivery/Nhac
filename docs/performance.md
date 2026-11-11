@@ -56,3 +56,20 @@ NODE_PATH=/tmp/nhac-browser/node_modules node tool/verify_perf_empty.cjs
 Os scripts usam a credencial pública da fixture E2E, nunca a conta de produção. Screenshots são gravados em /tmp/nhac-perf-ui por padrão.
 
 Para SQL, medição HTTP, hospedagem e limites da conciliação, consultar [o relatório do backend](https://github.com/NhacDelivery/backend-nhac/blob/perf/latencia-tcc/docs/performance.md).
+
+
+## Passo 6 — paginação de chat e regra de frete (16/10/2026 UTC)
+
+GET /conversas recebe tipo=LOJA ou CLIENTE. O servidor filtra antes de paginar,
+com ordenação ultimaMensagemEm/id e totais por aba. O cliente pede diretamente
+page/size da aba em uma única consulta. Sem tipo, a API continua compatível com
+clientes anteriores. Publicar o backend antes deste cliente. Não voltar à filtragem
+local de páginas mistas: isso oculta resultados ou exige varrer páginas anteriores.
+
+O benchmark test/benchmarks/chat_paginacao_benchmark_test.dart compara o algoritmo
+da revisão 0307b90 com o novo repositório, usando a mesma caixa sintética (400 lojas
++ 120 pessoas) e os mesmos 20 resultados da página 5. Conta consultas e bytes JSON;
+não apresenta o tempo do adapter como latência real. Executar com flutter test.
+
+As observações reais de rede e o roteiro estão no backend em docs/passo6-medicoes.md.
+Nenhum cache novo, TTL maior ou cache de conversas privadas foi introduzido.

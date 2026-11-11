@@ -52,7 +52,9 @@ class HomeOrdersState extends State<HomeOrders>
     final prefs = await SharedPreferences.getInstance();
     if (!mounted ||
         generation != _generation ||
-        context.read<AuthService>().usuarioId != user) return;
+        context.read<AuthService>().usuarioId != user) {
+      return;
+    }
     try {
       final raw = prefs.getString('pedidos_home_$_user');
       if (raw != null) {
@@ -72,7 +74,9 @@ class HomeOrdersState extends State<HomeOrders>
         if (mounted &&
             generation == _generation &&
             context.read<AuthService>().usuarioId == user &&
-            legacy != null) setState(() => _orders = [legacy]);
+            legacy != null) {
+          setState(() => _orders = [legacy]);
+        }
       }
     } catch (_) {
       // Um snapshot inválido não equivale a uma resposta vazia do servidor.
@@ -98,7 +102,9 @@ class HomeOrdersState extends State<HomeOrders>
       if (!mounted ||
           !_active ||
           generation != _generation ||
-          context.read<AuthService>().usuarioId != user) return;
+          context.read<AuthService>().usuarioId != user) {
+        return;
+      }
       setState(() {
         final incoming = {for (final order in orders) order.id: order};
         // Uma atualização individual mais recente prevalece sobre a lista em voo.
@@ -117,11 +123,13 @@ class HomeOrdersState extends State<HomeOrders>
       });
       await _persistSnapshot();
     } catch (_) {
-      if (mounted && generation == _generation)
+      if (mounted && generation == _generation) {
         setState(() => _error = 'Não foi possível atualizar os pedidos.');
+      }
     } finally {
-      if (mounted && generation == _generation)
+      if (mounted && generation == _generation) {
         setState(() => _pending = false);
+      }
     }
   }
 
@@ -145,7 +153,9 @@ class HomeOrdersState extends State<HomeOrders>
       if (!mounted ||
           user == null ||
           generation != _generation ||
-          context.read<AuthService>().usuarioId != user) return;
+          context.read<AuthService>().usuarioId != user) {
+        return;
+      }
       await prefs.setString(
           'pedidos_home_$user',
           jsonEncode({

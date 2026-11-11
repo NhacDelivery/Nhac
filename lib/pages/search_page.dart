@@ -151,11 +151,12 @@ class _SearchPageState extends State<SearchPage>
   }
 
   Future<void> _carregarCategorias() async {
-    if (mounted)
+    if (mounted) {
       setState(() {
         _categoriasCarregando = true;
         _erroCategorias = false;
       });
+    }
     try {
       final categorias = await _produtoRepository.buscarCategorias();
       if (mounted) setState(() => _categoriasSugeridas = categorias);

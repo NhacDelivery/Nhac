@@ -1,3 +1,4 @@
+import 'package:nhac/models/pedido/operacao_pagamento_model.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -38,6 +39,8 @@ void main() {
 
   setUp(() {
     mockPedidoRepository = MockPedidoRepository();
+    when(() => mockPedidoRepository.buscarOperacaoPagamento(any()))
+        .thenAnswer((_) async => const OperacaoPagamentoModel(estado: 'REGULAR'));
     mockLojaRepository = MockLojaRepository();
     mockEntregaRepository = MockEntregaRepository();
     mockSocket = MockPedidoStatusSocketService();

@@ -1,4 +1,6 @@
+import 'package:nhac/components/pedido/operacao_pagamento_card.dart';
 import 'package:nhac/components/estado_com_retry.dart';
+import 'package:nhac/components/botoes/botao_largo_nhac.dart';
 import 'dart:async';
 import 'package:nhac/models/chat/pedido_chat_referencia.dart';
 import 'package:nhac/services/shared_get.dart';
@@ -57,11 +59,14 @@ class RastreioPedidoPage extends StatefulWidget {
 }
 
 class _RastreioPedidoPageState extends State<RastreioPedidoPage>
-    with RouteAware, WidgetsBindingObserver {
+    with RouteAware, WidgetsBindingObserver, TickerProviderStateMixin {
+  late final AnimationController _statusAnimationController;
+  late final Animation<Offset> _statusOffsetAnimation;
+  late final AnimationController _ampulhetaController;
+  late final Animation<double> _ampulhetaAnimation;
   String get _cacheKey => '${SharedGet.sessionGeneration}|${widget.pedidoId}';
   bool _visible = true;
   bool _foreground = true;
-  bool _connected = false;
   bool get _active => _visible && _foreground;
   StreamSubscription<bool>? _connectionSubscription;
   DateTime? _nextRouteAttempt;
@@ -106,6 +111,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
   void didPushNext() {
     _visible = false;
     _statusSocket.desconectar();
+    _sincronizarAmpulheta();
   }
 
   @override
@@ -113,6 +119,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     _visible = true;
     _statusSocket.conectar(widget.pedidoId);
     _carregarDados(silencioso: true);
+    _sincronizarAmpulheta();
   }
 
   @override
@@ -124,6 +131,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     } else {
       _statusSocket.desconectar();
     }
+    _sincronizarAmpulheta();
   }
 
   static final Map<String, _RastreioCacheEntry> _cache = {};
@@ -188,16 +196,56 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     }
     _carregarDados(silencioso: cached != null);
     _conectarStatus();
+    _statusAnimationController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _statusOffsetAnimation = Tween<Offset>(
+      begin: const Offset(0, -2.5),
+      end: const Offset(0, 0),
+    ).animate(CurvedAnimation(
+      parent: _statusAnimationController,
+      curve: Curves.elasticOut,
+    ));
+    _statusAnimationController.forward();
+    _ampulhetaController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _ampulhetaAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: 0.5)
+            .chain(CurveTween(curve: Curves.easeInOutBack)),
+        weight: 35.0,
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(0.5),
+        weight: 65.0,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.5, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOutBack)),
+        weight: 35.0,
+      ),
+      TweenSequenceItem(
+        tween: ConstantTween<double>(1.0),
+        weight: 65.0,
+      ),
+    ]).animate(_ampulhetaController);
+    _sincronizarAmpulheta();
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (ModalRoute.of(context)?.isCurrent == true &&
           WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
-        _carregarDados(silencioso: true, recuperarStatus: !_connected);
+        // A conexão aberta não garante que todo evento tenha sido recebido.
+        _carregarDados(silencioso: true);
       }
     });
   }
 
   @override
   void dispose() {
+    _ampulhetaController.dispose();
+    _statusAnimationController.dispose();
     _requestVersion++;
     _statusRefreshTimer?.cancel();
     homeOrderRouteObserver.unsubscribe(this);
@@ -233,8 +281,11 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
       }
     });
     _connectionSubscription = _statusSocket.conectado.listen((connected) {
-      _connected = connected;
-      if (connected && _active) _carregarDados(silencioso: true);
+      if (connected && _active) {
+        _pedidoRepository.invalidarPedido(widget.pedidoId);
+        _statusRefreshPending = _refreshing;
+        _carregarDados(silencioso: true);
+      }
     });
     await _statusSocket.conectar(widget.pedidoId);
   }
@@ -242,7 +293,6 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
   Future<void> _carregarDados({
     bool silencioso = false,
     bool tentarRota = false,
-    bool recuperarStatus = true,
   }) async {
     if (_refreshing || !mounted || !_active) return;
     final session = SharedGet.sessionGeneration;
@@ -257,9 +307,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     }
 
     try {
-      final pedido = !recuperarStatus && _pedido != null
-          ? _pedido!
-          : await _pedidoRepository.buscarPedidoPorId(widget.pedidoId);
+      final pedido = await _pedidoRepository.buscarPedidoPorId(widget.pedidoId);
       if (!mounted ||
           !_active ||
           session != SharedGet.sessionGeneration ||
@@ -296,6 +344,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
         _erro = '';
         _pedidoDesatualizado = false;
       });
+      _sincronizarAmpulheta();
       LojasModel? loja = _loja;
       RotaEntregaModel? rota = _rota;
       String? rotaErro;
@@ -348,8 +397,8 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
           }
         } catch (e) {
           _rotaSemCoordenadas = e.toString().toLowerCase().contains(
-            'coordenad',
-          );
+                'coordenad',
+              );
           if (_rotaSemCoordenadas) rota = null;
           rotaErro = e.toString();
         }
@@ -378,8 +427,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
           if (ponto != null && ponto.isValido) {
             motoboyLocation = LatLng(ponto.latitude, ponto.longitude);
             motoboyAtualizadoEm = ponto.atualizadaEm;
-            motoboyDesatualizado =
-                ponto.atualizadaEm == null ||
+            motoboyDesatualizado = ponto.atualizadaEm == null ||
                 DateTime.now().difference(ponto.atualizadaEm!) >
                     const Duration(minutes: 2);
           } else if (motoboyLocation != null) {
@@ -408,6 +456,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
         _erro = '';
         _pedidoDesatualizado = false;
       });
+      _sincronizarAmpulheta();
 
       _cache.remove(_cacheKey);
       _cache[_cacheKey] = _RastreioCacheEntry(
@@ -449,6 +498,27 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
           () => _carregarDados(silencioso: true),
         );
       }
+    }
+  }
+
+  void _sincronizarAmpulheta() {
+    final deveAnimar = _pedido?.status == StatusPedido.pendente && _active;
+    if (!deveAnimar) {
+      if (_ampulhetaController.isAnimating) {
+        _ampulhetaController.stop();
+      }
+      _ampulhetaController.value = 0.0;
+      return;
+    }
+
+    if (!_ampulhetaController.isAnimating &&
+        _ampulhetaController.value >= 0.99) {
+      _ampulhetaController.forward(from: 0.0);
+      return;
+    }
+
+    if (!_ampulhetaController.isAnimating) {
+      _ampulhetaController.forward(from: 0.0);
     }
   }
 
@@ -545,6 +615,44 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
       }
     }
     return _pedido?.statusTexto ?? 'Pedido em andamento';
+  }
+
+  IconData _statusIcon() {
+    final status = _pedido?.status;
+    switch (status) {
+      case StatusPedido.pendente:
+        return Icons.hourglass_top_rounded;
+      case StatusPedido.pago:
+        return Icons.check_circle_outline_rounded;
+      case StatusPedido.preparando:
+        return Icons.soup_kitchen_rounded;
+      case StatusPedido.saiuEntrega:
+        return Icons.delivery_dining_rounded;
+      case StatusPedido.entregue:
+        return Icons.task_alt_rounded;
+      case StatusPedido.cancelado:
+        return Icons.cancel_outlined;
+      default:
+        return Icons.fastfood_rounded;
+    }
+  }
+
+  Widget _buildStatusIcon() {
+    final iconData = _statusIcon();
+    final iconWidget = Icon(
+      iconData,
+      color: const Color(0xFFFE645C),
+      size: 22.r,
+    );
+
+    if (iconData == Icons.hourglass_top_rounded) {
+      return RotationTransition(
+        turns: _ampulhetaAnimation,
+        child: iconWidget,
+      );
+    }
+
+    return iconWidget;
   }
 
   Widget _buildMapa() {
@@ -694,20 +802,17 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     final distanciaKm = _rota?.distanciaKm ?? 0;
     final tempoEstimadoMin = _tempoEstimadoMinutos();
     final previsao = DateTime.now().add(Duration(minutes: tempoEstimadoMin));
-    final horaPrevisao = status.terminal
-        ? '--:--'
-        : DateFormat('HH:mm').format(previsao);
+    final horaPrevisao =
+        status.terminal ? '--:--' : DateFormat('HH:mm').format(previsao);
     final tempoExibicao = status == StatusPedido.entregue
         ? 'Entregue'
         : status == StatusPedido.cancelado
-        ? 'Cancelado'
-        : '$tempoEstimadoMin min total';
-    final distanciaTexto = _rota == null
-        ? 'Indisponível'
-        : '${distanciaKm.toStringAsFixed(1)} km';
-    final tempoEstimadoTexto = tempoEstimadoMin > 0
-        ? '$tempoEstimadoMin min'
-        : '--';
+            ? 'Cancelado'
+            : '$tempoEstimadoMin min total';
+    final distanciaTexto =
+        _rota == null ? 'Indisponível' : '${distanciaKm.toStringAsFixed(1)} km';
+    final tempoEstimadoTexto =
+        tempoEstimadoMin > 0 ? '$tempoEstimadoMin min' : '--';
 
     int quantidadeItens = _pedido!.itens.fold(
       0,
@@ -756,47 +861,72 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
             top: MediaQuery.of(context).padding.top + 16.h,
             left: 70.w,
             right: 16.w,
-            child: Container(
-              padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 12.h),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16.r),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 4),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      SizedBox(width: 8.w),
-                      Expanded(
-                        child: Semantics(
-                          key: E2EKeys.trackingStatus,
-                          value: _pedido!.status.apiValue,
-                          child: Text(
-                            _statusPedidoTexto(),
-                            key: const Key('pedido-status-text'),
+            child: SlideTransition(
+              position: _statusOffsetAnimation,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 14.w, vertical: 10.h),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(50.r),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF5D201C).withValues(alpha: 0.1),
+                      blurRadius: 20.r,
+                      offset: Offset(0, 10.h),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40.w,
+                      height: 40.w,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFFFE645C).withValues(alpha: 0.15),
+                      ),
+                      child: Center(
+                        child: _buildStatusIcon(),
+                      ),
+                    ),
+                    SizedBox(width: 12.w),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            key: E2EKeys.trackingStatus,
+                            value: _pedido!.status.apiValue,
+                            child: Text(
+                              _statusPedidoTexto(),
+                              key: const Key('pedido-status-text'),
+                              style: TextStyle(
+                                color: const Color(0xFF5D201C),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14.sp,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          SizedBox(height: 2.h),
+                          Text(
+                            '${_pedido!.enderecoEntrega.rua}, ${_pedido!.enderecoEntrega.numero}',
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16.sp,
+                              color: Colors.grey.shade500,
+                              fontSize: 12.sp,
+                              fontWeight: FontWeight.w500,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    '${_pedido!.enderecoEntrega.rua}, ${_pedido!.enderecoEntrega.numero}',
-                    style: TextStyle(color: Colors.grey, fontSize: 13.sp),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                    ),
+                    SizedBox(width: 6.w),
+                  ],
+                ),
               ),
             ),
           ),
@@ -955,9 +1085,16 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                         onTap: () => _abrirMensagemRestaurante(),
                         child: Container(
                           padding: EdgeInsets.all(12.w),
-                          decoration: const BoxDecoration(
-                            color: Colors.blue,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFE645C),
                             shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFFE645C).withValues(alpha: 0.3),
+                                blurRadius: 8.r,
+                                offset: Offset(0, 3.h),
+                              ),
+                            ],
                           ),
                           child: Icon(
                             Icons.message,
@@ -1021,6 +1158,13 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                       ),
                     ],
                   ),
+                  if ((status == StatusPedido.pendente || status == StatusPedido.pago) && ['PIX', 'CARTAO', 'STRIPE', 'GOOGLE_PAY']
+                      .contains(_pedido!.formaPagamento.toUpperCase()))
+                    OperacaoPagamentoCard(
+                        key: ValueKey('operacao-${widget.pedidoId}'),
+                        pedidoId: widget.pedidoId,
+                        repository: _pedidoRepository,
+                        aoCancelar: () => _carregarDados(silencioso: true)),
                   if (status == StatusPedido.pendente) ...[
                     SizedBox(height: 20.h),
                     if (_pedido!.formaPagamento.toUpperCase() == 'PIX' ||
@@ -1037,15 +1181,11 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                       ),
                       SizedBox(height: 8.h),
                     ],
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        key: const Key('pedido-cancelar-button'),
-                        onPressed: _cancelando ? null : _cancelarPedido,
-                        child: Text(
-                          _cancelando ? 'Cancelando...' : 'Cancelar pedido',
-                        ),
-                      ),
+                    BotaoLargoNhac(
+                      key: const Key('pedido-cancelar-button'),
+                      texto: 'Cancelar pedido',
+                      carregando: _cancelando,
+                      onPressed: _cancelando ? null : _cancelarPedido,
                     ),
                   ],
                   SizedBox(height: 32.h),

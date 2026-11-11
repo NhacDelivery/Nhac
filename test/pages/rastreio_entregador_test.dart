@@ -1,3 +1,4 @@
+import 'package:nhac/models/pedido/operacao_pagamento_model.dart';
 import 'dart:async';
 import 'package:nhac/components/estado_com_retry.dart';
 import 'package:flutter/material.dart';
@@ -38,6 +39,8 @@ void main() {
 
   setUp(() {
     mockPedidoRepository = MockPedidoRepository();
+    when(() => mockPedidoRepository.buscarOperacaoPagamento(any()))
+        .thenAnswer((_) async => const OperacaoPagamentoModel(estado: 'REGULAR'));
     mockLojaRepository = MockLojaRepository();
     mockEntregaRepository = MockEntregaRepository();
     mockSocket = MockPedidoStatusSocketService();
@@ -219,6 +222,31 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Loja recuperada'), findsOneWidget);
     expect(retry, findsNothing);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  testWidgets('socket conectado reconcilia status perdido pela consulta periódica',
+      (tester) async {
+    setupScreen(tester);
+    final connections = StreamController<bool>();
+    addTearDown(connections.close);
+    when(() => mockSocket.conectado).thenAnswer((_) => connections.stream);
+    when(() => mockPedidoRepository.buscarPedidoPorId('evento-perdido'))
+        .thenAnswer((_) async => criarPedido(status: StatusPedido.pendente));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(createWidgetUnderTest('evento-perdido'));
+    await tester.pumpAndSettle();
+    connections.add(true);
+    await tester.pumpAndSettle();
+    // O evento PAGO não chega pelo socket, mas o servidor já avançou.
+    when(() => mockPedidoRepository.buscarPedidoPorId('evento-perdido'))
+        .thenAnswer((_) async => criarPedido(status: StatusPedido.pago));
+    await tester.pump(const Duration(seconds: 31));
+    await tester.pumpAndSettle();
+    final status = find.byWidgetPredicate((widget) => widget is Semantics &&
+        widget.key == const Key('e2e.tracking.status') &&
+        widget.properties.value == 'PAGO');
+    expect(status, findsOneWidget);
     await tester.pumpWidget(const SizedBox.shrink());
   });
 

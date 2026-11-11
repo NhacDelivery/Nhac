@@ -190,3 +190,87 @@ Em destaque na loja usa desconto > 0; Vendidos ordena quantidades de pedidos ENT
 Percentual positivo da loja usa suas avaliações com nota >= 4 e não afirma percentual por produto.
 Recuperação do checkout subtrai só produto/quantidade/loja do payload original e grava um recibo
 junto ao carrinho, conservando itens adicionais e evitando novo consumo no replay.
+
+
+## Chat e erros — passo 4
+
+Fontes: `backend-nhac/docs/chat-clientes.md`, `ConversaClienteController`,
+`ChatService` e DTOs de mensagens. O backend existente é suficiente; não há
+nova regra de permissão nesta mudança.
+
+| Capability | Canonical owner | Source of truth | Allowed variants | Verification |
+|---|---|---|---|---|
+| CRUD | ChatRepository / ChatConversaPage | API /conversas e clientMessageId | pessoa / loja / pedido / produto | chat_passo4_test.dart; client_chat_e2e_test.dart |
+| Toast | ErrorUIHelper / AppUiUtils | exceções tipadas da API | banner persistente / notificação | error_ui_helper_test.dart |
+
+- Pessoas e Lojas conservam listas, páginas e posição por aba. Consultar novamente
+  não transforma falha em caixa vazia. Retry repete a operação que falhou.
+- Buscar filtra nome e prévia das conversas carregadas. O texto do campo informa
+  esse alcance; carregar mais continua disponível durante o filtro. A busca é
+  local e temporária, sem enviar conteúdo privado para URLs ou analytics.
+- Tocar em Pessoas abre o ID existente, sem criar uma conversa com loja. O autor
+  é definido por remetenteUsuarioId e pela sessão; CLIENTE não significa “eu”.
+- Loja, pessoa, pedido e produto reutilizam ChatConversaPage. O texto só é limpo
+  após a mensagem confirmada. IDs deduplicam socket, histórico e resposta REST.
+- Socket indisponível usa POST de mensagem por REST. Ausência de confirmação por
+  15 segundos tenta REST uma vez com o mesmo clientMessageId; erro conserva a
+  tentativa e permite reenvio com o mesmo ID. Não afirmar falha definitiva quando
+  a persistência é incerta. Envio pendente bloqueia alterações do mesmo texto.
+- Reconectar restabelece o socket e atualiza o histórico. Em primeiro plano, uma
+  conexão indisponível consulta o histórico a cada 15 segundos sem sobreposição.
+  Sair ou colocar o aplicativo em segundo plano interrompe essas consultas.
+- Falhas persistentes usam BannerErroInline e ErrorUIHelper; textos tipados do
+  backend são preservados. Falhas técnicas desconhecidas não exibem detalhes
+  internos. Não existem botões de busca/menu/criação de conversa sem operação.
+
+Verificação visual: capturas de estados de widgets no job Chat e estados de
+recuperação. Não equivalem a uma certificação de browser/acessibilidade completa.
+
+
+## Operação de pagamentos (passo 5)
+
+OperacaoPagamentoCard é o dono compartilhado do acompanhamento no rastreio e no
+pedido cancelado. Consulta ao abrir, ao retomar e a cada 30 segundos enquanto a
+rota estiver visível, sem sobreposição. Não armazena estado financeiro em disco.
+Falhas preservam o último estado e oferecem retry somente da consulta.
+
+O backend autoriza estorno automático somente do pedido PAGO, antes do preparo,
+com cobrança eletrônica identificada. confirmarNhac informa que cancelar o pedido
+é imediato e a devolução é assíncrona. O botão bloqueia do diálogo ao fim do envio.
+Resultado incerto exige consultar antes de permitir nova solicitação. O servidor
+é idempotente; nunca afirmar devolução concluída antes da confirmação do provedor.
+Após confirmação do cancelamento, o rastreio abre os detalhes existentes; histórico
+mostra o mesmo acompanhamento. Publicar o backend com V1023 antes do app.
+
+| Capability | Canonical owner | Source of truth | Allowed variants | Verification |
+|---|---|---|---|---|
+| CRUD | PedidoRepository / OperacaoPagamentoCard / confirmarNhac | autorização e fila persistida do backend | solicitação e acompanhamento | test/components/operacao_pagamento_card_test.dart |
+
+
+## Home com catálogo pequeno (16/10/2026)
+
+HomeCategoryChips é o único dono dos atalhos de categorias na home. Os banners
+mostram produtos reais e abrem seus detalhes, usando as próprias imagens e nomes.
+Não fazem outra consulta de categorias e não usam uma foto genérica para sugerir
+conteúdo que não existe. O carrossel pausa fora da rota/app ativo ou com redução
+de movimento e se ajusta quando o catálogo muda.
+
+HomeProductSelection deriva as seções sem filtrar/truncar o catálogo original:
+prioriza lojas abertas, deduplica por ID e limita cada seção a dez itens. A faixa
+abaixo de R$ 20 usa o preço real, inclusive sem desconto. Se nenhum produto atende,
+mostra “Explore o cardápio” com produtos existentes, sem inventar oferta/preço.
+As duas seções podem compartilhar produtos quando o catálogo é pequeno. Lojas
+fechadas continuam visíveis para consulta, com identificação e bloqueio existente
+de adição; o servidor permanece responsável por autorizar a compra. Falhas mantêm
+os produtos carregados e o retry; consulta bem-sucedida sem produtos é o único vazio.
+O catálogo é solicitado com lojas abertas primeiro, antes do limite de 50 itens.
+
+
+## Entrada do feed
+
+O feed usa FeedPublishInvite para convidar a compartilhar uma experiência com comida.
+A ação reutiliza /feed-publicar e a mesma recuperação de publicação do cabeçalho.
+Voltar sem publicar preserva lista/categoria; publicar recarrega Destaques.
+Salvos não mostra o convite. Não consultar categorias de produtos, usar fotos
+genéricas, autoplay ou prometer promoções nesse espaço. Conteúdo editorial
+permanece disponível mesmo quando a listagem falha.

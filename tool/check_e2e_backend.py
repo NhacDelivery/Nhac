@@ -38,14 +38,23 @@ def check_backend(port):
     if not any(product.get("id") == "e2e-produto-001" for product in products):
         raise RuntimeError("/produtos/cards: produto fixture e2e-produto-001 ausente")
     page("/produtos/cards/promocoes?page=0&size=1")
+    page("/lojas?page=0&size=1")
     login = request("/auth/login", {
         "email": "e2e.cliente@nhac.local", "senha": password,
     })
     token = login.get("token") if isinstance(login, dict) else None
     if not isinstance(token, str) or not token:
         raise RuntimeError("/auth/login: token da fixture ausente")
-    if not isinstance(request("/pedidos/ativos", token=token), list):
+    ativos = request("/pedidos/ativos", token=token)
+    if not isinstance(ativos, list):
         raise RuntimeError("/pedidos/ativos: lista de pedidos inválida")
+    if ativos:
+        raise RuntimeError("/pedidos/ativos: fixture contaminada antes do teste")
+    historico = request("/pedidos?page=0&size=1", token=token)
+    if not isinstance(historico, dict) or not isinstance(historico.get("content"), list):
+        raise RuntimeError("/pedidos: resposta paginada inválida")
+    if historico["content"] or historico.get("totalElements", 0) != 0:
+        raise RuntimeError("/pedidos: fixture contaminada antes do teste")
     feed = request("/feed/posts?page=0&size=1", token=token)
     if not isinstance(feed, dict) or not isinstance(feed.get("content"), list):
         raise RuntimeError("/feed/posts: resposta paginada inválida")
@@ -62,7 +71,7 @@ def main():
     except (RuntimeError, ValueError, urllib.error.URLError) as error:
         print(f"Contrato do backend E2E recusado: {error}", file=sys.stderr)
         return 1
-    print("Contratos E2E confirmados: cards, promoções, login, pedidos ativos e feed.")
+    print("Contratos E2E confirmados: catálogo, login, histórico, pedidos ativos e feed; fixture limpa.")
     return 0
 
 

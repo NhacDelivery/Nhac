@@ -1,8 +1,7 @@
 // lib/repositories/chat_repository.dart
 //
-// Parte REST do chat do cliente. O ENVIO de mensagem não passa por aqui —
-// é WebSocket (ChatSocketService). Este arquivo só abre a conversa, carrega
-// o histórico e marca como lida.
+// Parte REST do chat do cliente, incluindo recuperação de envio com o mesmo
+// clientMessageId usado pelo WebSocket.
 
 import 'package:dio/dio.dart';
 import 'package:nhac/globals/exceptions.dart';
@@ -14,6 +13,24 @@ import 'package:nhac/services/api_client.dart';
 class ChatRepository {
   final Dio _dio;
   ChatRepository({Dio? dio}) : _dio = dio ?? ApiClient().dio;
+
+  Future<MensagemChat> enviarMensagem(
+    String conversaId, {
+    required String conteudo,
+    required String clientMessageId,
+  }) async {
+    try {
+      final response =
+          await _dio.post('/conversas/$conversaId/mensagens', data: {
+        'conteudo': conteudo,
+        'clientMessageId': clientMessageId,
+      });
+      return MensagemChat.fromMap(
+          Map<String, dynamic>.from(response.data as Map));
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
 
   /// POST /conversas/lojas/{lojaId} — idempotente, devolve o id da conversa.
   ///
@@ -109,26 +126,21 @@ class ChatRepository {
     if (pagina < 0 || tamanho < 1 || tamanho > 100) {
       throw ArgumentError('Use página >= 0 e tamanho entre 1 e 100.');
     }
-    final inicio = pagina * tamanho;
-    final conversas = <Map<String, dynamic>>[];
-    var paginaServidor = 0;
-    // O backend pagina lojas e pessoas juntas. Pagina cada aba depois do filtro
-    // para não ocultar conversas quando outra categoria ocupa a primeira página.
-    while (conversas.length < inicio + tamanho) {
-      final response = await _dio.get(
-        '/conversas',
-        queryParameters: {'page': paginaServidor, 'size': 100},
-      );
-      final dados = Map<String, dynamic>.from(response.data as Map);
-      final conteudo = dados['content'] as List;
-      conversas.addAll(
-        conteudo
-            .map((item) => Map<String, dynamic>.from(item as Map))
-            .where((item) => item['tipo'] == tipo),
-      );
-      if (dados['last'] == true || conteudo.isEmpty) break;
-      paginaServidor++;
+    final response = await _dio.get('/conversas', queryParameters: {
+      'tipo': tipo,
+      'page': pagina,
+      'size': tamanho,
+    });
+    final dados = Map<String, dynamic>.from(response.data as Map);
+    final conteudo = dados['content'] as List;
+    // Filtrar localmente voltaria a produzir páginas curtas e esconder conversas.
+    // Falhar explicitamente se um backend antigo ignorar o novo contrato.
+    final conversas =
+        conteudo.map((item) => Map<String, dynamic>.from(item as Map)).toList();
+    if (conversas.any((item) => item['tipo'] != tipo)) {
+      throw StateError(
+          'O servidor não aplicou o filtro de conversas. Atualize o backend.');
     }
-    return conversas.skip(inicio).take(tamanho).toList();
+    return conversas;
   }
 }

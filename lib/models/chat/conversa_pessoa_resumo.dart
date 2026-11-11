@@ -47,4 +47,33 @@ class ConversaPessoaResumo {
       mensagensNaoLidas: safeInt(map['naoLidas'] ?? map['mensagensNaoLidas']),
     );
   }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'pessoaId': pessoaId,
+      'pessoaNome': pessoaNome,
+      'ultimaMensagem': ultimaMensagem,
+      'ultimaMensagemData': ultimaMensagemData.toUtc().toIso8601String(),
+      'mensagensNaoLidas': mensagensNaoLidas,
+    };
+  }
+
+  ConversaPessoaResumo copyWith({
+    String? id,
+    String? pessoaId,
+    String? pessoaNome,
+    String? ultimaMensagem,
+    DateTime? ultimaMensagemData,
+    int? mensagensNaoLidas,
+  }) {
+    return ConversaPessoaResumo(
+      id: id ?? this.id,
+      pessoaId: pessoaId ?? this.pessoaId,
+      pessoaNome: pessoaNome ?? this.pessoaNome,
+      ultimaMensagem: ultimaMensagem ?? this.ultimaMensagem,
+      ultimaMensagemData: ultimaMensagemData ?? this.ultimaMensagemData,
+      mensagensNaoLidas: mensagensNaoLidas ?? this.mensagensNaoLidas,
+    );
+  }
 }

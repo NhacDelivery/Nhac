@@ -166,7 +166,7 @@ class _NotificacoesPageState extends State<NotificacoesPage>
                             aviso,
                           );
                         } catch (_) {
-                          if (context.mounted)
+                          if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
                                 content: Text(
@@ -174,6 +174,7 @@ class _NotificacoesPageState extends State<NotificacoesPage>
                                 ),
                               ),
                             );
+                          }
                           return;
                         }
                         if (!context.mounted || aviso.pedidoId == null) return;

@@ -1,0 +1,55 @@
+name: Home com catálogo pequeno
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/components/home/**'
+      - 'lib/models/home/**'
+      - 'lib/repositories/produto_repository.dart'
+      - 'test/components/home/**'
+      - 'test/models/home/**'
+      - '.github/workflows/home-estados.yml'
+permissions:
+  contents: read
+jobs:
+  estados:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+          cache: true
+      - uses: ./.github/actions/prepare-flutter-config
+        with:
+          env_file_content: ${{ secrets.ENV_FILE }}
+          google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - run: flutter pub get
+      - name: Formatar os arquivos alterados
+        env:
+          BASE_REF: ${{ github.base_ref || 'eu-e-tu' }}
+        run: |
+          git diff --name-only --diff-filter=ACM "origin/$BASE_REF...HEAD" -- '*.dart' > /tmp/pagamento-files
+          if [ -s /tmp/pagamento-files ]; then xargs dart format < /tmp/pagamento-files; fi
+      - run: flutter test --update-goldens --dart-define=CAPTURE_UI=true test/models/home/home_product_selection_test.dart test/components/home/home_catalogo_pequeno_test.dart test/components/home/home_content_error_test.dart test/repositories/produto_repository_test.dart
+      - run: flutter build web --release
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: home-estados
+          path: |
+            test/components/home/goldens/*.png
+            test/failures/**
+            lib/components/product_card.dart
+            lib/components/home/*.dart
+            lib/models/home/*.dart
+            lib/repositories/produto_repository.dart
+            test/components/home/home_catalogo_pequeno_test.dart
+            test/components/home/home_content_error_test.dart
+            test/models/home/*.dart
+            test/repositories/produto_repository_test.dart
+          retention-days: 7

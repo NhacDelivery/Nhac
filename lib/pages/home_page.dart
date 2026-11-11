@@ -133,13 +133,6 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       },
       child: Scaffold(
         extendBody: true,
-        bottomNavigationBar: SafeArea(
-          top: false,
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(24.w, 0, 24.w, 10.h),
-            child: _buildDynamicNavBar(),
-          ),
-        ),
         backgroundColor: const Color(0xFFFFE7E5),
         body: NotificationListener<ScrollNotification>(
           onNotification: (notification) {
@@ -307,6 +300,33 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     );
                   },
                 ),
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOutCubic,
+                  bottom: bottomPadding + 10.h,
+                  left: _isScrolledDown
+                      ? MediaQuery.of(context).size.width - 24.w - 75.w
+                      : 24.w,
+                  right: 24.w,
+                  child: AnimatedBuilder(
+                    animation: _cartBarController,
+                    builder: (context, child) {
+                      final t = _cartBarController.value;
+                      final bounceAmount = math.sin(t * math.pi) * 8.h;
+
+                      final isReversing =
+                          _cartBarController.status == AnimationStatus.reverse;
+                      final offsetY =
+                          isReversing ? bounceAmount : -bounceAmount;
+
+                      return Transform.translate(
+                        offset: Offset(0, offsetY),
+                        child: child,
+                      );
+                    },
+                    child: _buildDynamicNavBar(),
+                  ),
+                ),
               ],
             ),
           ),
@@ -347,7 +367,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           borderRadius: BorderRadius.circular(50.r),
           child: AnimatedCrossFade(
             duration: const Duration(milliseconds: 300),
-            crossFadeState: CrossFadeState.showFirst,
+            crossFadeState: _isScrolledDown ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             alignment: Alignment.center,
             layoutBuilder:
                 (topChild, topChildKey, bottomChild, bottomChildKey) {

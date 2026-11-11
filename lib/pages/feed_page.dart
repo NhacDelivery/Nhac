@@ -9,7 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lottie/lottie.dart';
-import 'package:nhac/components/home/home_banner_carousel.dart';
+import 'package:nhac/components/feed_publish_invite.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/pages/search_page.dart';
 import 'package:nhac/repositories/feed_repository.dart';
@@ -59,6 +59,15 @@ class _FeedPageState extends State<FeedPage>
     'Novidades',
   ];
 
+  IconData _iconeParaCategoriaFeed(String categoria) {
+    final lower = categoria.toLowerCase().trim();
+    if (lower.contains('destaque')) return Icons.auto_awesome_rounded;
+    if (lower.contains('alta')) return Icons.whatshot_rounded;
+    if (lower.contains('promo')) return Icons.local_offer_rounded;
+    if (lower.contains('novidade')) return Icons.fiber_new_rounded;
+    return Icons.restaurant_menu_rounded;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -80,18 +89,20 @@ class _FeedPageState extends State<FeedPage>
     final requestId = ++_requestId;
     final revisoes = Map<String, int>.of(_revisoes);
     if (_categoriaCarregada != categoria) {
-      if (_categoriaCarregada != null)
+      if (_categoriaCarregada != null) {
         _cacheCategorias[_categoriaCarregada!] = List.of(_posts);
+      }
       _posts = List.of(_cacheCategorias[categoria] ?? []);
       _categoriaCarregada = categoria;
       _hasMore = false;
     }
-    if (mounted)
+    if (mounted) {
       setState(() {
         _isLoading = true;
         _error = null;
         _loadingMore = false;
       });
+    }
     try {
       final posts = widget.salvos
           ? await _repository.buscarSalvos()
@@ -114,8 +125,9 @@ class _FeedPageState extends State<FeedPage>
       if (!mounted || requestId != _requestId) return;
       setState(() => _error = 'Não foi possível carregar o feed.');
     } finally {
-      if (mounted && requestId == _requestId)
+      if (mounted && requestId == _requestId) {
         setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -151,9 +163,18 @@ class _FeedPageState extends State<FeedPage>
     } catch (e) {
       if (mounted && requestId == _requestId) ErrorUIHelper.handle(context, e);
     } finally {
-      if (mounted && requestId == _requestId)
+      if (mounted && requestId == _requestId) {
         setState(() => _loadingMore = false);
+      }
     }
+  }
+
+  Future<void> _abrirPublicacao() async {
+    final post = await context.push<FeedPostModel>('/feed-publicar');
+    if (!mounted || post == null) return;
+    context.showSuccess('Publicação criada.');
+    _tabController.index = 0;
+    await _carregarPosts('Destaques');
   }
 
   @override
@@ -169,34 +190,32 @@ class _FeedPageState extends State<FeedPage>
             refreshIndicatorExtent: 120.h,
             refreshTriggerPullDistance: 160.h,
             onRefresh: () => _carregarPosts(_categorias[_tabController.index]),
-            builder:
-                (
-                  context,
-                  refreshState,
-                  pulledExtent,
-                  refreshTriggerPullDistance,
-                  refreshIndicatorExtent,
-                ) {
-                  return Center(
-                    child: Opacity(
-                      opacity: (pulledExtent / refreshIndicatorExtent).clamp(
-                        0.0,
-                        1.0,
-                      ),
-                      child: Lottie.asset(
-                        'assets/animations/loading_nhac.json',
-                        width: 180.w,
-                        height: 180.h,
-                        animate:
-                            refreshState == RefreshIndicatorMode.refresh ||
-                            refreshState == RefreshIndicatorMode.armed,
-                      ),
-                    ),
-                  );
-                },
+            builder: (
+              context,
+              refreshState,
+              pulledExtent,
+              refreshTriggerPullDistance,
+              refreshIndicatorExtent,
+            ) {
+              return Center(
+                child: Opacity(
+                  opacity: (pulledExtent / refreshIndicatorExtent).clamp(
+                    0.0,
+                    1.0,
+                  ),
+                  child: Lottie.asset(
+                    'assets/animations/loading_nhac.json',
+                    width: 180.w,
+                    height: 180.h,
+                    animate: refreshState == RefreshIndicatorMode.refresh ||
+                        refreshState == RefreshIndicatorMode.armed,
+                  ),
+                ),
+              );
+            },
           ),
 
-          // ── Header: localização + search bar + carrossel ──────────────────
+          // Cabeçalho, busca e convite para publicar no feed.
           SliverToBoxAdapter(
             child: Padding(
               padding: EdgeInsets.fromLTRB(24.w, 16.h, 24.w, 0),
@@ -248,16 +267,7 @@ class _FeedPageState extends State<FeedPage>
                             Icons.edit_square,
                             color: Color(0xFF5D201C),
                           ),
-                          onPressed: () async {
-                            final post = await context.push<FeedPostModel>(
-                              '/feed-publicar',
-                            );
-                            if (!mounted || post == null) return;
-                            if (!context.mounted) return;
-                            context.showSuccess('Publicação criada.');
-                            _tabController.index = 0;
-                            await _carregarPosts('Destaques');
-                          },
+                          onPressed: _abrirPublicacao,
                         ),
                     ],
                   ),
@@ -274,11 +284,11 @@ class _FeedPageState extends State<FeedPage>
                                   const SearchPage(),
                           transitionsBuilder:
                               (context, animation, secondaryAnimation, child) {
-                                return FadeTransition(
-                                  opacity: animation,
-                                  child: child,
-                                );
-                              },
+                            return FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            );
+                          },
                           transitionDuration: const Duration(milliseconds: 300),
                         ),
                       );
@@ -322,8 +332,8 @@ class _FeedPageState extends State<FeedPage>
 
                   SizedBox(height: 24.h),
 
-                  // Carrossel de banners — o mesmo componente da Home
-                  if (!widget.salvos) const HomeBannerCarousel(),
+                  if (!widget.salvos)
+                    FeedPublishInvite(onPublish: _abrirPublicacao),
 
                   SizedBox(height: 24.h),
                 ],
@@ -331,37 +341,41 @@ class _FeedPageState extends State<FeedPage>
             ),
           ),
 
-          // ── TabBar de categorias ──────────────────────────────────────────
+          // ── Categorias do feed ──────────────────────────────────────────
           if (!widget.salvos)
             SliverPersistentHeader(
               pinned: true,
               delegate: _StickyTabBarDelegate(
+                height: 60.h,
                 child: Container(
                   color: const Color(0xFFFFE7E5),
-                  child: TabBar(
-                    controller: _tabController,
-                    isScrollable: true,
-                    tabAlignment: TabAlignment.start,
-                    labelColor: const Color(0xFFFF6961),
-                    unselectedLabelColor: Colors.grey,
-                    labelStyle: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14.sp,
+                  alignment: Alignment.center,
+                  child: SizedBox(
+                    height: 52.h,
+                    child: ListView.separated(
+                      physics: const BouncingScrollPhysics(),
+                      clipBehavior: Clip.none,
+                      scrollDirection: Axis.horizontal,
+                      padding: EdgeInsets.symmetric(horizontal: 16.w),
+                      itemCount: _categorias.length,
+                      separatorBuilder: (_, __) => SizedBox(width: 10.w),
+                      itemBuilder: (context, i) {
+                        final selecionado = _tabController.index == i;
+                        return _BouncingCategoryChip(
+                          label: _categorias[i],
+                          icon: _iconeParaCategoriaFeed(_categorias[i]),
+                          selecionado: selecionado,
+                          onTap: () {
+                            if (_tabController.index != i) {
+                              setState(() {
+                                _tabController.index = i;
+                              });
+                              _carregarPosts(_categorias[i]);
+                            }
+                          },
+                        );
+                      },
                     ),
-                    unselectedLabelStyle: TextStyle(
-                      fontWeight: FontWeight.w400,
-                      fontSize: 14.sp,
-                    ),
-                    indicator: UnderlineTabIndicator(
-                      borderSide: BorderSide(
-                        color: const Color(0xFFFF6961),
-                        width: 2.5,
-                      ),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                    indicatorSize: TabBarIndicatorSize.label,
-                    padding: EdgeInsets.symmetric(horizontal: 8.w),
-                    tabs: _categorias.map((c) => Tab(text: c)).toList(),
                   ),
                 ),
               ),
@@ -488,7 +502,7 @@ class _FeedPageState extends State<FeedPage>
       _confirmados[post.id] = updated;
       _revisoes[post.id] = (_revisoes[post.id] ?? 0) + 1;
       final index = _posts.indexWhere((p) => p.id == post.id);
-      if (index >= 0)
+      if (index >= 0) {
         setState(() {
           if (widget.salvos && !updated.salvo) {
             _posts.removeAt(index);
@@ -496,6 +510,7 @@ class _FeedPageState extends State<FeedPage>
             _posts[index] = updated;
           }
         });
+      }
     } catch (e) {
       if (mounted && recursoExcluido(e)) {
         setState(() => _invalidar(post.id));
@@ -909,9 +924,8 @@ class _FeedPageState extends State<FeedPage>
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontSize: 13.sp,
-                    color: active
-                        ? const Color(0xFFFF6961)
-                        : Colors.grey.shade600,
+                    color:
+                        active ? const Color(0xFFFF6961) : Colors.grey.shade600,
                   ),
                 ),
               ),
@@ -1018,16 +1032,148 @@ class _FeedPageState extends State<FeedPage>
   }
 }
 
+// ─── Bouncing Category Chip ───────────────────────────────────────────────────
+
+class _BouncingCategoryChip extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final bool selecionado;
+  final VoidCallback onTap;
+
+  const _BouncingCategoryChip({
+    required this.label,
+    required this.icon,
+    required this.selecionado,
+    required this.onTap,
+  });
+
+  @override
+  State<_BouncingCategoryChip> createState() => _BouncingCategoryChipState();
+}
+
+class _BouncingCategoryChipState extends State<_BouncingCategoryChip>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _jumpAnimation;
+  late final Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+
+    _jumpAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.0, end: -4.0)
+            .chain(CurveTween(curve: Curves.easeOutQuad)),
+        weight: 40,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: -4.0, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeInOutQuad)),
+        weight: 35,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 0.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 25,
+      ),
+    ]).animate(_controller);
+
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.0, end: 1.05)
+            .chain(CurveTween(curve: Curves.easeOutQuad)),
+        weight: 40,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.05, end: 0.98)
+            .chain(CurveTween(curve: Curves.easeInOutQuad)),
+        weight: 35,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 0.98, end: 1.0)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 25,
+      ),
+    ]).animate(_controller);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(0, _jumpAnimation.value),
+        child: Transform.scale(
+          scale: _scaleAnimation.value,
+          child: child,
+        ),
+      ),
+      child: ActionChip(
+        backgroundColor:
+            widget.selecionado ? const Color(0xFFFF6961) : Colors.white,
+        surfaceTintColor: Colors.transparent,
+        elevation: 1,
+        pressElevation: 2,
+        shadowColor: const Color(0xFF5D201C).withValues(alpha: 0.08),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(28.r),
+        ),
+        side: BorderSide(
+          color: widget.selecionado
+              ? Colors.transparent
+              : const Color(0xFFFFE7E5),
+          width: 1.0,
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: 14.w,
+          vertical: 10.h,
+        ),
+        label: Text(widget.label),
+        labelStyle: TextStyle(
+          color: widget.selecionado
+              ? Colors.white
+              : const Color(0xFF5D201C),
+          fontWeight: FontWeight.w600,
+          fontSize: 14.sp,
+        ),
+        avatar: Icon(
+          widget.icon,
+          size: 20.r,
+          color: widget.selecionado
+              ? Colors.white
+              : const Color(0xFFFF6961),
+        ),
+        onPressed: () {
+          _controller.forward(from: 0.0);
+          widget.onTap();
+        },
+      ),
+    );
+  }
+}
+
 // ─── Sticky TabBar Delegate ───────────────────────────────────────────────────
 
 class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
-  const _StickyTabBarDelegate({required this.child});
+  const _StickyTabBarDelegate({required this.child, required this.height});
   final Widget child;
+  final double height;
 
   @override
-  double get minExtent => 46;
+  double get minExtent => height;
   @override
-  double get maxExtent => 46;
+  double get maxExtent => height;
 
   @override
   Widget build(
@@ -1040,5 +1186,5 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   bool shouldRebuild(_StickyTabBarDelegate oldDelegate) =>
-      oldDelegate.child != child;
+      oldDelegate.child != child || oldDelegate.height != height;
 }

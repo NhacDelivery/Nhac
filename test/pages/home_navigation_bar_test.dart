@@ -99,8 +99,13 @@ void main() {
     ApiClient().dio.httpClientAdapter = EmptyCatalogAdapter();
   });
 
-  testWidgets('Barra de navegação da Home possui 4 itens e Feed é navegável',
+  testWidgets('Barra da Home recolhe ao rolar, reabre e permite acessar o Feed',
       (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final userProvider = MockUserProvider();
     final cartProvider = MockCartProvider();
     final enderecoProvider = MockEnderecoProvider();
@@ -158,15 +163,22 @@ void main() {
     expect(find.descendant(of: navBarRow, matching: find.text('Feed')),
         findsNothing);
 
-    // A barra continua acessível no final da home, fora da rolagem.
+    // Ao rolar, a barra recolhe e mantém o atalho da aba atual acessível.
     await tester.drag(
         find.byType(CustomScrollView).first, const Offset(0, -10000));
     await tester.pump(const Duration(milliseconds: 500));
+    expect(find.byIcon(Icons.shopping_cart_outlined).hitTestable(), findsNothing);
+    expect(find.byIcon(Icons.newspaper_outlined).hitTestable(), findsNothing);
+    expect(find.byIcon(Icons.house_outlined).hitTestable(), findsOneWidget);
+
+    // O atalho leva ao topo e restaura as opções da navegação.
+    await tester.tap(find.byIcon(Icons.house_outlined).hitTestable());
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pump(const Duration(milliseconds: 400));
     expect(find.byIcon(Icons.shopping_cart_outlined).hitTestable(),
         findsOneWidget);
     expect(find.byIcon(Icons.newspaper_outlined).hitTestable(), findsOneWidget);
-    final scaffold = tester.widget<Scaffold>(find.byType(Scaffold).first);
-    expect(scaffold.bottomNavigationBar, isNotNull);
 
     // Tocar no Feed (índice 2)
     await tester.tap(find.descendant(

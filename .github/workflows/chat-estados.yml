@@ -1,0 +1,66 @@
+name: Chat e estados de recuperação
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/**chat**'
+      - 'lib/pages/mensagens_page.dart'
+      - 'lib/controllers/lista_conversas_controller.dart'
+      - 'lib/utils/error_ui_helper.dart'
+      - 'test/pages/chat_passo4_test.dart'
+      - '.github/workflows/chat-estados.yml'
+concurrency:
+  group: chat-estados-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  estados:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.7'
+          cache: true
+      - uses: ./.github/actions/prepare-flutter-config
+        with:
+          env_file_content: ${{ secrets.ENV_FILE }}
+          google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - run: flutter pub get
+      - name: Formatar os arquivos da mudança
+        env:
+          BASE_REF: ${{ github.base_ref || 'eu-e-tu' }}
+        run: |
+          git diff --name-only --diff-filter=ACM "origin/$BASE_REF...HEAD" -- '*.dart' > /tmp/chat-dart-files
+          if [ -s /tmp/chat-dart-files ]; then xargs dart format < /tmp/chat-dart-files; fi
+      - name: Estados, interações e capturas de interface
+        run: flutter test --update-goldens --dart-define=CAPTURE_UI=true test/pages/chat_passo4_test.dart test/controllers/lista_conversas_controller_test.dart test/utils/error_ui_helper_test.dart test/repositories/chat_repository_test.dart test/globals/exceptions_test.dart
+      - run: flutter build web --release
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: chat-estados-e-fontes-formatadas
+          path: |
+            test/pages/goldens/*.png
+            test/failures/**
+            lib/pages/chat_conversa_page.dart
+            lib/pages/chat_loja_page.dart
+            lib/pages/mensagens_page.dart
+            lib/controllers/lista_conversas_controller.dart
+            lib/repositories/chat_repository.dart
+            lib/services/chat_socket_service.dart
+            lib/utils/error_ui_helper.dart
+            lib/globals/exceptions.dart
+            lib/globals/router.dart
+            test/pages/chat_passo4_test.dart
+            test/controllers/lista_conversas_controller_test.dart
+            test/utils/error_ui_helper_test.dart
+            test/globals/exceptions_test.dart
+            test/repositories/chat_repository_test.dart
+            integration_test/client_chat_e2e_test.dart
+          retention-days: 7

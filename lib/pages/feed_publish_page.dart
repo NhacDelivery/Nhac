@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/feed_tentativa_service.dart';
 
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 
@@ -113,9 +112,10 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
       }
     } catch (_) {
       _falhaRestauracao = true;
-      if (mounted)
+      if (mounted) {
         _erro =
             'Não foi possível recuperar o envio anterior. Reabra a tela para tentar novamente.';
+      }
     } finally {
       if (mounted) setState(() => _restaurando = false);
     }
@@ -125,11 +125,12 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
       _enviando || _selecionandoFoto || _restaurando || _falhaRestauracao;
   bool get _alterado {
     final original = widget.post;
-    if (original == null)
+    if (original == null) {
       return _conteudo.text.isNotEmpty ||
           _tags.text.isNotEmpty ||
           _fotos.isNotEmpty ||
           _lojaId != null;
+    }
     return _conteudo.text != original.conteudo ||
         !listEquals(_hashtags, original.hashTags) ||
         _lojaId != original.mentionedStore?.id ||
@@ -193,11 +194,12 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
       final bytes = await arquivo.readAsBytes();
       if (mounted) setState(() => _fotos.add(_FotoPublicacao(arquivo, bytes)));
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () =>
               _erro = 'Não foi possível abrir a foto. Tente selecionar outra.',
         );
+      }
     } finally {
       if (mounted) setState(() => _selecionandoFoto = false);
     }
@@ -207,7 +209,9 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
     if (_ocupado ||
         _pendente != null ||
         _buscando ||
-        _busca.text.trim().isEmpty) return;
+        _busca.text.trim().isEmpty) {
+      return;
+    }
     final consulta = ++_consulta;
     setState(() {
       _buscando = true;
@@ -223,11 +227,12 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
         _buscou = true;
       });
     } catch (_) {
-      if (mounted && consulta == _consulta)
+      if (mounted && consulta == _consulta) {
         setState(
           () =>
               _erroBusca = 'Não foi possível buscar as lojas. Tente novamente.',
         );
+      }
     } finally {
       if (mounted && consulta == _consulta) setState(() => _buscando = false);
     }
@@ -311,18 +316,20 @@ class _FeedPublishPageState extends State<FeedPublishPage> {
         await _tentativas.concluir(uid, _escopo);
         _pendente = null;
       }
-      if (mounted)
+      if (mounted) {
         setState(
           () => _erro = rejeicaoDefinitiva(e)
               ? 'O servidor rejeitou o envio. Corrija o conteúdo e tente novamente. $e'
               : 'Não foi possível confirmar a publicação. Seu conteúdo foi preservado. Toque em Confirmar envio anterior para verificar o resultado.',
         );
+      }
     } finally {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _enviando = false;
           _progresso = null;
         });
+      }
     }
   }
 
