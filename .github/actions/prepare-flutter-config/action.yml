@@ -20,6 +20,18 @@ inputs:
     description: Base64 encoded keystore content
     required: false
     default: ''
+  require_google_maps_key:
+    description: Whether to fail when no usable Google Maps/Places key is configured
+    required: false
+    default: 'false'
+  require_google_services_json:
+    description: Whether to require a real Firebase configuration for the Android package
+    required: false
+    default: 'false'
+  android_package_name:
+    description: Android application ID expected in google-services.json
+    required: false
+    default: com.feentzs.nhac
   required_env_keys:
     description: Space-separated .env keys to warn if missing
     required: false
@@ -36,6 +48,9 @@ runs:
         GOOGLE_SERVICES_JSON_CONTENT: ${{ inputs.google_services_json }}
         REQUIRE_KEYSTORE: ${{ inputs.require_keystore }}
         KEYSTORE_BASE64: ${{ inputs.keystore_base64 }}
+        REQUIRE_GOOGLE_MAPS_KEY: ${{ inputs.require_google_maps_key }}
+        REQUIRE_GOOGLE_SERVICES_JSON: ${{ inputs.require_google_services_json }}
+        ANDROID_PACKAGE_NAME: ${{ inputs.android_package_name }}
         REQUIRED_ENV_KEYS: ${{ inputs.required_env_keys }}
       run: |
         set -euo pipefail
@@ -54,6 +69,8 @@ runs:
 
         if [ -n "${GOOGLE_SERVICES_JSON_CONTENT:-}" ]; then
           printf '%s\n' "$GOOGLE_SERVICES_JSON_CONTENT" > android/app/google-services.json
+        elif [ -s android/app/google-services.json ]; then
+          echo "::notice::GOOGLE_SERVICES_JSON não informado; mantendo o google-services.json versionado no repositório."
         else
           cat > android/app/google-services.json <<'EOF'
         {
@@ -85,7 +102,7 @@ runs:
           "configuration_version": "1"
         }
         EOF
-          echo "::warning::google-services.json vazio no secret; usando placeholder para CI."
+          echo "::warning::google-services.json ausente; usando placeholder apenas para CI não-release."
         fi
 
         if [ ! -s .env ]; then
@@ -96,23 +113,90 @@ runs:
         python3 - <<'PYCONFIG'
         import os
         import re
+        import sys
         from pathlib import Path
+
         path = Path('.env')
-        content = re.sub(r'^\s*(?:export\s+)?API_BASE_URL\s*=.*$', '', path.read_text(), flags=re.MULTILINE)
+        content = re.sub(
+            r'^\s*(?:export\s+)?API_BASE_URL\s*=.*$',
+            '',
+            path.read_text(),
+            flags=re.MULTILINE,
+        )
         path.write_text(content.rstrip() + '\nAPI_BASE_URL=' + os.environ['API_BASE_URL'] + '\n')
+
+        def read_env_values(text):
+            values = {}
+            for raw_line in text.splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                if line.startswith('export '):
+                    line = line[7:].lstrip()
+                if '=' not in line:
+                    continue
+                name, value = line.split('=', 1)
+                name = name.strip()
+                value = value.strip()
+                if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+                    value = value[1:-1]
+                values[name] = value
+            return values
+
+        values = read_env_values(path.read_text())
+        places_key = values.get('GOOGLE_PLACES_API_KEY', '').strip()
+        general_key = values.get('GOOGLE_API_KEY', '').strip()
+        selected_key = places_key or general_key
+
+        invalid_keys = {'', 'chave_do_places_aqui', 'your_google_api_key', 'your_api_key', 'ci-placeholder-key', 'placeholder'}
+        if os.environ.get('REQUIRE_GOOGLE_MAPS_KEY') == 'true':
+            if selected_key.lower() in invalid_keys:
+                print('::error::Release sem chave Google utilizável. Configure GOOGLE_PLACES_API_KEY ou GOOGLE_API_KEY no secret ENV_FILE.')
+                sys.exit(1)
+
+        # Keep the native Android manifest and Dart configuration in sync when
+        # the project uses the legacy GOOGLE_API_KEY variable.
+        if selected_key and not places_key:
+            with path.open('a') as env_file:
+                env_file.write('GOOGLE_PLACES_API_KEY=' + selected_key + '\n')
+            print('::notice::GOOGLE_API_KEY normalizada para GOOGLE_PLACES_API_KEY para o build Android.')
+
         PYCONFIG
 
         python3 - <<'PYJSON'
         import json
+        import os
+        import sys
         from pathlib import Path
 
         path = Path('android/app/google-services.json')
         try:
-            json.load(path.open())
+            with path.open() as config_file:
+                config = json.load(config_file)
         except Exception:
-            echo = __import__('os').system
-            echo('::error::google-services.json inválido - confira o secret GOOGLE_SERVICES_JSON')
+            print('::error::google-services.json inválido - confira o secret GOOGLE_SERVICES_JSON')
             raise
+
+        if os.environ.get('REQUIRE_GOOGLE_SERVICES_JSON') == 'true':
+            project_id = str(config.get('project_info', {}).get('project_id', '')).strip()
+            clients = config.get('client', [])
+            package_name = os.environ['ANDROID_PACKAGE_NAME']
+            matching_clients = [
+                client for client in clients
+                if client.get('client_info', {}).get('android_client_info', {}).get('package_name') == package_name
+            ]
+            has_api_key = any(
+                str(key.get('current_key', '')).strip()
+                and str(key.get('current_key', '')).strip().lower() not in {'ci-placeholder-key', 'placeholder'}
+                for client in matching_clients
+                for key in client.get('api_key', [])
+            )
+            if not project_id or 'placeholder' in project_id.lower() or not matching_clients or not has_api_key:
+                print(
+                    '::error::google-services.json não contém uma configuração Firebase válida '
+                    f'para {package_name}. Configure GOOGLE_SERVICES_JSON ou versione o arquivo correto.'
+                )
+                sys.exit(1)
         PYJSON
 
         if [ "$REQUIRE_KEYSTORE" = "true" ]; then
@@ -128,5 +212,5 @@ runs:
         fi
 
         for key in $REQUIRED_ENV_KEYS; do
-          grep -q "^${key}=" .env || echo "::warning::$key não encontrada em .env (pode causar crash no boot do app)"
+          grep -q "^$key=" .env || echo "::warning::$key não encontrada em .env (pode causar crash no boot do app)"
         done
