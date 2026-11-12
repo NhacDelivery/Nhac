@@ -67,12 +67,17 @@ void main() {
         expect(Validators.validarSenha('Senh1'), 'Mínimo de 8 caracteres');
       });
 
-      test('deve retornar erro para senha sem letra maiúscula', () {
-        expect(Validators.validarSenha('senha1234'), 'Precisa de pelo menos uma letra maiúscula');
+      test('deve retornar erro para senha sem letra', () {
+        expect(Validators.validarSenha('12345678'), 'Precisa de pelo menos uma letra');
+      });
+
+      test('deve retornar erro para senha sem número', () {
+        expect(Validators.validarSenha('Abcdefgh'), 'Precisa de pelo menos um número');
       });
 
       test('deve retornar nulo para senha válida', () {
-        expect(Validators.validarSenha('Senha123'), null);
+        expect(Validators.validarSenha('Senha1234'), null);
+        expect(Validators.validarSenha('senha123'), null);
       });
     });
 

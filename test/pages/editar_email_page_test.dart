@@ -87,6 +87,7 @@ class MockAuthService extends ChangeNotifier implements AuthService {
     required String email,
     required String telefone,
     required String senha,
+    required String tokenCadastro,
   }) async {}
   @override
   Future<void> signOut() async {}
@@ -143,7 +144,7 @@ class MockAuthService extends ChangeNotifier implements AuthService {
   bool get isPhoneUser => false;
 
   @override
-  Future<void> confirmarEmailCadastro(String email, String codigo) {
+  Future<String> confirmarEmailCadastro(String email, String codigo) {
     throw UnimplementedError();
   }
 

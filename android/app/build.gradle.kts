@@ -46,7 +46,16 @@ android {
         if (envFile.exists()) {
             envProperties.load(FileInputStream(envFile))
         }
-        val googlePlacesApiKey = envProperties.getProperty("GOOGLE_PLACES_API_KEY") ?: ""
+
+        // Suporta a variável antiga GOOGLE_API_KEY e a chave específica do Places.
+        // A chave específica tem prioridade; a chave genérica é usada como fallback.
+        val googlePlacesApiKey = listOf("GOOGLE_PLACES_API_KEY", "GOOGLE_API_KEY")
+            .mapNotNull { key ->
+                envProperties.getProperty(key)?.trim()?.takeIf { it.isNotEmpty() }
+            }
+            .firstOrNull()
+            .orEmpty()
+
         manifestPlaceholders["googleMapsApiKey"] = googlePlacesApiKey
     }
 
