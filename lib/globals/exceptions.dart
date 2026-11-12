@@ -37,12 +37,30 @@ class CustomCheckoutException extends AppException {
   }) : super(message, code: code);
 }
 
+String _mensagemValidacao(String fallback, Map<String, dynamic> details) {
+  const campos = {
+    'nome': 'Nome',
+    'email': 'E-mail',
+    'telefone': 'Telefone',
+    'senha': 'Senha',
+    'tokenCadastro': 'Confirmação de e-mail',
+  };
+  final mensagens = details.entries
+      .where((entry) => entry.value is String &&
+          (entry.value as String).trim().isNotEmpty)
+      .map((entry) => '${campos[entry.key] ?? entry.key}: ${(entry.value as String).trim()}')
+      .toSet();
+  return mensagens.isEmpty ? fallback : mensagens.join('\n');
+}
+
 Exception mapException(Object error) {
   if (error is DioException) {
     if (error.error is app_exc.AppException) {
       final mapped = error.error as app_exc.AppException;
       return AppException(
-        mapped.message,
+        mapped is app_exc.ValidationException
+            ? _mensagemValidacao(mapped.message, mapped.validationErrors)
+            : mapped.message,
         code: mapped.code,
         statusCode: error.response?.statusCode,
       );
@@ -52,7 +70,9 @@ Exception mapException(Object error) {
       final data = error.response!.data as Map;
       if (data.containsKey('message')) {
         return AppException(
-          data['message'].toString(),
+          data['details'] is Map<String, dynamic>
+              ? _mensagemValidacao(data['message'].toString(), data['details'])
+              : data['message'].toString(),
           statusCode: error.response?.statusCode,
           code: (data['errorCode'] ?? data['error'])?.toString(),
         );
@@ -108,7 +128,12 @@ Exception mapException(Object error) {
   if (error is AppException) return error;
 
   if (error is app_exc.AppException) {
-    return AppException(error.message, code: error.code);
+    return AppException(
+      error is app_exc.ValidationException
+          ? _mensagemValidacao(error.message, error.validationErrors)
+          : error.message,
+      code: error.code,
+    );
   }
 
   if (error.toString().contains('SocketException')) {

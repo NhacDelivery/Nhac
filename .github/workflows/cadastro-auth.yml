@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - 'lib/services/auth_service.dart'
+      - 'lib/globals/exceptions.dart'
+      - 'test/services/api_client_test.dart'
       - 'lib/controllers/cadastro_controller.dart'
       - 'lib/pages/auth/cadastro/**'
       - 'lib/utils/validators.dart'
@@ -31,4 +33,4 @@ jobs:
           env_file_content: ${{ secrets.ENV_FILE }}
           google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
       - run: flutter pub get
-      - run: flutter test test/services/auth_cadastro_test.dart test/controllers/cadastro_controller_test.dart test/pages/auth/verificar_email_cadastro_test.dart test/pages/editar_email_page_test.dart test/utils/validators_test.dart
+      - run: flutter test test/services/api_client_test.dart test/services/auth_cadastro_test.dart test/controllers/cadastro_controller_test.dart test/pages/auth/verificar_email_cadastro_test.dart test/pages/editar_email_page_test.dart test/utils/validators_test.dart
