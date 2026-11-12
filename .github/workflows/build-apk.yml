@@ -185,6 +185,9 @@ jobs:
           env_file_content: ${{ secrets.ENV_FILE }}
           google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
           require_keystore: 'true'
+          require_google_maps_key: 'true'
+          require_google_services_json: 'true'
+          android_package_name: com.feentzs.nhac
           keystore_base64: ${{ secrets.KEYSTORE_BASE64 }}
 
       - name: Install dependencies
