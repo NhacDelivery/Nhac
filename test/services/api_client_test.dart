@@ -122,7 +122,7 @@ void main() {
   });
 
   test('detalhes vazios ou malformados mantêm a mensagem genérica', () {
-    for (final details in [{}, {'senha': null}, {'senha': []}, {'senha': ' '}]) {
+    for (final details in <Map<String, dynamic>>[{}, {'senha': null}, {'senha': []}, {'senha': ' '}]) {
       final mapped = globals.mapException(
           ValidationException('Campos inválidos', details));
       expect(mapped.toString(), 'Campos inválidos');
