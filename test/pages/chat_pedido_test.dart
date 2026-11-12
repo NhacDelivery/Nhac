@@ -137,10 +137,15 @@ void main() {
           ),
         );
 
+    Future<void> pumpChatReady(WidgetTester tester) async {
+      await tester.pump();
+      await tester.pump();
+    }
+
     testWidgets('mostra a prévia e anexa o pedido na mensagem enviada',
         (tester) async {
       await tester.pumpWidget(page());
-      await tester.pump();
+      await pumpChatReady(tester);
       expect(find.text('Pedido #ABCD1234'), findsOneWidget);
       expect(find.text('Enviar pedido à loja'), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Meu pedido saiu?');
