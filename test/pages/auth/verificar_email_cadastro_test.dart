@@ -1,6 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:nhac/controllers/cadastro_controller.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -15,6 +18,7 @@ void main() {
 
   setUp(() {
     auth = MockAuthService();
+    SharedPreferences.setMockInitialValues({});
   });
 
   Future<void> abrirPagina(WidgetTester tester) async {
@@ -31,6 +35,37 @@ void main() {
     );
     await tester.pump();
   }
+
+  testWidgets('confirmação guarda prova e e-mail antes de avançar', (tester) async {
+    when(() => auth.confirmarEmailCadastro(any(), any()))
+        .thenAnswer((_) async => 'prova-do-email');
+    final cadastro = CadastroController();
+    final router = GoRouter(initialLocation: '/verificar', routes: [
+      GoRoute(path: '/verificar', builder: (_, __) =>
+          const VerificarEmailCadastro(email: 'cliente@exemplo.com')),
+      GoRoute(path: '/cadastro/nome', builder: (_, __) =>
+          const Scaffold(body: Text('Próxima etapa'))),
+    ]);
+    await tester.pumpWidget(ScreenUtilInit(
+      designSize: const Size(375, 812),
+      builder: (_, __) => MultiProvider(
+        providers: [
+          ChangeNotifierProvider<AuthService>.value(value: auth),
+          ChangeNotifierProvider<CadastroController>.value(value: cadastro),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    ));
+    await tester.enterText(find.byType(TextField), '123456');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+    expect(cadastro.email, 'cliente@exemplo.com');
+    expect(cadastro.tokenCadastro, 'prova-do-email');
+    expect(find.text('Próxima etapa'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    router.dispose();
+    cadastro.dispose();
+  });
 
   testWidgets('código inválido é limpo e permite digitar e apagar novamente',
       (tester) async {
@@ -66,7 +101,7 @@ void main() {
 
   testWidgets('resposta tardia não acessa controlador após sair da tela',
       (tester) async {
-    final resposta = Completer<void>();
+    final resposta = Completer<String>();
     when(() => auth.confirmarEmailCadastro(any(), any()))
         .thenAnswer((_) => resposta.future);
     await abrirPagina(tester);

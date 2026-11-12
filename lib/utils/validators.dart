@@ -37,8 +37,11 @@ class Validators {
     if (value.length < 8) {
       return 'Mínimo de 8 caracteres';
     }
-    if (!value.contains(RegExp(r'[A-Z]'))) {
-      return 'Precisa de pelo menos uma letra maiúscula';
+    if (!value.contains(RegExp(r'[a-zA-Z]'))) {
+      return 'Precisa de pelo menos uma letra';
+    }
+    if (!value.contains(RegExp(r'[0-9]'))) {
+      return 'Precisa de pelo menos um número';
     }
     return null;
   }

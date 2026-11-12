@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/services/api_client.dart';
 import 'package:nhac/services/session_storage_service.dart';
-import 'package:uuid/uuid.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService with ChangeNotifier {
@@ -139,13 +138,16 @@ class AuthService with ChangeNotifier {
     required String email,
     required String telefone,
     required String senha,
+    required String tokenCadastro,
   }) async {
     try {
-      final id = const Uuid().v4();
+      if (tokenCadastro.trim().isEmpty) {
+        throw AuthException('Confirme seu e-mail antes de concluir o cadastro.');
+      }
       final response = await _dio.post(
         '/auth/registrar',
         data: {
-          'id': id,
+          'tokenCadastro': tokenCadastro,
           'nome': nome,
           'email': email,
           'telefone': telefone,
@@ -181,12 +183,17 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  Future<void> confirmarEmailCadastro(String email, String codigo) async {
+  Future<String> confirmarEmailCadastro(String email, String codigo) async {
     try {
-      await _dio.post(
+      final response = await _dio.post(
         '/auth/confirmar-email-cadastro',
         data: {'email': email.trim(), 'codigo': codigo.trim()},
       );
+      final token = response.data is Map ? response.data['tokenCadastro'] : null;
+      if (token is! String || token.trim().isEmpty) {
+        throw AuthException('Não foi possível confirmar seu e-mail. Solicite um novo código.');
+      }
+      return token;
     } catch (e) {
       throw mapException(e);
     }
