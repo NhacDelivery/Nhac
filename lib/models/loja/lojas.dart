@@ -6,6 +6,7 @@ class LojasModel {
   final String categoria;
   final String descricao;
   final String imagemUrl;
+  final String bannerUrl;
 
   final bool _isAbertoFlag;
 
@@ -19,6 +20,7 @@ class LojasModel {
     required this.categoria,
     this.descricao = '',
     this.imagemUrl = '',
+    this.bannerUrl = '',
     bool isAberto = true,
     this.dadosOperacionais,
     this.endereco,
@@ -35,6 +37,7 @@ class LojasModel {
       categoria: map['categoria']?.toString() ?? '',
       descricao: map['descricao']?.toString() ?? '',
       imagemUrl: map['imagemUrl']?.toString() ?? '',
+      bannerUrl: map['bannerUrl']?.toString() ?? '',
       isAberto: safeBool(map['isAberto'], fallback: true),
       dadosOperacionais: map['dadosOperacionais'] != null
           ? DadosOperacionais.fromMap(map['dadosOperacionais'])
@@ -51,6 +54,7 @@ class LojasModel {
   Map<String, dynamic> toMap() => {
     'id': id, 'nome': nome, 'categoria': categoria,
     'descricao': descricao, 'imagemUrl': imagemUrl, 'isAberto': isAberto,
+    if (bannerUrl.isNotEmpty) 'bannerUrl': bannerUrl,
     'dadosOperacionais': dadosOperacionais?.toMap(),
     'endereco': endereco?.toMap(), 'horarios': horarios?.toMap(),
   };

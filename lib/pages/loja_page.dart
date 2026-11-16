@@ -21,7 +21,6 @@ import 'package:provider/provider.dart';
 
 import '../globals/ui_utils.dart';
 import '../e2e/e2e_keys.dart';
-import '../globals/app_constants.dart';
 
 class LojaPage extends StatefulWidget {
   final LojasModel loja;
@@ -602,18 +601,16 @@ class _LojaPageState extends State<LojaPage>
     return Container(
       height: 220.h,
       width: double.infinity,
-      color: Colors.grey.shade300,
+      color: const Color(0xFF42567A),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          AppConstants.e2eMode
-              ? Container(color: const Color(0xFF42567A))
-              : CachedNetworkImage(
-                  imageUrl: "https://picsum.photos/seed/picsum/800/400",
-                  fit: BoxFit.cover,
-                  errorWidget: (context, url, error) =>
-                      Container(color: const Color(0xFF42567A)),
-                ),
+          if (_loja.bannerUrl.isNotEmpty)
+            CachedNetworkImage(
+              imageUrl: _loja.bannerUrl,
+              fit: BoxFit.cover,
+              errorWidget: (context, url, error) => const SizedBox.shrink(),
+            ),
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
