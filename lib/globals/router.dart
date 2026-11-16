@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:nhac/pages/feed_link_page.dart';
 import 'package:nhac/pages/feed_page.dart';
 import 'package:nhac/pages/produto_link_page.dart';
@@ -160,6 +161,15 @@ class _ChatCardExpandPageRoute<T> extends PageRoute<T>
   final Rect? cardRect;
 
   @override
+  bool get opaque => false;
+
+  @override
+  bool canTransitionFrom(TransitionRoute<dynamic> previousRoute) => false;
+
+  @override
+  bool canTransitionTo(TransitionRoute<dynamic> nextRoute) => false;
+
+  @override
   Widget buildContent(BuildContext context) => child;
 
   @override
@@ -192,7 +202,7 @@ class _ChatCardExpandPageRoute<T> extends PageRoute<T>
     final curvedAnimation = CurvedAnimation(
       parent: animation,
       curve: Curves.fastOutSlowIn,
-      reverseCurve: Curves.easeInCubic,
+      reverseCurve: Curves.fastOutSlowIn,
     );
 
     return AnimatedBuilder(
@@ -201,7 +211,17 @@ class _ChatCardExpandPageRoute<T> extends PageRoute<T>
         final t = curvedAnimation.value;
         final currentRect = Rect.lerp(initialRect, targetRect, t)!;
         final currentRadius =
-            Radius.circular((16.0 * (1.0 - t)).clamp(0.0, 16.0));
+            Radius.circular((20.0 * (1.0 - t)).clamp(0.0, 20.0));
+
+        final elevation = math.sin(t * math.pi);
+        final shadowAlpha =
+            (0.05 + 0.08 * elevation * (1.0 - t * 0.5)).clamp(0.0, 0.14);
+        final shadowBlur = 10.0 + 8.0 * elevation;
+        final shadowOffset = Offset(0, 4.0 + 3.0 * elevation);
+
+        final contentOpacity = animation.status == AnimationStatus.reverse
+            ? (t / 0.18).clamp(0.0, 1.0)
+            : 1.0;
 
         return Stack(
           children: [
@@ -215,10 +235,10 @@ class _ChatCardExpandPageRoute<T> extends PageRoute<T>
                       ? [
                           BoxShadow(
                             color: const Color(0xFF5D201C)
-                                .withValues(alpha: 0.14 * (1.0 - t)),
-                            blurRadius: 18,
-                            spreadRadius: 2,
-                            offset: Offset(0, 6 * (1.0 - t)),
+                                .withValues(alpha: shadowAlpha),
+                            blurRadius: shadowBlur,
+                            spreadRadius: 1 + 1.0 * elevation,
+                            offset: shadowOffset,
                           ),
                         ]
                       : null,
@@ -231,7 +251,10 @@ class _ChatCardExpandPageRoute<T> extends PageRoute<T>
                     maxWidth: screenSize.width,
                     minHeight: screenSize.height,
                     maxHeight: screenSize.height,
-                    child: child,
+                    child: Opacity(
+                      opacity: contentOpacity,
+                      child: child,
+                    ),
                   ),
                 ),
               ),
@@ -674,16 +697,23 @@ final GoRouter appRouter = GoRouter(
         }
 
         final post = state.extra as FeedPostModel;
-        return CustomTransitionPage(
+        final rectStr = state.uri.queryParameters['rect'];
+        Rect? cardRect;
+        if (rectStr != null) {
+          final parts = rectStr.split(',').map(double.tryParse).toList();
+          if (parts.length == 4 && parts.every((p) => p != null)) {
+            cardRect = Rect.fromLTWH(parts[0]!, parts[1]!, parts[2]!, parts[3]!);
+          }
+        }
+
+        return _buildChatExpandPage(
           key: state.pageKey,
+          cardRect: cardRect,
           child: FeedPostDetailPage(
             post: post,
             focarComentario: state.uri.queryParameters['comentar'] == 'true',
+            heroTag: post.id,
           ),
-          transitionDuration: const Duration(milliseconds: 400),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            return FadeTransition(opacity: animation, child: child);
-          },
         );
       },
     ),

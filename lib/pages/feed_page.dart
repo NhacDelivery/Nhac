@@ -531,9 +531,16 @@ class _FeedPageState extends State<FeedPage>
 
   // ─── Post Card ────────────────────────────────────────────────────────────
 
-  Future<void> _abrirPost(FeedPostModel post, {bool comentar = false}) async {
+  Future<void> _abrirPost(
+    FeedPostModel post, {
+    bool comentar = false,
+    Rect? cardRect,
+  }) async {
+    final rectParam = cardRect != null
+        ? '&rect=${cardRect.left},${cardRect.top},${cardRect.width},${cardRect.height}'
+        : '';
     final removed = await context.push<bool>(
-      '/feed-post?comentar=$comentar',
+      '/feed-post?comentar=$comentar$rectParam',
       extra: post,
     );
     if (!mounted) return;
@@ -601,170 +608,204 @@ class _FeedPageState extends State<FeedPage>
   }
 
   Widget _buildPostCard(FeedPostModel post) {
-    return GestureDetector(
-      onTap: () => _abrirPost(post),
-      child: Material(
-        type: MaterialType.transparency,
-        child: Container(
-          margin: EdgeInsets.only(bottom: 12.h),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20.r),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF5D201C).withValues(alpha: 0.05),
-                blurRadius: 10.r,
-                offset: Offset(0, 4.h),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20.r),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Padding(
-                  padding: EdgeInsets.fromLTRB(14.w, 14.h, 14.w, 8.h),
-                  child: Row(
-                    children: [
-                      _buildAvatar(post.avatarUrl),
-                      SizedBox(width: 10.w),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              post.nomeUsuario,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14.sp,
-                                color: const Color(0xFF5D201C),
-                              ),
-                            ),
-                            FeedTimestamp(post.criadoEm),
-                            if (post.badge != null) ...[
-                              SizedBox(height: 2.h),
-                              Text(
-                                post.badge!,
-                                style: TextStyle(
-                                  fontSize: 11.sp,
-                                  color: Colors.grey.shade500,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        Icons.keyboard_arrow_down,
-                        color: Colors.grey.shade400,
-                        size: 20.r,
-                      ),
-                    ],
-                  ),
-                ),
+    return Padding(
+      padding: EdgeInsets.only(bottom: 12.h),
+      child: Builder(
+        builder: (cardContext) {
+          void abrir({bool comentar = false}) {
+            final box = cardContext.findRenderObject() as RenderBox?;
+            Rect? cardRect;
+            if (box != null && box.hasSize) {
+              final pos = box.localToGlobal(Offset.zero);
+              cardRect = pos & box.size;
+            }
+            _abrirPost(post, comentar: comentar, cardRect: cardRect);
+          }
 
-                // Sponsor badge
-                if (post.isPatrocinado && post.sponsorLabel != null)
-                  Padding(
-                    padding: EdgeInsets.only(left: 14.w, bottom: 8.h),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 8.w,
-                        vertical: 3.h,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF6961).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(4.r),
-                      ),
-                      child: Text(
-                        post.sponsorLabel!,
-                        style: TextStyle(
-                          fontSize: 11.sp,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFFFF6961),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // Content text
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 14.w),
-                  child: _buildRichText(post.conteudo, post.hashTags),
-                ),
-
-                // Images
-                if (post.imagens.isNotEmpty) ...[
-                  SizedBox(height: 10.h),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => FeedImagesPage(imagens: post.imagens),
-                      ),
-                    ),
-                    child: _buildImagesGrid(post.imagens),
+          return GestureDetector(
+            onTap: () => abrir(),
+            child: Material(
+              type: MaterialType.transparency,
+              child: Container(
+                decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20.r),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF5D201C).withValues(alpha: 0.05),
+                    blurRadius: 10.r,
+                    offset: Offset(0, 4.h),
                   ),
                 ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20.r),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(14.w, 14.h, 14.w, 8.h),
+                      child: Row(
+                        children: [
+                          Hero(
+                            tag: 'feed-avatar-${post.id}',
+                            child: _buildAvatar(post.avatarUrl),
+                          ),
+                          SizedBox(width: 10.w),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Hero(
+                                  tag: 'feed-nome-${post.id}',
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: Text(
+                                      post.nomeUsuario,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14.sp,
+                                        color: const Color(0xFF5D201C),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Hero(
+                                  tag: 'feed-tempo-${post.id}',
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: FeedTimestamp(post.criadoEm),
+                                  ),
+                                ),
+                                if (post.badge != null) ...[
+                                  SizedBox(height: 2.h),
+                                  Text(
+                                    post.badge!,
+                                    style: TextStyle(
+                                      fontSize: 11.sp,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                          Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Colors.grey.shade400,
+                            size: 20.r,
+                          ),
+                        ],
+                      ),
+                    ),
 
-                // Top Comment
-                if (post.topComment != null) _buildTopComment(post.topComment!),
-
-                // Footer (likes, comments, share)
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 12.w,
-                    vertical: 12.h,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: _buildFooterAction(
-                            icon: post.curtido
-                                ? Icons.thumb_up_alt
-                                : Icons.thumb_up_alt_outlined,
-                            onPressed: _curtindo.contains(post.id)
-                                ? null
-                                : () => _curtir(post),
-                            active: post.curtido,
-                            tooltip: post.curtido ? 'Descurtir' : 'Curtir',
-                            label: _formatCount(post.curtidas),
+                    // Sponsor badge
+                    if (post.isPatrocinado && post.sponsorLabel != null)
+                      Padding(
+                        padding: EdgeInsets.only(left: 14.w, bottom: 8.h),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8.w,
+                            vertical: 3.h,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                const Color(0xFFFF6961).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(4.r),
+                          ),
+                          child: Text(
+                            post.sponsorLabel!,
+                            style: TextStyle(
+                              fontSize: 11.sp,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFFFF6961),
+                            ),
                           ),
                         ),
                       ),
-                      SizedBox(width: 12.w),
-                      Expanded(
-                        child: _buildFooterAction(
-                          icon: Icons.chat_bubble_outline,
-                          onPressed: () => _abrirPost(post, comentar: true),
-                          tooltip: 'Comentar',
-                          label: _formatCount(post.comentarios),
-                        ),
-                      ),
-                      SizedBox(width: 12.w),
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: _buildFooterAction(
-                            icon: Icons.share_outlined,
-                            onPressed: () => _compartilhar(post),
-                            tooltip: 'Compartilhar',
-                            label: '',
+
+                    // Content text
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 14.w),
+                      child: _buildRichText(post.conteudo, post.hashTags),
+                    ),
+
+                    // Images
+                    if (post.imagens.isNotEmpty) ...[
+                      SizedBox(height: 10.h),
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                FeedImagesPage(imagens: post.imagens),
                           ),
                         ),
+                        child: _buildImagesGrid(post.imagens),
                       ),
                     ],
-                  ),
+
+                    // Top Comment
+                    if (post.topComment != null)
+                      _buildTopComment(post.topComment!),
+
+                    // Footer (likes, comments, share)
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12.w,
+                        vertical: 12.h,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: _buildFooterAction(
+                                icon: post.curtido
+                                    ? Icons.thumb_up_alt
+                                    : Icons.thumb_up_alt_outlined,
+                                onPressed: _curtindo.contains(post.id)
+                                    ? null
+                                    : () => _curtir(post),
+                                active: post.curtido,
+                                tooltip: post.curtido ? 'Descurtir' : 'Curtir',
+                                label: _formatCount(post.curtidas),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 12.w),
+                          Expanded(
+                            child: _buildFooterAction(
+                              icon: Icons.chat_bubble_outline,
+                              onPressed: () => abrir(comentar: true),
+                              tooltip: 'Comentar',
+                              label: _formatCount(post.comentarios),
+                            ),
+                          ),
+                          SizedBox(width: 12.w),
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: _buildFooterAction(
+                                icon: Icons.share_outlined,
+                                onPressed: () => _compartilhar(post),
+                                tooltip: 'Compartilhar',
+                                label: '',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
-    );
+        );
+      },
+    ),
+  );
   }
 
   Widget _buildTopComment(TopCommentModel comment) {
