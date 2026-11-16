@@ -13,13 +13,15 @@ import 'package:nhac/components/feed_publish_invite.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/pages/search_page.dart';
 import 'package:nhac/repositories/feed_repository.dart';
+import 'package:nhac/services/feed_cache_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:nhac/utils/error_ui_helper.dart';
 import 'package:nhac/globals/ui_utils.dart';
 
 class FeedPage extends StatefulWidget {
   final bool salvos;
-  const FeedPage({super.key, this.salvos = false});
+  final FeedRepository? repository;
+  const FeedPage({super.key, this.salvos = false, this.repository});
 
   @override
   State<FeedPage> createState() => _FeedPageState();
@@ -28,7 +30,7 @@ class FeedPage extends StatefulWidget {
 class _FeedPageState extends State<FeedPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final FeedRepository _repository = FeedRepository();
+  late final FeedRepository _repository = widget.repository ?? FeedRepository();
   List<FeedPostModel> _posts = [];
   final Map<String, List<FeedPostModel>> _cacheCategorias = {};
   bool _isLoading = true;
@@ -50,6 +52,7 @@ class _FeedPageState extends State<FeedPage>
     }
     _confirmados.remove(id);
     _revisoes.remove(id);
+    FeedCacheService.removerPost(id);
   }
 
   static const List<String> _categorias = [
@@ -88,7 +91,16 @@ class _FeedPageState extends State<FeedPage>
   Future<void> _carregarPosts(String categoria) async {
     final requestId = ++_requestId;
     final revisoes = Map<String, int>.of(_revisoes);
-    if (_categoriaCarregada != categoria) {
+    final categoriaEfetiva = widget.salvos ? '_salvos' : categoria;
+
+    // Cache L1 (memória) imediato para carregamento instantâneo
+    final cacheMemoria = FeedCacheService.obterMemoria(categoriaEfetiva);
+    if (cacheMemoria != null && cacheMemoria.isNotEmpty) {
+      _posts = List.of(cacheMemoria);
+      _categoriaCarregada = categoria;
+      _isLoading = false;
+      _error = null;
+    } else if (_categoriaCarregada != categoria) {
       if (_categoriaCarregada != null) {
         _cacheCategorias[_categoriaCarregada!] = List.of(_posts);
       }
@@ -96,34 +108,63 @@ class _FeedPageState extends State<FeedPage>
       _categoriaCarregada = categoria;
       _hasMore = false;
     }
+
     if (mounted) {
       setState(() {
-        _isLoading = true;
+        _isLoading = _posts.isEmpty;
         _error = null;
         _loadingMore = false;
       });
     }
+
+    // Cache L2 (disco) em background sem travar o disparo da requisição de rede
+    if (_posts.isEmpty) {
+      FeedCacheService.carregarCache(categoriaEfetiva).then((cacheDisco) {
+        if (cacheDisco != null &&
+            cacheDisco.isNotEmpty &&
+            mounted &&
+            requestId == _requestId &&
+            _posts.isEmpty) {
+          setState(() {
+            _posts = List.of(cacheDisco);
+            _categoriaCarregada = categoria;
+            _isLoading = false;
+          });
+        }
+      }).catchError((_) {});
+    }
+
     try {
       final posts = widget.salvos
           ? await _repository.buscarSalvos()
           : await _repository.buscarPosts(categoria: categoria);
       if (!mounted || requestId != _requestId) return;
+
+      final processados = posts
+          .where((p) => !_excluidos.contains(p.id))
+          .map(
+            (post) => _revisoes[post.id] != revisoes[post.id]
+                ? (_confirmados[post.id] ?? post)
+                : post,
+          )
+          .toList();
+
+      final ordenados = FeedCacheService.ordenarPorMaisRecentes(processados);
+
       setState(() {
-        _posts = posts
-            .where((p) => !_excluidos.contains(p.id))
-            .map(
-              (post) => _revisoes[post.id] != revisoes[post.id]
-                  ? (_confirmados[post.id] ?? post)
-                  : post,
-            )
-            .toList();
+        _posts = ordenados;
         _categoriaCarregada = categoria;
         _page = 0;
         _hasMore = posts.length == 20;
+        _error = null;
       });
+
+      FeedCacheService.salvar(categoriaEfetiva, ordenados);
     } catch (_) {
       if (!mounted || requestId != _requestId) return;
-      setState(() => _error = 'Não foi possível carregar o feed.');
+      if (_posts.isEmpty) {
+        setState(() => _error = 'Não foi possível carregar o feed.');
+      }
     } finally {
       if (mounted && requestId == _requestId) {
         setState(() => _isLoading = false);
@@ -136,6 +177,9 @@ class _FeedPageState extends State<FeedPage>
     final requestId = _requestId;
     final revisoes = Map<String, int>.of(_revisoes);
     setState(() => _loadingMore = true);
+    final categoriaEfetiva = widget.salvos
+        ? '_salvos'
+        : _categorias[_tabController.index];
     try {
       final posts = widget.salvos
           ? await _repository.buscarSalvos(page: _page + 1)
@@ -157,9 +201,11 @@ class _FeedPageState extends State<FeedPage>
                     : post,
               ),
         );
+        _posts = FeedCacheService.ordenarPorMaisRecentes(_posts);
         _page++;
         _hasMore = posts.length == 20;
       });
+      FeedCacheService.salvar(categoriaEfetiva, _posts);
     } catch (e) {
       if (mounted && requestId == _requestId) ErrorUIHelper.handle(context, e);
     } finally {
@@ -510,6 +556,7 @@ class _FeedPageState extends State<FeedPage>
             _posts[index] = updated;
           }
         });
+        FeedCacheService.atualizarPost(updated);
       }
     } catch (e) {
       if (mounted && recursoExcluido(e)) {
@@ -533,6 +580,7 @@ class _FeedPageState extends State<FeedPage>
       _revisoes[post.id] = (_revisoes[post.id] ?? 0) + 1;
       final index = _posts.indexWhere((p) => p.id == post.id);
       if (index >= 0) setState(() => _posts[index] = updated);
+      FeedCacheService.atualizarPost(updated);
     } catch (e) {
       if (mounted) {
         if (recursoExcluido(e)) setState(() => _invalidar(post.id));
