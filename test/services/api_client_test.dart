@@ -90,4 +90,43 @@ void main() {
     }
   });
 
+  test('validação do cadastro mostra a confirmação e a senha rejeitadas', () async {
+    final dio = ApiClient().dio;
+    dio.httpClientAdapter = ErrorAdapter(
+      '{"message":"Alguns campos enviados são inválidos. Verifique os detalhes.",'
+      '"error":"VALIDACAO_FALHOU","details":{'
+      '"tokenCadastro":"Confirme seu e-mail antes de concluir o cadastro.",'
+      '"senha":"A senha deve conter pelo menos uma letra e um número."}}',
+      400, 'application/json');
+    try {
+      await dio.post('/auth/registrar', data: {});
+      fail('Esperava erro de validação');
+    } catch (e) {
+      final mapped = globals.mapException(e) as globals.AppException;
+      expect(mapped.statusCode, 400);
+      expect(mapped.message, contains('Confirmação de e-mail: Confirme seu e-mail'));
+      expect(mapped.message, contains('Senha: A senha deve conter'));
+    }
+  });
+
+  test('validação sem interceptor também preserva o detalhe do campo', () {
+    final options = RequestOptions(path: '/auth/registrar');
+    final mapped = globals.mapException(DioException(
+      requestOptions: options,
+      response: Response(requestOptions: options, statusCode: 400, data: {
+        'message': 'Campos inválidos',
+        'details': {'telefone': 'não deve estar em branco'},
+      }),
+    ));
+    expect(mapped.toString(), 'Telefone: não deve estar em branco');
+  });
+
+  test('detalhes vazios ou malformados mantêm a mensagem genérica', () {
+    for (final details in <Map<String, dynamic>>[{}, {'senha': null}, {'senha': []}, {'senha': ' '}]) {
+      final mapped = globals.mapException(
+          ValidationException('Campos inválidos', details));
+      expect(mapped.toString(), 'Campos inválidos');
+    }
+  });
+
 }

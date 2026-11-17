@@ -22,6 +22,17 @@ class CadastroController extends ChangeNotifier {
     super.dispose();
   }
 
+  String? _tokenCadastro;
+  String? get tokenCadastro => _tokenCadastro;
+
+  void setTokenCadastro(String token) {
+    _tokenCadastro = token;
+  }
+
+  void invalidarTokenCadastro() {
+    _tokenCadastro = null;
+  }
+
   String _email = '';
   String _nome = '';
   String _telefone = '';
@@ -40,6 +51,9 @@ class CadastroController extends ChangeNotifier {
   }
 
   void setEmail(String novoEmail) {
+    if (_email.trim().toLowerCase() != novoEmail.trim().toLowerCase()) {
+      invalidarTokenCadastro();
+    }
     _email = novoEmail;
     notifyListeners();
   }
@@ -60,6 +74,7 @@ class CadastroController extends ChangeNotifier {
   }
 
   void limparDados() {
+    invalidarTokenCadastro();
     _email = '';
     _nome = '';
     _telefone = '';

@@ -173,8 +173,9 @@ void main() {
         final like = tester.widget<Icon>(find.byIcon(Icons.thumb_up_alt));
         expect(like.color, const Color(0xFFFF6961));
         for (var i = 0; i < 3; i++) {
-          await tester.ensureVisible(find.text('Autora da publicação'));
-          await tester.tap(find.text('Autora da publicação'));
+          final abrirPublicacao = find.byIcon(Icons.keyboard_arrow_down);
+          await tester.ensureVisible(abrirPublicacao);
+          await tester.tap(abrirPublicacao);
           await frames(tester);
           expect(find.byType(FeedPostDetailPage), findsOneWidget);
           router.pop();

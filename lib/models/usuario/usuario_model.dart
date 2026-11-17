@@ -1,10 +1,10 @@
-
 class UsuarioModel {
   final String id;
   final String nome;
   final String email;
   final String telefone;
   final String? imagemUrl;
+  final String? bannerUrl;
   final String? senha;
 
   UsuarioModel({
@@ -13,6 +13,7 @@ class UsuarioModel {
     required this.email,
     required this.telefone,
     this.imagemUrl,
+    this.bannerUrl,
     this.senha,
   });
 
@@ -23,6 +24,7 @@ class UsuarioModel {
       email: map['email']?.toString() ?? '',
       telefone: map['telefone']?.toString() ?? '',
       imagemUrl: map['imagemUrl']?.toString(),
+      bannerUrl: map['bannerUrl']?.toString(),
       // 'senha' nunca vem do backend nas respostas (nunca é serializada
       // de volta), então não há o que ler aqui — só existe no toMap()
       // para o payload de criação.

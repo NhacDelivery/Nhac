@@ -1,0 +1,36 @@
+name: Cadastro e autenticação
+on:
+  pull_request:
+    paths:
+      - 'lib/services/auth_service.dart'
+      - 'lib/globals/exceptions.dart'
+      - 'test/services/api_client_test.dart'
+      - 'lib/controllers/cadastro_controller.dart'
+      - 'lib/pages/auth/cadastro/**'
+      - 'lib/utils/validators.dart'
+      - 'test/services/auth_cadastro_test.dart'
+      - 'test/controllers/cadastro_controller_test.dart'
+      - 'test/pages/auth/verificar_email_cadastro_test.dart'
+      - 'test/pages/editar_email_page_test.dart'
+      - 'test/utils/validators_test.dart'
+      - '.github/workflows/cadastro-auth.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  cadastro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+          cache: true
+      - uses: ./.github/actions/prepare-flutter-config
+        with:
+          env_file_content: ${{ secrets.ENV_FILE }}
+          google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - run: flutter pub get
+      - run: flutter test test/services/api_client_test.dart test/services/auth_cadastro_test.dart test/controllers/cadastro_controller_test.dart test/pages/auth/verificar_email_cadastro_test.dart test/pages/editar_email_page_test.dart test/utils/validators_test.dart

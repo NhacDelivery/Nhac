@@ -101,7 +101,7 @@ class _SenhaState extends State<Senha> {
                       ),
                       const SizedBox(height: 8.0),
                       const Text(
-                        'A sua nova senha tem que ter pelo menos 8 caracteres e 1 letra maiúscula.',
+                        'A sua nova senha deve ter pelo menos 8 caracteres, uma letra e um número.',
                         style: TextStyle(
                           fontSize: 16.0,
                           color: Color(0xFF5D201C),
@@ -223,6 +223,7 @@ class _SenhaState extends State<Senha> {
         email: cadastroData.email,
         telefone: cadastroData.telefone,
         senha: _senhaController.text,
+        tokenCadastro: cadastroData.tokenCadastro ?? '',
       );
 
       if (!localContext.mounted) return;
@@ -234,10 +235,14 @@ class _SenhaState extends State<Senha> {
         } catch (e) {
       if (!localContext.mounted) return;
       final mensagem = e.toString().replaceAll('Exception: ', '');
-      // Janela de 30 min do código de cadastro expirou: reenvia e volta pra
-      // tela de código em vez de deixar o usuário travado no fim do fluxo.
-      if (mensagem.toLowerCase().contains('não verificado')) {
-        final email = localContext.read<CadastroController>().email;
+      // Sem prova válida, pede uma nova confirmação antes de tentar registrar.
+      final texto = mensagem.toLowerCase();
+      if (texto.contains('confirme seu e-mail') ||
+          texto.contains('confirmação de e-mail inválida') ||
+          texto.contains('não verificado')) {
+        final cadastro = localContext.read<CadastroController>();
+        cadastro.invalidarTokenCadastro();
+        final email = cadastro.email;
         try {
           await localContext.read<AuthService>().enviarCodigoCadastro(email);
           await LocalCacheService.salvarEmailVerificacao(email);

@@ -8,6 +8,8 @@
 
 import 'dart:async';
 
+import 'package:nhac/controllers/cadastro_controller.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:nhac/components/loading_nhac.dart';
@@ -67,6 +69,7 @@ class _VerificarEmailCadastroState extends State<VerificarEmailCadastro> {
   Future<void> _reenviarCodigo() async {
     final authService = context.read<AuthService>();
     try {
+      context.read<CadastroController>().invalidarTokenCadastro();
       await authService.enviarCodigoCadastro(widget.email);
       if (!mounted) return;
       _iniciarTimer();
@@ -85,10 +88,13 @@ class _VerificarEmailCadastroState extends State<VerificarEmailCadastro> {
 
     setState(() => _validando = true);
     try {
-      await authService.confirmarEmailCadastro(widget.email, codigo);
+      final token = await authService.confirmarEmailCadastro(widget.email, codigo);
+      if (!localContext.mounted) return;
+      final cadastro = localContext.read<CadastroController>();
+      cadastro.setEmail(widget.email);
+      cadastro.setTokenCadastro(token);
       await LocalCacheService.limparEmailVerificacao();
       if (!localContext.mounted) return;
-      // A partir daqui o backend libera o POST /auth/registrar por 30 min.
       localContext.push('/cadastro/nome');
     } catch (e) {
       if (!localContext.mounted) return;

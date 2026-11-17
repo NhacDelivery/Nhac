@@ -25,6 +25,7 @@ void main() {
         'categoria': 'Hamburguer',
         'descricao': 'O melhor',
         'imagemUrl': 'img.jpg',
+        'bannerUrl': 'https://example.com/capa.jpg',
         'isAberto': false,
         'dadosOperacionais': {
           'avaliacaoMedia': 4.5,
@@ -49,6 +50,9 @@ void main() {
 
       expect(loja.id, '2');
       expect(loja.nome, 'Burguer Shop');
+      expect(loja.imagemUrl, 'img.jpg');
+      expect(loja.bannerUrl, 'https://example.com/capa.jpg');
+      expect(loja.toMap()['bannerUrl'], loja.bannerUrl);
       expect(loja.isAberto, false);
       expect(loja.dadosOperacionais?.avaliacaoMedia, 4.5);
       expect(loja.endereco?.rua, 'Rua A');
@@ -62,6 +66,7 @@ void main() {
       expect(loja.nome, '');
       expect(loja.isAberto, true);
       expect(loja.dadosOperacionais, null);
+      expect(loja.bannerUrl, isEmpty);
     });
 
     test('deve inicializar DadosOperacionais a partir de um Map e tratar tipos', () {

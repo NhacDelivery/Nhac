@@ -9,6 +9,7 @@ import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/feed_tentativa_service.dart';
 import 'package:nhac/services/feed_share_service.dart';
 import 'package:nhac/components/feed_content.dart';
+import 'package:nhac/components/feed_autor_link.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -25,11 +26,13 @@ import 'package:nhac/pages/feed_edit_page.dart';
 class FeedPostDetailPage extends StatefulWidget {
   final FeedPostModel post;
   final bool focarComentario;
+  final String? heroTag;
 
   const FeedPostDetailPage({
     super.key,
     required this.post,
     this.focarComentario = false,
+    this.heroTag,
   });
 
   @override
@@ -555,35 +558,69 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                         padding: EdgeInsets.only(left: 8),
                         child: Center(child: SetaVoltar()),
                       ),
-                      title: Row(
-                        children: [
-                          _buildAvatar(post.avatarUrl, 32.w),
-                          SizedBox(width: 10.w),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  post.nomeUsuario,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 15.sp,
-                                    color: const Color(0xFF5D201C),
-                                  ),
-                                ),
-                                FeedTimestamp(post.criadoEm),
-                                if (post.badge != null)
-                                  Text(
-                                    post.badge!,
-                                    style: TextStyle(
-                                      fontSize: 11.sp,
-                                      color: Colors.grey.shade500,
+                      title: FeedAutorLink(
+                        post: post,
+                        child: Row(
+                          children: [
+                            if (widget.heroTag != null)
+                              Hero(
+                                tag: 'feed-avatar-${widget.heroTag}',
+                                child: _buildAvatar(post.avatarUrl, 32.w),
+                              )
+                            else
+                              _buildAvatar(post.avatarUrl, 32.w),
+                            SizedBox(width: 10.w),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (widget.heroTag != null)
+                                    Hero(
+                                      tag: 'feed-nome-${widget.heroTag}',
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: Text(
+                                          post.nomeUsuario,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 15.sp,
+                                            color: const Color(0xFF5D201C),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                  else
+                                    Text(
+                                      post.nomeUsuario,
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15.sp,
+                                        color: const Color(0xFF5D201C),
+                                      ),
                                     ),
-                                  ),
-                              ],
+                                  if (widget.heroTag != null)
+                                    Hero(
+                                      tag: 'feed-tempo-${widget.heroTag}',
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: FeedTimestamp(post.criadoEm),
+                                      ),
+                                    )
+                                  else
+                                    FeedTimestamp(post.criadoEm),
+                                  if (post.badge != null)
+                                    Text(
+                                      post.badge!,
+                                      style: TextStyle(
+                                        fontSize: 11.sp,
+                                        color: Colors.grey.shade500,
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                       actions: [
                         IconButton(

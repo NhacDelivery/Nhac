@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:nhac/components/botoes/botao_largo_nhac.dart';
 import 'package:nhac/components/nhac_input_field.dart';
 import 'package:nhac/controllers/user_provider.dart';
@@ -41,6 +42,9 @@ class MockUserProvider extends ChangeNotifier implements UserProvider {
 
   @override
   Future<void> atualizarFotoPerfil(File imagem) async {}
+
+  @override
+  Future<bool> atualizarBannerPerfil(XFile imagem) async => false;
 
   @override
   Future<void> carregarDadosUsuario() async {}
@@ -87,6 +91,7 @@ class MockAuthService extends ChangeNotifier implements AuthService {
     required String email,
     required String telefone,
     required String senha,
+    required String tokenCadastro,
   }) async {}
   @override
   Future<void> signOut() async {}
@@ -143,7 +148,7 @@ class MockAuthService extends ChangeNotifier implements AuthService {
   bool get isPhoneUser => false;
 
   @override
-  Future<void> confirmarEmailCadastro(String email, String codigo) {
+  Future<String> confirmarEmailCadastro(String email, String codigo) {
     throw UnimplementedError();
   }
 

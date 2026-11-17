@@ -1,5 +1,7 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:nhac/globals/router.dart';
 import 'package:nhac/models/usuario/usuario_model.dart';
 import 'package:nhac/repositories/user_repository.dart';
@@ -10,8 +12,8 @@ class UserProvider with ChangeNotifier {
   final UserRepository _userRepository;
 
   UserProvider({AuthService? authService, UserRepository? repository})
-      : _authService = authService ?? authServiceRoteador,
-        _userRepository = repository ?? UserRepository() {
+    : _authService = authService ?? authServiceRoteador,
+      _userRepository = repository ?? UserRepository() {
     _sessionUserId = _authService.usuarioId;
     _authService.addListener(_onSessionChanged);
   }
@@ -103,6 +105,18 @@ class UserProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<bool> atualizarBannerPerfil(XFile imagem) async {
+    final usuarioId = _authService.usuarioId;
+    if (usuarioId == null) return false;
+
+    final versao = _sessionVersion;
+    final usuario = await _userRepository.atualizarBanner(usuarioId, imagem);
+    if (_disposed || versao != _sessionVersion) return false;
+    _usuario = usuario;
+    notifyListeners();
+    return true;
   }
 
   void limparUsuario() {

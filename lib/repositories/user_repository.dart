@@ -1,5 +1,7 @@
 import 'package:nhac/services/shared_get.dart';
+
 import 'dart:io';
+
 import 'package:image_picker/image_picker.dart';
 import 'package:nhac/services/image_upload_service.dart';
 
@@ -16,11 +18,23 @@ class UserRepository {
     return ImageUploadService().enviar(XFile(imagem.path));
   }
 
+  Future<UsuarioModel> atualizarBanner(String id, XFile imagem) async {
+    final url = await ImageUploadService().enviar(imagem);
+    try {
+      final response = await _dio.patch(
+        '/usuarios/${Uri.encodeComponent(id)}/banner',
+        data: {'bannerUrl': url},
+      );
+      return UsuarioModel.fromMap(Map<String, dynamic>.from(response.data));
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
   Future<UsuarioModel?> buscarUsuario(String id) async {
     try {
-      final response = await SharedGet.forClient(
-        _dio,
-      ).get(_dio, '/usuarios/$id');
+      final response = await SharedGet.forClient(_dio)
+          .get(_dio, '/usuarios/$id');
       if (response.statusCode == 200 && response.data != null) {
         return UsuarioModel.fromMap(response.data);
       }

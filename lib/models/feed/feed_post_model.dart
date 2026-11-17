@@ -10,6 +10,15 @@ class TopCommentModel {
     required this.conteudo,
     required this.curtidas,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'criadoEm': criadoEm?.toIso8601String(),
+      'nomeUsuario': nomeUsuario,
+      'conteudo': conteudo,
+      'curtidas': curtidas,
+    };
+  }
 }
 
 class MentionedStoreModel {
@@ -26,6 +35,16 @@ class MentionedStoreModel {
     required this.rating,
     required this.avaliacoes,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'nome': nome,
+      'imageUrl': imageUrl,
+      'rating': rating,
+      'avaliacoes': avaliacoes,
+    };
+  }
 }
 
 class FeedPostModel {
@@ -80,6 +99,8 @@ class FeedPostModel {
       criadoEm: DateTime.tryParse(map['criadoEm'] as String? ?? ''),
       nomeUsuario: map['nomeUsuario'] as String,
       usuarioId: map['usuarioId'] as String?,
+      badge: map['badge'] as String?,
+      dispositivo: map['dispositivo'] as String?,
       topComment: map['topComment'] is Map
           ? TopCommentModel(
               nomeUsuario: map['topComment']['nomeUsuario'] as String,
@@ -109,6 +130,77 @@ class FeedPostModel {
               rating: (store['rating'] as num? ?? 0).toDouble(),
               avaliacoes: store['avaliacoes'] as String? ?? '0 avaliações',
             ),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'criadoEm': criadoEm?.toIso8601String(),
+      'nomeUsuario': nomeUsuario,
+      'usuarioId': usuarioId,
+      'badge': badge,
+      'dispositivo': dispositivo,
+      'avatarUrl': avatarUrl,
+      'conteudo': conteudo,
+      'imagens': imagens,
+      'hashTags': hashTags,
+      'curtidas': curtidas,
+      'comentarios': comentarios,
+      'salvos': salvos,
+      'curtido': curtido,
+      'salvo': salvo,
+      'podeEditar': podeEditar,
+      'isPatrocinado': isPatrocinado,
+      'sponsorLabel': sponsorLabel,
+      'topComment': topComment?.toMap(),
+      'mentionedStore': mentionedStore?.toMap(),
+    };
+  }
+
+  FeedPostModel copyWith({
+    String? id,
+    DateTime? criadoEm,
+    String? nomeUsuario,
+    String? usuarioId,
+    String? avatarUrl,
+    String? badge,
+    String? dispositivo,
+    String? conteudo,
+    List<String>? imagens,
+    int? curtidas,
+    int? comentarios,
+    int? salvos,
+    bool? curtido,
+    bool? salvo,
+    bool? podeEditar,
+    List<String>? hashTags,
+    bool? isPatrocinado,
+    String? sponsorLabel,
+    TopCommentModel? topComment,
+    MentionedStoreModel? mentionedStore,
+  }) {
+    return FeedPostModel(
+      id: id ?? this.id,
+      criadoEm: criadoEm ?? this.criadoEm,
+      nomeUsuario: nomeUsuario ?? this.nomeUsuario,
+      usuarioId: usuarioId ?? this.usuarioId,
+      avatarUrl: avatarUrl ?? this.avatarUrl,
+      badge: badge ?? this.badge,
+      dispositivo: dispositivo ?? this.dispositivo,
+      conteudo: conteudo ?? this.conteudo,
+      imagens: imagens ?? this.imagens,
+      curtidas: curtidas ?? this.curtidas,
+      comentarios: comentarios ?? this.comentarios,
+      salvos: salvos ?? this.salvos,
+      curtido: curtido ?? this.curtido,
+      salvo: salvo ?? this.salvo,
+      podeEditar: podeEditar ?? this.podeEditar,
+      hashTags: hashTags ?? this.hashTags,
+      isPatrocinado: isPatrocinado ?? this.isPatrocinado,
+      sponsorLabel: sponsorLabel ?? this.sponsorLabel,
+      topComment: topComment ?? this.topComment,
+      mentionedStore: mentionedStore ?? this.mentionedStore,
     );
   }
 }

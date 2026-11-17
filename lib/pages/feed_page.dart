@@ -2,6 +2,7 @@ import 'package:nhac/utils/request_outcome.dart';
 import 'package:nhac/pages/feed_images_page.dart';
 import 'package:nhac/components/feed_timestamp.dart';
 import 'package:nhac/components/feed_content.dart';
+import 'package:nhac/components/feed_autor_link.dart';
 import 'package:nhac/services/feed_share_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
@@ -13,13 +14,15 @@ import 'package:nhac/components/feed_publish_invite.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/pages/search_page.dart';
 import 'package:nhac/repositories/feed_repository.dart';
+import 'package:nhac/services/feed_cache_service.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:nhac/utils/error_ui_helper.dart';
 import 'package:nhac/globals/ui_utils.dart';
 
 class FeedPage extends StatefulWidget {
   final bool salvos;
-  const FeedPage({super.key, this.salvos = false});
+  final FeedRepository? repository;
+  const FeedPage({super.key, this.salvos = false, this.repository});
 
   @override
   State<FeedPage> createState() => _FeedPageState();
@@ -28,7 +31,7 @@ class FeedPage extends StatefulWidget {
 class _FeedPageState extends State<FeedPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final FeedRepository _repository = FeedRepository();
+  late final FeedRepository _repository = widget.repository ?? FeedRepository();
   List<FeedPostModel> _posts = [];
   final Map<String, List<FeedPostModel>> _cacheCategorias = {};
   bool _isLoading = true;
@@ -50,6 +53,7 @@ class _FeedPageState extends State<FeedPage>
     }
     _confirmados.remove(id);
     _revisoes.remove(id);
+    FeedCacheService.removerPost(id);
   }
 
   static const List<String> _categorias = [
@@ -88,7 +92,16 @@ class _FeedPageState extends State<FeedPage>
   Future<void> _carregarPosts(String categoria) async {
     final requestId = ++_requestId;
     final revisoes = Map<String, int>.of(_revisoes);
-    if (_categoriaCarregada != categoria) {
+    final categoriaEfetiva = widget.salvos ? '_salvos' : categoria;
+
+    // Cache L1 (memória) imediato para carregamento instantâneo
+    final cacheMemoria = FeedCacheService.obterMemoria(categoriaEfetiva);
+    if (cacheMemoria != null && cacheMemoria.isNotEmpty) {
+      _posts = List.of(cacheMemoria);
+      _categoriaCarregada = categoria;
+      _isLoading = false;
+      _error = null;
+    } else if (_categoriaCarregada != categoria) {
       if (_categoriaCarregada != null) {
         _cacheCategorias[_categoriaCarregada!] = List.of(_posts);
       }
@@ -96,34 +109,63 @@ class _FeedPageState extends State<FeedPage>
       _categoriaCarregada = categoria;
       _hasMore = false;
     }
+
     if (mounted) {
       setState(() {
-        _isLoading = true;
+        _isLoading = _posts.isEmpty;
         _error = null;
         _loadingMore = false;
       });
     }
+
+    // Cache L2 (disco) em background sem travar o disparo da requisição de rede
+    if (_posts.isEmpty) {
+      FeedCacheService.carregarCache(categoriaEfetiva).then((cacheDisco) {
+        if (cacheDisco != null &&
+            cacheDisco.isNotEmpty &&
+            mounted &&
+            requestId == _requestId &&
+            _posts.isEmpty) {
+          setState(() {
+            _posts = List.of(cacheDisco);
+            _categoriaCarregada = categoria;
+            _isLoading = false;
+          });
+        }
+      }).catchError((_) {});
+    }
+
     try {
       final posts = widget.salvos
           ? await _repository.buscarSalvos()
           : await _repository.buscarPosts(categoria: categoria);
       if (!mounted || requestId != _requestId) return;
+
+      final processados = posts
+          .where((p) => !_excluidos.contains(p.id))
+          .map(
+            (post) => _revisoes[post.id] != revisoes[post.id]
+                ? (_confirmados[post.id] ?? post)
+                : post,
+          )
+          .toList();
+
+      final ordenados = FeedCacheService.ordenarPorMaisRecentes(processados);
+
       setState(() {
-        _posts = posts
-            .where((p) => !_excluidos.contains(p.id))
-            .map(
-              (post) => _revisoes[post.id] != revisoes[post.id]
-                  ? (_confirmados[post.id] ?? post)
-                  : post,
-            )
-            .toList();
+        _posts = ordenados;
         _categoriaCarregada = categoria;
         _page = 0;
         _hasMore = posts.length == 20;
+        _error = null;
       });
+
+      FeedCacheService.salvar(categoriaEfetiva, ordenados);
     } catch (_) {
       if (!mounted || requestId != _requestId) return;
-      setState(() => _error = 'Não foi possível carregar o feed.');
+      if (_posts.isEmpty) {
+        setState(() => _error = 'Não foi possível carregar o feed.');
+      }
     } finally {
       if (mounted && requestId == _requestId) {
         setState(() => _isLoading = false);
@@ -136,6 +178,9 @@ class _FeedPageState extends State<FeedPage>
     final requestId = _requestId;
     final revisoes = Map<String, int>.of(_revisoes);
     setState(() => _loadingMore = true);
+    final categoriaEfetiva = widget.salvos
+        ? '_salvos'
+        : _categorias[_tabController.index];
     try {
       final posts = widget.salvos
           ? await _repository.buscarSalvos(page: _page + 1)
@@ -157,9 +202,11 @@ class _FeedPageState extends State<FeedPage>
                     : post,
               ),
         );
+        _posts = FeedCacheService.ordenarPorMaisRecentes(_posts);
         _page++;
         _hasMore = posts.length == 20;
       });
+      FeedCacheService.salvar(categoriaEfetiva, _posts);
     } catch (e) {
       if (mounted && requestId == _requestId) ErrorUIHelper.handle(context, e);
     } finally {
@@ -485,9 +532,16 @@ class _FeedPageState extends State<FeedPage>
 
   // ─── Post Card ────────────────────────────────────────────────────────────
 
-  Future<void> _abrirPost(FeedPostModel post, {bool comentar = false}) async {
+  Future<void> _abrirPost(
+    FeedPostModel post, {
+    bool comentar = false,
+    Rect? cardRect,
+  }) async {
+    final rectParam = cardRect != null
+        ? '&rect=${cardRect.left},${cardRect.top},${cardRect.width},${cardRect.height}'
+        : '';
     final removed = await context.push<bool>(
-      '/feed-post?comentar=$comentar',
+      '/feed-post?comentar=$comentar$rectParam',
       extra: post,
     );
     if (!mounted) return;
@@ -510,6 +564,7 @@ class _FeedPageState extends State<FeedPage>
             _posts[index] = updated;
           }
         });
+        FeedCacheService.atualizarPost(updated);
       }
     } catch (e) {
       if (mounted && recursoExcluido(e)) {
@@ -533,6 +588,7 @@ class _FeedPageState extends State<FeedPage>
       _revisoes[post.id] = (_revisoes[post.id] ?? 0) + 1;
       final index = _posts.indexWhere((p) => p.id == post.id);
       if (index >= 0) setState(() => _posts[index] = updated);
+      FeedCacheService.atualizarPost(updated);
     } catch (e) {
       if (mounted) {
         if (recursoExcluido(e)) setState(() => _invalidar(post.id));
@@ -553,170 +609,213 @@ class _FeedPageState extends State<FeedPage>
   }
 
   Widget _buildPostCard(FeedPostModel post) {
-    return GestureDetector(
-      onTap: () => _abrirPost(post),
-      child: Material(
-        type: MaterialType.transparency,
-        child: Container(
-          margin: EdgeInsets.only(bottom: 12.h),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(20.r),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(0xFF5D201C).withValues(alpha: 0.05),
-                blurRadius: 10.r,
-                offset: Offset(0, 4.h),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20.r),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Header
-                Padding(
-                  padding: EdgeInsets.fromLTRB(14.w, 14.h, 14.w, 8.h),
-                  child: Row(
-                    children: [
-                      _buildAvatar(post.avatarUrl),
-                      SizedBox(width: 10.w),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              post.nomeUsuario,
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14.sp,
-                                color: const Color(0xFF5D201C),
-                              ),
-                            ),
-                            FeedTimestamp(post.criadoEm),
-                            if (post.badge != null) ...[
-                              SizedBox(height: 2.h),
-                              Text(
-                                post.badge!,
-                                style: TextStyle(
-                                  fontSize: 11.sp,
-                                  color: Colors.grey.shade500,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                      Icon(
-                        Icons.keyboard_arrow_down,
-                        color: Colors.grey.shade400,
-                        size: 20.r,
-                      ),
-                    ],
-                  ),
-                ),
+    return Padding(
+      padding: EdgeInsets.only(bottom: 12.h),
+      child: Builder(
+        builder: (cardContext) {
+          void abrir({bool comentar = false}) {
+            final box = cardContext.findRenderObject() as RenderBox?;
+            Rect? cardRect;
+            if (box != null && box.hasSize) {
+              final pos = box.localToGlobal(Offset.zero);
+              cardRect = pos & box.size;
+            }
+            _abrirPost(post, comentar: comentar, cardRect: cardRect);
+          }
 
-                // Sponsor badge
-                if (post.isPatrocinado && post.sponsorLabel != null)
-                  Padding(
-                    padding: EdgeInsets.only(left: 14.w, bottom: 8.h),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 8.w,
-                        vertical: 3.h,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFF6961).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(4.r),
-                      ),
-                      child: Text(
-                        post.sponsorLabel!,
-                        style: TextStyle(
-                          fontSize: 11.sp,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFFFF6961),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // Content text
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 14.w),
-                  child: _buildRichText(post.conteudo, post.hashTags),
-                ),
-
-                // Images
-                if (post.imagens.isNotEmpty) ...[
-                  SizedBox(height: 10.h),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => FeedImagesPage(imagens: post.imagens),
-                      ),
-                    ),
-                    child: _buildImagesGrid(post.imagens),
+          return GestureDetector(
+            onTap: () => abrir(),
+            child: Material(
+              type: MaterialType.transparency,
+              child: Container(
+                decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20.r),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF5D201C).withValues(alpha: 0.05),
+                    blurRadius: 10.r,
+                    offset: Offset(0, 4.h),
                   ),
                 ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20.r),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(14.w, 14.h, 14.w, 8.h),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: FeedAutorLink(
+                              post: post,
+                              child: Row(
+                                children: [
+                                  Hero(
+                                    tag: 'feed-avatar-${post.id}',
+                                    child: _buildAvatar(post.avatarUrl),
+                                  ),
+                                  SizedBox(width: 10.w),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Hero(
+                                          tag: 'feed-nome-${post.id}',
+                                          child: Material(
+                                            color: Colors.transparent,
+                                            child: Text(
+                                              post.nomeUsuario,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14.sp,
+                                                color: const Color(0xFF5D201C),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Hero(
+                                          tag: 'feed-tempo-${post.id}',
+                                          child: Material(
+                                            color: Colors.transparent,
+                                            child: FeedTimestamp(post.criadoEm),
+                                          ),
+                                        ),
+                                        if (post.badge != null) ...[
+                                          SizedBox(height: 2.h),
+                                          Text(
+                                            post.badge!,
+                                            style: TextStyle(
+                                              fontSize: 11.sp,
+                                              color: Colors.grey.shade500,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.keyboard_arrow_down,
+                            color: Colors.grey.shade400,
+                            size: 20.r,
+                          ),
+                        ],
+                      ),
+                    ),
 
-                // Top Comment
-                if (post.topComment != null) _buildTopComment(post.topComment!),
-
-                // Footer (likes, comments, share)
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 12.w,
-                    vertical: 12.h,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: _buildFooterAction(
-                            icon: post.curtido
-                                ? Icons.thumb_up_alt
-                                : Icons.thumb_up_alt_outlined,
-                            onPressed: _curtindo.contains(post.id)
-                                ? null
-                                : () => _curtir(post),
-                            active: post.curtido,
-                            tooltip: post.curtido ? 'Descurtir' : 'Curtir',
-                            label: _formatCount(post.curtidas),
+                    // Sponsor badge
+                    if (post.isPatrocinado && post.sponsorLabel != null)
+                      Padding(
+                        padding: EdgeInsets.only(left: 14.w, bottom: 8.h),
+                        child: Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 8.w,
+                            vertical: 3.h,
+                          ),
+                          decoration: BoxDecoration(
+                            color:
+                                const Color(0xFFFF6961).withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(4.r),
+                          ),
+                          child: Text(
+                            post.sponsorLabel!,
+                            style: TextStyle(
+                              fontSize: 11.sp,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFFFF6961),
+                            ),
                           ),
                         ),
                       ),
-                      SizedBox(width: 12.w),
-                      Expanded(
-                        child: _buildFooterAction(
-                          icon: Icons.chat_bubble_outline,
-                          onPressed: () => _abrirPost(post, comentar: true),
-                          tooltip: 'Comentar',
-                          label: _formatCount(post.comentarios),
-                        ),
-                      ),
-                      SizedBox(width: 12.w),
-                      Expanded(
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: _buildFooterAction(
-                            icon: Icons.share_outlined,
-                            onPressed: () => _compartilhar(post),
-                            tooltip: 'Compartilhar',
-                            label: '',
+
+                    // Content text
+                    Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 14.w),
+                      child: _buildRichText(post.conteudo, post.hashTags),
+                    ),
+
+                    // Images
+                    if (post.imagens.isNotEmpty) ...[
+                      SizedBox(height: 10.h),
+                      GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                FeedImagesPage(imagens: post.imagens),
                           ),
                         ),
+                        child: _buildImagesGrid(post.imagens),
                       ),
                     ],
-                  ),
+
+                    // Top Comment
+                    if (post.topComment != null)
+                      _buildTopComment(post.topComment!),
+
+                    // Footer (likes, comments, share)
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 12.w,
+                        vertical: 12.h,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: _buildFooterAction(
+                                icon: post.curtido
+                                    ? Icons.thumb_up_alt
+                                    : Icons.thumb_up_alt_outlined,
+                                onPressed: _curtindo.contains(post.id)
+                                    ? null
+                                    : () => _curtir(post),
+                                active: post.curtido,
+                                tooltip: post.curtido ? 'Descurtir' : 'Curtir',
+                                label: _formatCount(post.curtidas),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 12.w),
+                          Expanded(
+                            child: _buildFooterAction(
+                              icon: Icons.chat_bubble_outline,
+                              onPressed: () => abrir(comentar: true),
+                              tooltip: 'Comentar',
+                              label: _formatCount(post.comentarios),
+                            ),
+                          ),
+                          SizedBox(width: 12.w),
+                          Expanded(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: _buildFooterAction(
+                                icon: Icons.share_outlined,
+                                onPressed: () => _compartilhar(post),
+                                tooltip: 'Compartilhar',
+                                label: '',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
-    );
+        );
+      },
+    ),
+  );
   }
 
   Widget _buildTopComment(TopCommentModel comment) {

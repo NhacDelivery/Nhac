@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/services/api_client.dart';
 import 'package:nhac/services/session_storage_service.dart';
-import 'package:uuid/uuid.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService with ChangeNotifier {
@@ -101,8 +100,7 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Deixa o telefone só com os dígitos locais, tirando o +55 se vier junto
-  /// (o backend devolve o número em E.164, mas [formatarTelefoneE164] já soma o 55).
+  /// Deixa o telefone só com os dígitos locais, tirando o +55 se vier junto.
   String telefoneLocal(String telefone) {
     final numeros = telefone.replaceAll(RegExp(r'\D'), '');
     return numeros.length > 11 && numeros.startsWith('55')
@@ -120,8 +118,8 @@ class AuthService with ChangeNotifier {
       final response = await _dio.post(
         '/auth/login-sms',
         data: {
-          'telefone': formatarTelefoneE164(telefoneLocal(telefone)),
-          'codigo': codigo,
+          'telefone': formatarTelefoneE164(telefone),
+          'codigo': codigo.trim(),
         },
       );
       if (_usuarioId != usuarioEsperado ||
@@ -139,13 +137,16 @@ class AuthService with ChangeNotifier {
     required String email,
     required String telefone,
     required String senha,
+    required String tokenCadastro,
   }) async {
     try {
-      final id = const Uuid().v4();
+      if (tokenCadastro.trim().isEmpty) {
+        throw AuthException('Confirme seu e-mail antes de concluir o cadastro.');
+      }
       final response = await _dio.post(
         '/auth/registrar',
         data: {
-          'id': id,
+          'tokenCadastro': tokenCadastro,
           'nome': nome,
           'email': email,
           'telefone': telefone,
@@ -181,21 +182,23 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  Future<void> confirmarEmailCadastro(String email, String codigo) async {
+  Future<String> confirmarEmailCadastro(String email, String codigo) async {
     try {
-      await _dio.post(
+      final response = await _dio.post(
         '/auth/confirmar-email-cadastro',
         data: {'email': email.trim(), 'codigo': codigo.trim()},
       );
+      final token = response.data is Map ? response.data['tokenCadastro'] : null;
+      if (token is! String || token.trim().isEmpty) {
+        throw AuthException('Não foi possível confirmar seu e-mail. Solicite um novo código.');
+      }
+      return token;
     } catch (e) {
       throw mapException(e);
     }
   }
 
-  String formatarTelefoneE164(String telefoneBR) {
-    final numeros = telefoneBR.replaceAll(RegExp(r'\D'), '');
-    return '+55$numeros';
-  }
+  String formatarTelefoneE164(String telefoneBR) => '+55${telefoneLocal(telefoneBR)}';
 
   Future<void> enviarCodigoSms(String telefone) async {
     try {
@@ -203,6 +206,13 @@ class AuthService with ChangeNotifier {
         '/verificacao-telefone/enviar-codigo',
         data: {'telefone': formatarTelefoneE164(telefone)},
       );
+    } on DioException catch (e) {
+      if ((e.response?.statusCode ?? 0) >= 500) {
+        throw AuthException(
+          'O envio de SMS está indisponível agora. Tente novamente ou entre com e-mail.',
+        );
+      }
+      throw mapException(e);
     } catch (e) {
       throw mapException(e);
     }
@@ -212,7 +222,10 @@ class AuthService with ChangeNotifier {
     try {
       final response = await _dio.post(
         '/auth/login-sms',
-        data: {'telefone': formatarTelefoneE164(telefone), 'codigo': codigo},
+        data: {
+          'telefone': formatarTelefoneE164(telefone),
+          'codigo': codigo.trim(),
+        },
       );
       await _salvarSessaoDaResposta(response.data, viaTelefone: true);
       return response.data['isNovoUsuario'] == true;
