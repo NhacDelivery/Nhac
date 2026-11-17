@@ -13,6 +13,7 @@ class PedidoModel {
   final String formaPagamento;
   final double? trocoPara;
   final String? observacao;
+  final String? justificativaDesistenciaEntrega;
   final EnderecoModel enderecoEntrega;
   final List<ItemPedidoModel> itens;
   final StatusPedido status;
@@ -31,6 +32,7 @@ class PedidoModel {
     required this.formaPagamento,
     this.trocoPara,
     this.observacao,
+    this.justificativaDesistenciaEntrega,
     required this.enderecoEntrega,
     required this.itens,
     required this.status,
@@ -55,6 +57,7 @@ class PedidoModel {
     'formaPagamento': formaPagamento,
     'trocoPara': trocoPara,
     'observacao': observacao,
+    'justificativaDesistenciaEntrega': justificativaDesistenciaEntrega,
     'enderecoEntrega': enderecoEntrega.toMap(),
     'itens': itens.map((item) => item.toMap()).toList(),
     'status': status.apiValue,
@@ -78,6 +81,8 @@ class PedidoModel {
           ? null
           : num.tryParse(map['trocoPara'].toString())?.toDouble(),
       observacao: map['observacao']?.toString(),
+      justificativaDesistenciaEntrega: map['justificativaDesistenciaEntrega']
+          ?.toString(),
       enderecoEntrega: EnderecoModel.fromMap(
         Map<String, dynamic>.from(map['enderecoEntrega'] ?? const {}),
       ),
@@ -109,6 +114,7 @@ class PedidoModel {
     String? formaPagamento,
     double? trocoPara,
     String? observacao,
+    String? justificativaDesistenciaEntrega,
     EnderecoModel? enderecoEntrega,
     List<ItemPedidoModel>? itens,
     StatusPedido? status,
@@ -127,6 +133,9 @@ class PedidoModel {
       formaPagamento: formaPagamento ?? this.formaPagamento,
       trocoPara: trocoPara ?? this.trocoPara,
       observacao: observacao ?? this.observacao,
+      justificativaDesistenciaEntrega:
+          justificativaDesistenciaEntrega ??
+          this.justificativaDesistenciaEntrega,
       enderecoEntrega: enderecoEntrega ?? this.enderecoEntrega,
       itens: itens ?? this.itens,
       status: status ?? this.status,

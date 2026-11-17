@@ -1024,6 +1024,16 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                           'Não foi possível atualizar o pedido. Exibindo a última informação recebida.',
                       aoTentarNovamente: () => _carregarDados(silencioso: true),
                     ),
+                  if (_pedido!.justificativaDesistenciaEntrega
+                      case final justificativa?
+                      when justificativa.trim().isNotEmpty)
+                    Padding(
+                      padding: EdgeInsets.only(bottom: 12.h),
+                      child: Text(
+                        'O entregador anterior desistiu da corrida. Motivo: $justificativa',
+                        style: TextStyle(fontSize: 14.sp),
+                      ),
+                    ),
                   _buildCodigoEntregaCard(),
                   _buildEntregadorCard(),
                   if (_erroLoja)
