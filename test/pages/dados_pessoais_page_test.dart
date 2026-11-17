@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:nhac/models/usuario/usuario_model.dart';
 import 'package:nhac/pages/dados_pessoais_page.dart';
 import 'package:nhac/controllers/user_provider.dart';
@@ -36,6 +37,9 @@ class MockUserProvider extends ChangeNotifier implements UserProvider {
 
   @override
   Future<void> atualizarFotoPerfil(File imagem) async {}
+
+  @override
+  Future<bool> atualizarBannerPerfil(XFile imagem) async => false;
 
   @override
   Future<void> carregarDadosUsuario() async {}
