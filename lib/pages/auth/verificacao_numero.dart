@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:nhac/components/seta_voltar.dart';
+
 import 'dart:async';
+
 import 'package:nowa_runtime/nowa_runtime.dart';
 import 'package:pin_code_fields/pin_code_fields.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -29,6 +31,7 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
   int _tempoRestante = 60;
 
   bool _podeReenviar = false;
+  bool _ocupado = false;
 
   Timer? _timer;
 
@@ -39,6 +42,7 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
   }
 
   void _iniciarTimer() {
+    _timer?.cancel();
     setState(() {
       _tempoRestante = 60;
       _podeReenviar = false;
@@ -62,17 +66,40 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
   }
 
   Future<void> _reenviarCodigo() async {
+    if (_ocupado || !_podeReenviar) return;
+    setState(() => _ocupado = true);
     try {
       await context.read<AuthService>().enviarCodigoSms(widget.numero);
       if (!mounted) return;
       _iniciarTimer();
-      if (mounted) {
-        context.showSuccess("Código reenviado com sucesso!");
-      }
+      context.showSuccess('Código reenviado com sucesso!');
     } catch (e) {
       if (mounted) {
         context.showError(e.toString());
       }
+    } finally {
+      if (mounted) setState(() => _ocupado = false);
+    }
+  }
+
+  Future<void> _confirmarCodigo(String codigo) async {
+    if (_ocupado) return;
+    setState(() => _ocupado = true);
+    try {
+      final isNovoUsuario = await context.read<AuthService>().loginSms(
+        widget.numero,
+        codigo,
+      );
+      if (!mounted) return;
+      if (isNovoUsuario) {
+        context.push('/cadastro/nome');
+      } else {
+        context.go('/home-page');
+      }
+    } catch (e) {
+      if (mounted) context.showError(e.toString());
+    } finally {
+      if (mounted) setState(() => _ocupado = false);
     }
   }
 
@@ -154,29 +181,8 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
                     fieldHeight: 55.0,
                   ),
                   onChanged: (value) {},
-                  onCompleted: (value) async {
-                    final localContext = context;
-                    final authService = localContext.read<AuthService>();
-
-                    try {
-                      final isNovoUsuario = await authService.loginSms(
-                        widget.numero,
-                        value,
-                      );
-
-                      if (!localContext.mounted) return;
-
-                      if (isNovoUsuario) {
-                        localContext.push('/cadastro/nome');
-                      } else {
-                        localContext.push('/home-page');
-                      }
-                    } catch (e) {
-                      if (localContext.mounted) {
-                        localContext.showError(e.toString());
-                      }
-                    }
-                  },
+                  onCompleted: _confirmarCodigo,
+                  enabled: !_ocupado,
 
                   autoFocus: true,
                   enableActiveFill: true,
@@ -189,7 +195,9 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
                   children: [
                     const SizedBox(width: 8.0),
                     GestureDetector(
-                      onTap: _podeReenviar ? _reenviarCodigo : null,
+                      onTap: _podeReenviar && !_ocupado
+                          ? _reenviarCodigo
+                          : null,
                       child: SvgPicture(
                         const SvgAssetLoader('assets/reload.svg'),
                         width: 14.0,
@@ -202,7 +210,9 @@ class _VerificacaoNumeroState extends State<VerificacaoNumero> {
                     ),
                     const SizedBox(width: 8.0),
                     GestureDetector(
-                      onTap: _podeReenviar ? _reenviarCodigo : null,
+                      onTap: _podeReenviar && !_ocupado
+                          ? _reenviarCodigo
+                          : null,
                       child: Text(
                         textoAtual,
                         style: TextStyle(

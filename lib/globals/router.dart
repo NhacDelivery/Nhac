@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:nhac/pages/feed_link_page.dart';
 import 'package:nhac/pages/feed_page.dart';
+import 'package:nhac/pages/feed_perfil_page.dart';
 import 'package:nhac/pages/produto_link_page.dart';
 import 'package:flutter/material.dart';
 import 'package:nhac/pages/feed_publish_page.dart';
@@ -681,6 +682,13 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (context, state) => _buildSlideRightToLeftPage(
         key: state.pageKey,
         child: const FeedPublishPage(),
+      ),
+    ),
+    GoRoute(
+      path: '/feed/perfil/:usuarioId',
+      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+        key: state.pageKey,
+        child: FeedPerfilPage(usuarioId: state.pathParameters['usuarioId']!),
       ),
     ),
     GoRoute(

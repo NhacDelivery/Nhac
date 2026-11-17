@@ -15,6 +15,7 @@ import 'package:go_router/go_router.dart';
 import 'package:nhac/controllers/endereco_provider.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:nhac/components/loading_nhac.dart';
+import 'package:nhac/components/profile/banner_perfil.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/biometric_service.dart';
 import 'package:nhac/services/local_cache_service.dart';
@@ -22,6 +23,7 @@ import 'package:provider/provider.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/pages/notificacoes_page.dart';
+import 'package:nhac/utils/error_ui_helper.dart';
 
 class ProfileContent extends StatefulWidget {
   final bool isActive;
@@ -84,6 +86,29 @@ class _ProfileContentState extends State<ProfileContent>
   }
 
   bool _isUploading = false;
+  bool _trocandoBanner = false;
+
+  Future<void> _trocarBanner() async {
+    if (_trocandoBanner) return;
+    final provider = context.read<UserProvider>();
+    final usuarioId = provider.usuario?.id;
+    setState(() => _trocandoBanner = true);
+    try {
+      final imagem = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1600,
+        imageQuality: 85,
+      );
+      if (!mounted || imagem == null || provider.usuario?.id != usuarioId) return;
+      final salvo = await provider.atualizarBannerPerfil(imagem);
+      if (mounted && salvo) context.showSuccess('Banner atualizado.');
+    } catch (e) {
+      if (mounted) ErrorUIHelper.handle(context, e);
+    } finally {
+      if (mounted) setState(() => _trocandoBanner = false);
+    }
+  }
+
   Map<String, dynamic> _estatisticas = {
     'totalPedidos': 0,
     'lojasFavoritadas': 0,
@@ -630,7 +655,22 @@ class _ProfileContentState extends State<ProfileContent>
                       ),
                     ],
                   ),
-                  SizedBox(height: 32.h),
+                  SizedBox(height: 20.h),
+                  BannerPerfil(
+                    url: usuario.bannerUrl,
+                    acao: FilledButton.tonalIcon(
+                      onPressed: _trocandoBanner ? null : _trocarBanner,
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: Text(
+                        _trocandoBanner
+                            ? 'Salvando…'
+                            : (usuario.bannerUrl?.isNotEmpty ?? false)
+                                ? 'Trocar banner'
+                                : 'Adicionar banner',
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 16.h),
                   Row(
                     children: [
                       Stack(

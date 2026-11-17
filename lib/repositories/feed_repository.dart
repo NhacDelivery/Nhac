@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:nhac/globals/exceptions.dart';
+import 'package:nhac/models/feed/feed_perfil_model.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/models/feed/feed_comment_model.dart';
 import 'package:nhac/services/api_client.dart';
@@ -56,6 +57,18 @@ class FeedRepository {
     try {
       final response = await _dio.get('/feed/posts/${Uri.encodeComponent(id)}');
       return FeedPostModel.fromMap(Map<String, dynamic>.from(response.data));
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<FeedPerfilModel> buscarPerfil(String usuarioId, {int page = 0}) async {
+    try {
+      final response = await _dio.get(
+        '/feed/posts/autores/${Uri.encodeComponent(usuarioId)}',
+        queryParameters: {'page': page, 'size': 20},
+      );
+      return FeedPerfilModel.fromMap(Map<String, dynamic>.from(response.data));
     } catch (e) {
       throw mapException(e);
     }

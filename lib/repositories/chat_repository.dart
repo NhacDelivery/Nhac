@@ -50,6 +50,22 @@ class ChatRepository {
     }
   }
 
+  Future<String> abrirConversaComPessoa(String usuarioId) async {
+    try {
+      final response = await _dio.post(
+        '/conversas/clientes/${Uri.encodeComponent(usuarioId)}',
+      );
+      final data = response.data;
+      final id = data is Map ? data['id'] : null;
+      if (id is! String || id.isEmpty) {
+        throw AppException('Não foi possível abrir a conversa. Tente novamente.');
+      }
+      return id;
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
   /// GET /conversas/{conversaId}/mensagens — página mais recente primeiro.
   /// Devolvemos já invertido (mais antiga primeiro), que é a ordem da tela.
   Future<List<MensagemChat>> historico(

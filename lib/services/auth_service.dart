@@ -100,8 +100,7 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  /// Deixa o telefone só com os dígitos locais, tirando o +55 se vier junto
-  /// (o backend devolve o número em E.164, mas [formatarTelefoneE164] já soma o 55).
+  /// Deixa o telefone só com os dígitos locais, tirando o +55 se vier junto.
   String telefoneLocal(String telefone) {
     final numeros = telefone.replaceAll(RegExp(r'\D'), '');
     return numeros.length > 11 && numeros.startsWith('55')
@@ -119,8 +118,8 @@ class AuthService with ChangeNotifier {
       final response = await _dio.post(
         '/auth/login-sms',
         data: {
-          'telefone': formatarTelefoneE164(telefoneLocal(telefone)),
-          'codigo': codigo,
+          'telefone': formatarTelefoneE164(telefone),
+          'codigo': codigo.trim(),
         },
       );
       if (_usuarioId != usuarioEsperado ||
@@ -199,10 +198,7 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  String formatarTelefoneE164(String telefoneBR) {
-    final numeros = telefoneBR.replaceAll(RegExp(r'\D'), '');
-    return '+55$numeros';
-  }
+  String formatarTelefoneE164(String telefoneBR) => '+55${telefoneLocal(telefoneBR)}';
 
   Future<void> enviarCodigoSms(String telefone) async {
     try {
@@ -210,6 +206,13 @@ class AuthService with ChangeNotifier {
         '/verificacao-telefone/enviar-codigo',
         data: {'telefone': formatarTelefoneE164(telefone)},
       );
+    } on DioException catch (e) {
+      if ((e.response?.statusCode ?? 0) >= 500) {
+        throw AuthException(
+          'O envio de SMS está indisponível agora. Tente novamente ou entre com e-mail.',
+        );
+      }
+      throw mapException(e);
     } catch (e) {
       throw mapException(e);
     }
@@ -219,7 +222,10 @@ class AuthService with ChangeNotifier {
     try {
       final response = await _dio.post(
         '/auth/login-sms',
-        data: {'telefone': formatarTelefoneE164(telefone), 'codigo': codigo},
+        data: {
+          'telefone': formatarTelefoneE164(telefone),
+          'codigo': codigo.trim(),
+        },
       );
       await _salvarSessaoDaResposta(response.data, viaTelefone: true);
       return response.data['isNovoUsuario'] == true;

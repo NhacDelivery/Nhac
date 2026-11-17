@@ -2,6 +2,7 @@ import 'package:nhac/utils/request_outcome.dart';
 import 'package:nhac/pages/feed_images_page.dart';
 import 'package:nhac/components/feed_timestamp.dart';
 import 'package:nhac/components/feed_content.dart';
+import 'package:nhac/components/feed_autor_link.dart';
 import 'package:nhac/services/feed_share_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
@@ -648,47 +649,56 @@ class _FeedPageState extends State<FeedPage>
                       padding: EdgeInsets.fromLTRB(14.w, 14.h, 14.w, 8.h),
                       child: Row(
                         children: [
-                          Hero(
-                            tag: 'feed-avatar-${post.id}',
-                            child: _buildAvatar(post.avatarUrl),
-                          ),
-                          SizedBox(width: 10.w),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Hero(
-                                  tag: 'feed-nome-${post.id}',
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: Text(
-                                      post.nomeUsuario,
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14.sp,
-                                        color: const Color(0xFF5D201C),
-                                      ),
-                                    ),
+                            child: FeedAutorLink(
+                              post: post,
+                              child: Row(
+                                children: [
+                                  Hero(
+                                    tag: 'feed-avatar-${post.id}',
+                                    child: _buildAvatar(post.avatarUrl),
                                   ),
-                                ),
-                                Hero(
-                                  tag: 'feed-tempo-${post.id}',
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: FeedTimestamp(post.criadoEm),
-                                  ),
-                                ),
-                                if (post.badge != null) ...[
-                                  SizedBox(height: 2.h),
-                                  Text(
-                                    post.badge!,
-                                    style: TextStyle(
-                                      fontSize: 11.sp,
-                                      color: Colors.grey.shade500,
+                                  SizedBox(width: 10.w),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Hero(
+                                          tag: 'feed-nome-${post.id}',
+                                          child: Material(
+                                            color: Colors.transparent,
+                                            child: Text(
+                                              post.nomeUsuario,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14.sp,
+                                                color: const Color(0xFF5D201C),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                        Hero(
+                                          tag: 'feed-tempo-${post.id}',
+                                          child: Material(
+                                            color: Colors.transparent,
+                                            child: FeedTimestamp(post.criadoEm),
+                                          ),
+                                        ),
+                                        if (post.badge != null) ...[
+                                          SizedBox(height: 2.h),
+                                          Text(
+                                            post.badge!,
+                                            style: TextStyle(
+                                              fontSize: 11.sp,
+                                              color: Colors.grey.shade500,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
                                     ),
                                   ),
                                 ],
-                              ],
+                              ),
                             ),
                           ),
                           Icon(
