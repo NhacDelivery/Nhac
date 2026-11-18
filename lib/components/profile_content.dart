@@ -726,9 +726,30 @@ class _ProfileContentState extends State<ProfileContent>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                RichText(
-                                  text: TextSpan(
-                                    text: usuario.nome,
+                                Container(
+                                  constraints: BoxConstraints(maxWidth: 220.w),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 12.w,
+                                    vertical: 7.h,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.94),
+                                    borderRadius: BorderRadius.circular(14.r),
+                                    border: Border.all(
+                                      color: const Color(0xFF5D201C).withValues(alpha: 0.08),
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.12),
+                                        blurRadius: 12.r,
+                                        offset: Offset(0, 3.h),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    usuario.nome,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 22.sp,
                                       fontWeight: FontWeight.bold,
