@@ -108,8 +108,9 @@ void main() {
     WidgetTester tester,
     FeedRepository feed, {
     String meuId = 'leitor',
+    double largura = 390,
   }) async {
-    tester.view.physicalSize = const Size(390, 844);
+    tester.view.physicalSize = Size(largura, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -282,6 +283,29 @@ void main() {
         tester.widget<FeedImagesPage>(find.byType(FeedImagesPage)).imagens,
         [_fotoUrl],
       );
+    },
+  );
+
+  testWidgets(
+    'nome longo deixa o banner e a mensagem acessíveis em tela estreita',
+    (tester) async {
+      final feed = _FeedMock();
+      const nome =
+          'Ana Beatriz de Oliveira Santana Albuquerque Vasconcelos de Almeida';
+      when(() => feed.buscarPerfil('autora', page: 0)).thenAnswer(
+        (_) async => const FeedPerfilModel(
+          id: 'autora',
+          nome: nome,
+          bannerUrl: _bannerUrl,
+          podeEnviarMensagem: true,
+          publicacoes: [],
+          temMais: false,
+        ),
+      );
+      await montar(tester, feed, largura: 320);
+      expect(tester.takeException(), isNull);
+      expect(find.byTooltip('Ampliar banner').hitTestable(), findsOneWidget);
+      expect(find.text('Enviar mensagem').hitTestable(), findsOneWidget);
     },
   );
 

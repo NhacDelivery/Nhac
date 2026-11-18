@@ -120,19 +120,23 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
           decoration: BoxDecoration(color: fundo, shape: BoxShape.circle),
           child: const Center(child: SetaVoltar()),
         ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: fundo,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-            child: Text(
-              titulo,
-              style: TextStyle(
-                color: _marrom,
-                fontSize: 18.sp,
-                fontWeight: FontWeight.bold,
+        Flexible(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: fundo,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+              child: Text(
+                titulo,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: _marrom,
+                  fontSize: 18.sp,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
