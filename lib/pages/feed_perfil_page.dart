@@ -2,7 +2,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
-import 'package:nhac/components/feed_timestamp.dart';
 import 'package:nhac/components/profile/banner_perfil.dart';
 import 'package:nhac/components/seta_voltar.dart';
 import 'package:nhac/models/feed/feed_perfil_model.dart';
@@ -122,31 +121,29 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
               )
             : RefreshIndicator(
                 onRefresh: _carregar,
-                child: ListView.builder(
-                  padding: EdgeInsets.only(bottom: 24.h),
+                child: CustomScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  itemCount: _publicacoes.length + 2,
-                  itemBuilder: (context, index) {
-                    if (index == 0) return _cabecalho(perfil);
-                    if (index > _publicacoes.length) return _rodape();
-                    final post = _publicacoes[index - 1];
-                    return Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 24.w),
-                      child: Card(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        child: ListTile(
-                          title: Text(
-                            post.conteudo,
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
+                  slivers: [
+                    SliverToBoxAdapter(child: _cabecalho(perfil)),
+                    SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 3,
+                            mainAxisSpacing: 2,
+                            crossAxisSpacing: 2,
                           ),
-                          subtitle: FeedTimestamp(post.criadoEm),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => _abrirPost(post),
-                        ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) => _miniatura(_publicacoes[index]),
+                        childCount: _publicacoes.length,
                       ),
-                    );
-                  },
+                    ),
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24.h),
+                        child: _rodape(),
+                      ),
+                    ),
+                  ],
                 ),
               ),
       ),
@@ -264,7 +261,7 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
             ),
           ),
         Padding(
-          padding: EdgeInsets.fromLTRB(24.w, 32.h, 24.w, 16.h),
+          padding: EdgeInsets.fromLTRB(24.w, 28.h, 24.w, 12.h),
           child: Text(
             'Publicações',
             style: TextStyle(
@@ -274,7 +271,74 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
             ),
           ),
         ),
+        const Divider(height: 1, thickness: 1, color: Color(0xFFE6DEDD)),
+        const SizedBox(height: 2),
       ],
+    );
+  }
+
+  Widget _miniatura(FeedPostModel post) {
+    return Semantics(
+      button: true,
+      label: 'Abrir publicação de ${post.nomeUsuario}',
+      value: post.conteudo,
+      child: Material(
+        color: Colors.white,
+        child: InkWell(
+          onTap: () => _abrirPost(post),
+          child: ExcludeSemantics(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (post.imagens.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Center(
+                      child: Text(
+                        post.conteudo,
+                        maxLines: 5,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: _marrom,
+                          fontSize: 13.sp,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  CachedNetworkImage(
+                    imageUrl: post.imagens.first,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => const Center(
+                      child: Icon(
+                        Icons.image_outlined,
+                        color: Color(0xFF918783),
+                      ),
+                    ),
+                    errorWidget: (_, __, ___) => const Center(
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: Color(0xFF918783),
+                      ),
+                    ),
+                  ),
+                if (post.imagens.length > 1)
+                  const Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Icon(
+                      Icons.photo_library_rounded,
+                      color: Colors.white,
+                      size: 18,
+                      shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

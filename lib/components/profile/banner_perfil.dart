@@ -30,18 +30,6 @@ class BannerPerfil extends StatelessWidget {
                   imageUrl: imagem,
                   fit: BoxFit.cover,
                   errorWidget: (_, __, ___) => const SizedBox.shrink(),
-                  imageBuilder: (context, image) => Container(
-                    decoration: BoxDecoration(
-                      image: DecorationImage(image: image, fit: BoxFit.cover),
-                    ),
-                    foregroundDecoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Color(0x66FFE7E5), Color(0xD9FFE7E5)],
-                      ),
-                    ),
-                  ),
                 ),
               ),
             ),
