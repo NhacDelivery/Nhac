@@ -109,7 +109,7 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
     );
   }
 
-  Widget _barraPerfil(String? capa) {
+  Widget _barraPerfil(String? capa, {String titulo = 'Perfil'}) {
     final fundo = Colors.white.withValues(alpha: 0.9);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -128,7 +128,7 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
             child: Text(
-              'Perfil',
+              titulo,
               style: TextStyle(
                 color: _marrom,
                 fontSize: 18.sp,
@@ -178,7 +178,7 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
             child: Column(
               children: [
                 SizedBox(height: 32.h),
-                _barraPerfil(capa),
+                _barraPerfil(capa, titulo: perfil.nome),
                 SizedBox(height: 32.h),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -220,10 +220,15 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
                         padding: EdgeInsets.only(bottom: 4.h),
                         child: Text(
                           perfil.nome,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: _marrom,
                             fontSize: 22.sp,
                             fontWeight: FontWeight.bold,
+                            shadows: const [
+                              Shadow(color: Colors.white, blurRadius: 12),
+                            ],
                           ),
                         ),
                       ),
