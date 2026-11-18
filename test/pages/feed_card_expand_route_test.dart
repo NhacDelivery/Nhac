@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -48,6 +49,8 @@ class _FeedAdapter implements HttpClientAdapter {
       body = {
         'id': 'u100',
         'nome': 'Usuario Hero',
+        'avatarUrl': 'https://example.com/foto-autor.png',
+        'bannerUrl': 'https://example.com/banner-autor.png',
         'podeEnviarMensagem': true,
         'publicacoes': [post],
         'temMais': false,
@@ -200,6 +203,23 @@ void main() {
       expect(find.byType(FeedPerfilPage), findsOneWidget);
       expect(find.text('Publicações'), findsOneWidget);
       expect(find.text('Conteudo do post animado'), findsOneWidget);
+      final foto = tester.getRect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is CachedNetworkImage &&
+              widget.imageUrl == 'https://example.com/foto-autor.png',
+        ),
+      );
+      final banner = tester.getRect(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is CachedNetworkImage &&
+              widget.imageUrl == 'https://example.com/banner-autor.png',
+        ),
+      );
+      expect(foto.size, const Size(80, 80));
+      expect(banner.width, 390);
+      expect(banner.bottom, foto.center.dy);
       await tester.tap(find.text('Enviar mensagem'));
       await frames(tester);
       expect(find.text('Conversa conversa-100'), findsOneWidget);

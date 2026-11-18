@@ -1,8 +1,10 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import 'package:nhac/components/feed_timestamp.dart';
 import 'package:nhac/components/profile/banner_perfil.dart';
+import 'package:nhac/components/seta_voltar.dart';
 import 'package:nhac/models/feed/feed_perfil_model.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/repositories/chat_repository.dart';
@@ -100,12 +102,8 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
   Widget build(BuildContext context) {
     final perfil = _perfil;
     return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        title: const Text('Perfil', style: TextStyle(color: _marrom)),
-      ),
+      backgroundColor: const Color(0xFFFFE7E5),
       body: SafeArea(
-        top: false,
         child: perfil == null
             ? Center(
                 child: _carregando
@@ -115,24 +113,27 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
             : RefreshIndicator(
                 onRefresh: _carregar,
                 child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                  padding: EdgeInsets.only(bottom: 24.h),
                   physics: const AlwaysScrollableScrollPhysics(),
                   itemCount: _publicacoes.length + 2,
                   itemBuilder: (context, index) {
                     if (index == 0) return _cabecalho(perfil);
                     if (index > _publicacoes.length) return _rodape();
                     final post = _publicacoes[index - 1];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        title: Text(
-                          post.conteudo,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
+                    return Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 24.w),
+                      child: Card(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          title: Text(
+                            post.conteudo,
+                            maxLines: 3,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: FeedTimestamp(post.criadoEm),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => _abrirPost(post),
                         ),
-                        subtitle: FeedTimestamp(post.criadoEm),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () => _abrirPost(post),
                       ),
                     );
                   },
@@ -147,45 +148,98 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (perfil.bannerUrl?.isNotEmpty ?? false) ...[
-          BannerPerfil(url: perfil.bannerUrl),
-          const SizedBox(height: 16),
-        ],
-        Row(
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: const Color(0xFFFFE7E5),
-              child: ClipOval(
-                child: foto == null || foto.isEmpty
-                    ? const Icon(Icons.person_outline, color: _marrom)
-                    : CachedNetworkImage(
-                        imageUrl: foto,
-                        width: 56,
-                        height: 56,
-                        fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) =>
-                            const Icon(Icons.person_outline, color: _marrom),
+        BannerPerfil(
+          url: perfil.bannerUrl,
+          sobreposicao: 40.h,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24.w),
+            child: Column(
+              children: [
+                SizedBox(height: 16.h),
+                SizedBox(height: 16.h),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      width: 40.w,
+                      height: 40.h,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.6),
+                        shape: BoxShape.circle,
                       ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                perfil.nome,
-                style: const TextStyle(
-                  color: _marrom,
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
+                      child: const Center(child: SetaVoltar()),
+                    ),
+                    Text(
+                      'Perfil',
+                      style: TextStyle(
+                        color: _marrom,
+                        fontSize: 18.sp,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    SizedBox(width: 40.w, height: 40.h),
+                  ],
                 ),
-              ),
+                SizedBox(height: 32.h),
+                Row(
+                  children: [
+                    Container(
+                      width: 80.w,
+                      height: 80.h,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: _marrom.withValues(alpha: 0.1),
+                            blurRadius: 10.r,
+                            offset: Offset(0, 4.h),
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: foto == null || foto.isEmpty
+                            ? Icon(
+                                Icons.person,
+                                size: 48.r,
+                                color: Colors.grey.shade400,
+                              )
+                            : CachedNetworkImage(
+                                imageUrl: foto,
+                                fit: BoxFit.cover,
+                                errorWidget: (_, __, ___) => Icon(
+                                  Icons.person,
+                                  size: 48.r,
+                                  color: Colors.grey.shade400,
+                                ),
+                              ),
+                      ),
+                    ),
+                    SizedBox(width: 16.w),
+                    Expanded(
+                      child: Text(
+                        perfil.nome,
+                        style: TextStyle(
+                          color: _marrom,
+                          fontSize: 22.sp,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
-          ],
+          ),
         ),
         if (perfil.podeEnviarMensagem)
           Padding(
-            padding: const EdgeInsets.only(top: 12),
+            padding: EdgeInsets.fromLTRB(24.w, 12.h, 24.w, 0),
             child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFF6961),
+                foregroundColor: Colors.white,
+              ),
               onPressed: _abrindoConversa
                   ? null
                   : () => _enviarMensagem(perfil),
@@ -195,13 +249,13 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
               ),
             ),
           ),
-        const Padding(
-          padding: EdgeInsets.only(top: 24, bottom: 8),
+        Padding(
+          padding: EdgeInsets.fromLTRB(24.w, 32.h, 24.w, 16.h),
           child: Text(
             'Publicações',
             style: TextStyle(
               color: _marrom,
-              fontSize: 18,
+              fontSize: 18.sp,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -213,18 +267,21 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
   Widget _rodape() {
     final erro = _erro;
     if (erro != null) {
-      return Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(erro, textAlign: TextAlign.center),
-          ),
-          TextButton(
-            onPressed: _carregar,
-            child: const Text('Tentar novamente'),
-          ),
-        ],
+      return Padding(
+        padding: EdgeInsets.symmetric(horizontal: 24.w),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(erro, textAlign: TextAlign.center),
+            ),
+            TextButton(
+              onPressed: _carregar,
+              child: const Text('Tentar novamente'),
+            ),
+          ],
+        ),
       );
     }
     if (_carregando) {
@@ -243,7 +300,12 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
         ),
       );
     }
-    if (_publicacoes.isEmpty) return const Text('Nenhuma publicação ainda.');
+    if (_publicacoes.isEmpty) {
+      return Padding(
+        padding: EdgeInsets.symmetric(horizontal: 24.w),
+        child: const Text('Nenhuma publicação ainda.'),
+      );
+    }
     return const SizedBox.shrink();
   }
 }

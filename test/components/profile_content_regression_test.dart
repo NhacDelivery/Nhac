@@ -1,8 +1,10 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:network_image_mock/network_image_mock.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nhac/components/profile_content.dart';
@@ -55,8 +57,8 @@ void main() {
     enderecos.dispose();
   });
 
-  Future<void> montar(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1170, 2532);
+  Future<void> montar(WidgetTester tester, {double largura = 390}) async {
+    tester.view.physicalSize = Size(largura * 3, 2532);
     tester.view.devicePixelRatio = 3;
     addTearDown(() {
       tester.view.resetPhysicalSize();
@@ -89,6 +91,65 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump();
+  }
+
+  for (final largura in [390.0, 320.0]) {
+    for (final comBanner in [false, true]) {
+      testWidgets(
+        'perfil mantém a posição original da foto e dos indicadores em $largura com banner $comBanner',
+        (tester) async {
+          const fotoUrl = 'https://example.com/foto-cliente.png';
+          const bannerUrl = 'https://example.com/banner-cliente.png';
+          when(() => users.buscarUsuario('cliente')).thenAnswer((_) async =>
+              UsuarioModel(
+                id: 'cliente',
+                nome: 'Cliente',
+                email: 'cliente@teste.com',
+                telefone: '11999999999',
+                imagemUrl: fotoUrl,
+                bannerUrl: comBanner ? bannerUrl : null,
+              ));
+          await user.carregarDadosUsuario();
+          await mockNetworkImagesFor(() async {
+            await montar(tester, largura: largura);
+            final foto = find.byWidgetPredicate(
+              (widget) => widget is CachedNetworkImage && widget.imageUrl == fotoUrl,
+            );
+            final fotoRect = tester.getRect(foto);
+            expect(fotoRect.left, closeTo(24 * largura / 390, 0.01));
+            expect(fotoRect.top, closeTo(104, 0.01));
+            expect(fotoRect.height, closeTo(80, 0.01));
+            final pedidos = find.ancestor(
+              of: find.text('Pedidos'),
+              matching: find.byType(InkWell),
+            );
+            expect(tester.getTopLeft(pedidos).dy, closeTo(216, 0.01));
+            expect(tester.takeException(), isNull);
+
+            if (comBanner) {
+              final banner = find.byWidgetPredicate(
+                (widget) => widget is CachedNetworkImage && widget.imageUrl == bannerUrl,
+              );
+              final bannerRect = tester.getRect(banner);
+              expect(bannerRect.left, 0);
+              expect(bannerRect.width, largura);
+              expect(bannerRect.bottom, fotoRect.center.dy);
+            }
+            if (const bool.fromEnvironment('CAPTURE_UI')) {
+              await expectLater(
+                find.byType(Scaffold),
+                matchesGoldenFile('goldens/perfil-$largura-$comBanner.png'),
+              );
+            }
+
+            await tester.tap(find.byIcon(Icons.more_horiz));
+            await tester.pump();
+            await tester.pump(const Duration(milliseconds: 500));
+            expect(find.text(comBanner ? 'Trocar banner' : 'Adicionar banner'), findsOneWidget);
+          });
+        },
+      );
+    }
   }
 
   testWidgets('cartão Pedidos abre histórico e opção duplicada não aparece',
