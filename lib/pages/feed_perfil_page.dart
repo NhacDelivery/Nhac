@@ -105,10 +105,20 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
       backgroundColor: const Color(0xFFFFE7E5),
       body: SafeArea(
         child: perfil == null
-            ? Center(
-                child: _carregando
-                    ? const CircularProgressIndicator()
-                    : _rodape(),
+            ? Column(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(24.w, 32.h, 24.w, 24.h),
+                    child: _barraPerfil(),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: _carregando
+                          ? const CircularProgressIndicator()
+                          : _rodape(),
+                    ),
+                  ),
+                ],
               )
             : RefreshIndicator(
                 onRefresh: _carregar,
@@ -143,6 +153,32 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
     );
   }
 
+  Widget _barraPerfil() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Container(
+          width: 40.w,
+          height: 40.h,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.6),
+            shape: BoxShape.circle,
+          ),
+          child: const Center(child: SetaVoltar()),
+        ),
+        Text(
+          'Perfil',
+          style: TextStyle(
+            color: _marrom,
+            fontSize: 18.sp,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(width: 40.w, height: 40.h),
+      ],
+    );
+  }
+
   Widget _cabecalho(FeedPerfilModel perfil) {
     final foto = perfil.avatarUrl;
     return Column(
@@ -157,29 +193,7 @@ class _FeedPerfilPageState extends State<FeedPerfilPage> {
               children: [
                 SizedBox(height: 16.h),
                 SizedBox(height: 16.h),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Container(
-                      width: 40.w,
-                      height: 40.h,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.6),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Center(child: SetaVoltar()),
-                    ),
-                    Text(
-                      'Perfil',
-                      style: TextStyle(
-                        color: _marrom,
-                        fontSize: 18.sp,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    SizedBox(width: 40.w, height: 40.h),
-                  ],
-                ),
+                _barraPerfil(),
                 SizedBox(height: 32.h),
                 Row(
                   children: [
