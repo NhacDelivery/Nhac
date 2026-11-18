@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -9,16 +10,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:nhac/components/profile/banner_perfil.dart';
+import 'package:nhac/components/profile/publicacoes_perfil.dart';
 import 'package:nhac/globals/themes.dart';
 import 'package:nhac/models/feed/feed_perfil_model.dart';
 import 'package:nhac/models/feed/feed_post_model.dart';
 import 'package:nhac/pages/feed_perfil_page.dart';
+import 'package:nhac/pages/feed_images_page.dart';
 import 'package:nhac/repositories/chat_repository.dart';
 import 'package:nhac/repositories/feed_repository.dart';
+import 'package:nhac/services/auth_service.dart';
+import 'package:provider/provider.dart';
 
 class _FeedMock extends Mock implements FeedRepository {}
 
 class _ChatMock extends Mock implements ChatRepository {}
+
+class _AuthMock extends Mock implements AuthService {}
 
 const _bannerUrl = 'https://example.com/banner-perfil.png';
 const _fotoUrl = 'https://example.com/foto-perfil.png';
@@ -45,13 +52,20 @@ FeedPostModel _post(
 FeedPerfilModel _perfil(
   List<FeedPostModel> publicacoes, {
   bool temMais = false,
+  bool podeEnviarMensagem = true,
+  LojaParaMensagem? loja,
+  String? bannerUrl = _bannerUrl,
+  int? total,
 }) {
   return FeedPerfilModel(
     id: 'autora',
     nome: 'Ana',
     avatarUrl: _fotoUrl,
-    bannerUrl: _bannerUrl,
-    podeEnviarMensagem: true,
+    bannerUrl: bannerUrl,
+    anoCadastro: 2025,
+    totalPublicacoes: total,
+    lojaParaMensagem: loja,
+    podeEnviarMensagem: podeEnviarMensagem,
     publicacoes: publicacoes,
     temMais: temMais,
   );
@@ -90,7 +104,11 @@ void main() {
     PaintingBinding.instance.imageCache.clearLiveImages();
   });
 
-  Future<void> montar(WidgetTester tester, FeedRepository feed) async {
+  Future<void> montar(
+    WidgetTester tester,
+    FeedRepository feed, {
+    String meuId = 'leitor',
+  }) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -99,6 +117,8 @@ void main() {
     await _imagem(tester, _fotoUrl, const Color(0xFFF4B362));
     await _imagem(tester, _primeiraFoto, const Color(0xFFEBA16D));
     await _imagem(tester, _outraFoto, const Color(0xFF70A89A));
+    final auth = _AuthMock();
+    when(() => auth.usuarioId).thenReturn(meuId);
     final router = GoRouter(
       routes: [
         GoRoute(
@@ -108,6 +128,13 @@ void main() {
             feedRepository: feed,
             chatRepository: _ChatMock(),
           ),
+        ),
+        GoRoute(
+          path: '/chat-loja',
+          builder: (_, state) {
+            final dados = state.extra! as Map<String, dynamic>;
+            return Scaffold(body: Text('Chat de ${dados['lojaId']}'));
+          },
         ),
         GoRoute(
           path: '/feed-post',
@@ -124,8 +151,10 @@ void main() {
     await tester.pumpWidget(
       ScreenUtilInit(
         designSize: const Size(390, 844),
-        builder: (_, __) =>
-            MaterialApp.router(theme: lightTheme, routerConfig: router),
+        builder: (_, __) => ChangeNotifierProvider<AuthService>.value(
+          value: auth,
+          child: MaterialApp.router(theme: lightTheme, routerConfig: router),
+        ),
       ),
     );
     await tester.pump();
@@ -227,5 +256,134 @@ void main() {
     expect(find.text('Mais uma publicação'), findsOneWidget);
     expect(find.text('Carregar mais'), findsNothing);
     verify(() => feed.buscarPerfil('autora', page: 1)).called(1);
+  });
+
+  testWidgets(
+    'perfil mostra o ano, o total de todas as páginas e amplia a capa e a foto',
+    (tester) async {
+      final feed = _FeedMock();
+      when(() => feed.buscarPerfil('autora', page: 0)).thenAnswer(
+        (_) async => _perfil([_post('um', 'Almoço')], total: 21, temMais: true),
+      );
+      await montar(tester, feed);
+      expect(find.text('No Nhac desde 2025'), findsOneWidget);
+      expect(find.text('21'), findsOneWidget);
+      await tester.tap(find.byTooltip('Ampliar banner'));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<FeedImagesPage>(find.byType(FeedImagesPage)).imagens,
+        [_bannerUrl],
+      );
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.tap(_imagemComUrl(_fotoUrl));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<FeedImagesPage>(find.byType(FeedImagesPage)).imagens,
+        [_fotoUrl],
+      );
+    },
+  );
+
+  testWidgets('lojista abre o chat da loja indicada pelo servidor', (
+    tester,
+  ) async {
+    final feed = _FeedMock();
+    final perfil = FeedPerfilModel.fromMap({
+      'id': 'autora',
+      'nome': 'Ana',
+      'podeEnviarMensagem': false,
+      'publicacoes': [],
+      'temMais': false,
+      'lojaParaMensagem': {'id': 'padaria-17', 'nome': 'Padaria da Ana'},
+    });
+    when(
+      () => feed.buscarPerfil('autora', page: 0),
+    ).thenAnswer((_) async => perfil);
+    await montar(tester, feed);
+    await tester.tap(find.text('Mensagem para Padaria da Ana'));
+    await tester.pumpAndSettle();
+    expect(find.text('Chat de padaria-17'), findsOneWidget);
+  });
+
+  for (final proprio in [false, true]) {
+    testWidgets(
+      'contato indisponível continua visível com motivo (próprio: $proprio)',
+      (tester) async {
+        final feed = _FeedMock();
+        when(() => feed.buscarPerfil('autora', page: 0)).thenAnswer(
+          (_) async => _perfil([], podeEnviarMensagem: false, bannerUrl: null),
+        );
+        await montar(tester, feed, meuId: proprio ? 'autora' : 'leitor');
+        final botao = find.ancestor(
+          of: find.text('Enviar mensagem'),
+          matching: find.byType(FilledButton),
+        );
+        expect(tester.widget<FilledButton>(botao).onPressed, isNull);
+        expect(
+          find.text(
+            proprio
+                ? 'Você está vendo seu próprio perfil.'
+                : 'Mensagens indisponíveis entre estas contas.',
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byType(BannerPerfil),
+            matching: find.byWidgetPredicate(
+              (w) =>
+                  w is DecoratedBox &&
+                  w.decoration is BoxDecoration &&
+                  (w.decoration as BoxDecoration).gradient != null,
+            ),
+          ),
+          findsOneWidget,
+        );
+      },
+    );
+  }
+
+  testWidgets('resposta atrasada da conta anterior não entra na nova grade', (
+    tester,
+  ) async {
+    final feed = _FeedMock();
+    final anterior = Completer<FeedPerfilModel>();
+    final autor = ValueNotifier('anterior');
+    addTearDown(autor.dispose);
+    when(
+      () => feed.buscarPerfil('anterior', page: 0),
+    ).thenAnswer((_) => anterior.future);
+    when(
+      () => feed.buscarPerfil('atual', page: 0),
+    ).thenAnswer((_) async => _perfil([_post('novo', 'Da nova conta')]));
+    await tester.pumpWidget(
+      ScreenUtilInit(
+        designSize: const Size(390, 844),
+        builder: (_, __) => MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder(
+              valueListenable: autor,
+              builder: (_, id, __) => CustomScrollView(
+                slivers: [
+                  PublicacoesPerfil(
+                    usuarioId: id,
+                    titulo: 'Suas publicações',
+                    repository: feed,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    autor.value = 'atual';
+    await tester.pump();
+    await tester.pump();
+    anterior.complete(_perfil([_post('velho', 'Da conta anterior')]));
+    await tester.pump();
+    expect(find.text('Da nova conta'), findsOneWidget);
+    expect(find.text('Da conta anterior'), findsNothing);
   });
 }

@@ -15,25 +15,36 @@ class BannerPerfil extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imagem = url;
+    final imagem = url?.trim();
+    const capaPadrao = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFFFFCFB5), Color(0xFFF4ADC0)],
+        ),
+      ),
+    );
     return Stack(
       children: [
-        if (imagem != null && imagem.isNotEmpty)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: sobreposicao,
-            child: IgnorePointer(
-              child: ExcludeSemantics(
-                child: CachedNetworkImage(
-                  imageUrl: imagem,
-                  fit: BoxFit.cover,
-                  errorWidget: (_, __, ___) => const SizedBox.shrink(),
-                ),
-              ),
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: sobreposicao,
+          child: IgnorePointer(
+            child: ExcludeSemantics(
+              child: imagem == null || imagem.isEmpty
+                  ? capaPadrao
+                  : CachedNetworkImage(
+                      imageUrl: imagem,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => capaPadrao,
+                      errorWidget: (_, __, ___) => capaPadrao,
+                    ),
             ),
           ),
+        ),
         child,
       ],
     );
