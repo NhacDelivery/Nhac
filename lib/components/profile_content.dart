@@ -434,6 +434,39 @@ class _ProfileContentState extends State<ProfileContent>
               ),
               SizedBox(height: 32.h),
               InkWell(
+                onTap: _trocandoBanner
+                    ? null
+                    : () {
+                        Navigator.pop(ctx);
+                        _trocarBanner();
+                      },
+                child: Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8.h),
+                  child: Row(
+                    children: [
+                      Icon(Icons.panorama_outlined, color: Colors.grey.shade700),
+                      SizedBox(width: 12.w),
+                      Expanded(
+                        child: Text(
+                          _trocandoBanner
+                              ? 'Salvando banner…'
+                              : (context.read<UserProvider>().usuario?.bannerUrl?.isNotEmpty ?? false)
+                                  ? 'Trocar banner'
+                                  : 'Adicionar banner',
+                          style: TextStyle(
+                            fontSize: 16.sp,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: Colors.grey.shade400),
+                    ],
+                  ),
+                ),
+              ),
+              SizedBox(height: 16.h),
+              InkWell(
                 onTap: () => showDialog<void>(
                   context: context,
                   builder: (ctx) => AlertDialog(
@@ -606,232 +639,230 @@ class _ProfileContentState extends State<ProfileContent>
                 );
               },
             ),
-            SliverPadding(
-              padding: EdgeInsets.symmetric(horizontal: 24.w),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  SizedBox(height: 16.h),
-                  SizedBox(height: 16.h),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            SliverToBoxAdapter(
+              child: BannerPerfil(
+                url: usuario.bannerUrl,
+                sobreposicao: 40.h,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24.w),
+                  child: Column(
                     children: [
-                      GestureDetector(
-                        onTap: () => _abrirNotificacoes(context),
-                        child: Container(
-                          width: 40.w,
-                          height: 40.h,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.6),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.notifications_none,
-                            color: Color(0xFF5D201C),
-                          ),
-                        ),
-                      ),
-                      Text(
-                        'Perfil',
-                        style: TextStyle(
-                          fontSize: 18.sp,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF5D201C),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => _mostrarOpcoesConta(context),
-                        child: Container(
-                          width: 40.w,
-                          height: 40.h,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.6),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.more_horiz,
-                            color: Color(0xFF5D201C),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 20.h),
-                  BannerPerfil(
-                    url: usuario.bannerUrl,
-                    acao: FilledButton.tonalIcon(
-                      onPressed: _trocandoBanner ? null : _trocarBanner,
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                      label: Text(
-                        _trocandoBanner
-                            ? 'Salvando…'
-                            : (usuario.bannerUrl?.isNotEmpty ?? false)
-                                ? 'Trocar banner'
-                                : 'Adicionar banner',
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 16.h),
-                  Row(
-                    children: [
-                      Stack(
+                      SizedBox(height: 16.h),
+                      SizedBox(height: 16.h),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           GestureDetector(
-                            onLongPress: () =>
-                                _mostrarPreviewFoto(context, usuario.imagemUrl),
-                            onLongPressUp: () => Navigator.of(context).pop(),
+                            onTap: () => _abrirNotificacoes(context),
                             child: Container(
-                              width: 80.w,
-                              height: 80.h,
+                              width: 40.w,
+                              height: 40.h,
                               decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.6),
                                 shape: BoxShape.circle,
-                                color: Colors.white,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: const Color(
-                                      0xFF5D201C,
-                                    ).withValues(alpha: 0.1),
-                                    blurRadius: 10.r,
-                                    offset: Offset(0, 4.h),
-                                  ),
-                                ],
                               ),
-                              child: _isUploading
-                                  ? Center(
-                                      child: Lottie.asset(
-                                        'assets/animations/loading_nhac.json',
-                                        width: 40.w,
-                                        height: 40.h,
-                                      ),
-                                    )
-                                  : ClipOval(
-                                      child: CachedNetworkImage(
-                                        imageUrl: usuario.imagemUrl ?? '',
-                                        fit: BoxFit.cover,
-                                        placeholder: (context, url) =>
-                                            const LoadingNhac(
-                                          telaCheia: false,
-                                          tamanho: 40,
-                                        ),
-                                        errorWidget: (context, url, error) =>
-                                            Icon(
-                                          Icons.person,
-                                          size: 48.r,
-                                          color: Colors.grey.shade400,
-                                        ),
-                                      ),
-                                    ),
+                              child: const Icon(
+                                Icons.notifications_none,
+                                color: Color(0xFF5D201C),
+                              ),
                             ),
                           ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: GestureDetector(
-                              onTap: _isUploading
-                                  ? null
-                                  : () async {
-                                      final picker = ImagePicker();
-                                      final pickedFile = await picker.pickImage(
-                                        source: ImageSource.gallery,
-                                      );
-                                      if (pickedFile != null && mounted) {
-                                        setState(() => _isUploading = true);
-                                        try {
-                                          if (context.mounted) {
-                                            await context
-                                                .read<UserProvider>()
-                                                .atualizarFotoPerfil(
-                                                  File(pickedFile.path),
-                                                );
-                                          }
-                                        } catch (e) {
-                                          if (context.mounted) {
-                                            context.showError(
-                                              'Erro ao carregar imagem: $e',
-                                            );
-                                          }
-                                        } finally {
-                                          if (mounted) {
-                                            setState(
-                                              () => _isUploading = false,
-                                            );
-                                          }
-                                        }
-                                      }
-                                    },
-                              child: Container(
-                                padding: EdgeInsets.all(4.w),
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Container(
-                                  padding: EdgeInsets.all(4.w),
-                                  decoration: const BoxDecoration(
-                                    color: Color(0xFF5D201C),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: _isUploading
-                                      ? SizedBox(
-                                          width: 12.w,
-                                          height: 12.h,
-                                          child: Lottie.asset(
-                                            'assets/animations/loading_nhac.json',
-                                          ),
-                                        )
-                                      : const Icon(
-                                          Icons.edit,
-                                          size: 12,
-                                          color: Colors.white,
-                                        ),
-                                ),
+                          Text(
+                            'Perfil',
+                            style: TextStyle(
+                              fontSize: 18.sp,
+                              fontWeight: FontWeight.bold,
+                              color: const Color(0xFF5D201C),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () => _mostrarOpcoesConta(context),
+                            child: Container(
+                              width: 40.w,
+                              height: 40.h,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.6),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.more_horiz,
+                                color: Color(0xFF5D201C),
                               ),
                             ),
                           ),
                         ],
                       ),
-                      SizedBox(width: 16.w),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            RichText(
-                              text: TextSpan(
-                                text: usuario.nome,
-                                style: TextStyle(
-                                  fontSize: 22.sp,
-                                  fontWeight: FontWeight.bold,
-                                  color: const Color(0xFF5D201C),
+                      SizedBox(height: 32.h),
+                      Row(
+                        children: [
+                          Stack(
+                            children: [
+                              GestureDetector(
+                                onLongPress: () =>
+                                    _mostrarPreviewFoto(context, usuario.imagemUrl),
+                                onLongPressUp: () => Navigator.of(context).pop(),
+                                child: Container(
+                                  width: 80.w,
+                                  height: 80.h,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: const Color(
+                                          0xFF5D201C,
+                                        ).withValues(alpha: 0.1),
+                                        blurRadius: 10.r,
+                                        offset: Offset(0, 4.h),
+                                      ),
+                                    ],
+                                  ),
+                                  child: _isUploading
+                                      ? Center(
+                                          child: Lottie.asset(
+                                            'assets/animations/loading_nhac.json',
+                                            width: 40.w,
+                                            height: 40.h,
+                                          ),
+                                        )
+                                      : ClipOval(
+                                          child: CachedNetworkImage(
+                                            imageUrl: usuario.imagemUrl ?? '',
+                                            fit: BoxFit.cover,
+                                            placeholder: (context, url) =>
+                                                const LoadingNhac(
+                                              telaCheia: false,
+                                              tamanho: 40,
+                                            ),
+                                            errorWidget: (context, url, error) =>
+                                                Icon(
+                                              Icons.person,
+                                              size: 48.r,
+                                              color: Colors.grey.shade400,
+                                            ),
+                                          ),
+                                        ),
                                 ),
                               ),
-                            ),
-                            SizedBox(height: 4.h),
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.location_on_outlined,
-                                  size: 14.r,
-                                  color: Colors.grey.shade600,
-                                ),
-                                SizedBox(width: 4.w),
-                                Expanded(
-                                  child: Text(
-                                    textoEndereco,
-                                    style: TextStyle(
-                                      color: Colors.grey.shade700,
-                                      fontSize: 12.sp,
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: GestureDetector(
+                                  onTap: _isUploading
+                                      ? null
+                                      : () async {
+                                          final picker = ImagePicker();
+                                          final pickedFile = await picker.pickImage(
+                                            source: ImageSource.gallery,
+                                          );
+                                          if (pickedFile != null && mounted) {
+                                            setState(() => _isUploading = true);
+                                            try {
+                                              if (context.mounted) {
+                                                await context
+                                                    .read<UserProvider>()
+                                                    .atualizarFotoPerfil(
+                                                      File(pickedFile.path),
+                                                    );
+                                              }
+                                            } catch (e) {
+                                              if (context.mounted) {
+                                                context.showError(
+                                                  'Erro ao carregar imagem: $e',
+                                                );
+                                              }
+                                            } finally {
+                                              if (mounted) {
+                                                setState(
+                                                  () => _isUploading = false,
+                                                );
+                                              }
+                                            }
+                                          }
+                                        },
+                                  child: Container(
+                                    padding: EdgeInsets.all(4.w),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
                                     ),
-                                    overflow: TextOverflow.ellipsis,
-                                    maxLines: 1,
+                                    child: Container(
+                                      padding: EdgeInsets.all(4.w),
+                                      decoration: const BoxDecoration(
+                                        color: Color(0xFF5D201C),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: _isUploading
+                                          ? SizedBox(
+                                              width: 12.w,
+                                              height: 12.h,
+                                              child: Lottie.asset(
+                                                'assets/animations/loading_nhac.json',
+                                              ),
+                                            )
+                                          : const Icon(
+                                              Icons.edit,
+                                              size: 12,
+                                              color: Colors.white,
+                                            ),
+                                    ),
                                   ),
                                 ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(width: 16.w),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                RichText(
+                                  text: TextSpan(
+                                    text: usuario.nome,
+                                    style: TextStyle(
+                                      fontSize: 22.sp,
+                                      fontWeight: FontWeight.bold,
+                                      color: const Color(0xFF5D201C),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(height: 4.h),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.location_on_outlined,
+                                      size: 14.r,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                    SizedBox(width: 4.w),
+                                    Expanded(
+                                      child: Text(
+                                        textoEndereco,
+                                        style: TextStyle(
+                                          color: Colors.grey.shade700,
+                                          fontSize: 12.sp,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                        maxLines: 1,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 8.h),
                               ],
                             ),
-                            SizedBox(height: 8.h),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: EdgeInsets.symmetric(horizontal: 24.w),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
                   SizedBox(height: 32.h),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
