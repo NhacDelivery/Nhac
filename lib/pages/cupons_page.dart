@@ -10,7 +10,8 @@ import 'package:nhac/repositories/cupom_repository.dart';
 
 class CuponsPage extends StatefulWidget {
   final double? subtotal;
-  const CuponsPage({super.key, this.subtotal});
+  final String? lojaId;
+  const CuponsPage({super.key, this.subtotal, this.lojaId});
 
   @override
   State<CuponsPage> createState() => _CuponsPageState();
@@ -32,7 +33,7 @@ class _CuponsPageState extends State<CuponsPage> {
 
   Future<void> _carregar() async {
     try {
-      final cupons = await _repository.buscarCupons();
+      final cupons = await _repository.buscarCupons(lojaId: widget.lojaId);
       if (!mounted) return;
       setState(() {
         _cupons = cupons;
@@ -70,7 +71,7 @@ class _CuponsPageState extends State<CuponsPage> {
     }
     setState(() => _ocupado = true);
     try {
-      final validado = await _repository.validarCupom(cupom.id, widget.subtotal!);
+      final validado = await _repository.validarCupom(cupom.id, widget.subtotal!, lojaId: widget.lojaId);
       if (mounted) context.pop(validado);
     } catch (e) {
       if (mounted) context.showError(e.toString());
@@ -170,7 +171,7 @@ class _CuponsPageState extends State<CuponsPage> {
                         ],
                       ),
                       SizedBox(height: 12.h),
-                      Text('${_moeda.format(cupom.desconto)} de desconto em produtos a partir de ${_moeda.format(cupom.usoMinimo)}'),
+                      Text('${cupom.tipo == 'FRETE_GRATIS' ? 'Frete grátis' : cupom.tipo == 'PERCENTUAL' ? '${cupom.desconto.toStringAsFixed(0)}% de desconto' : '${_moeda.format(cupom.desconto)} de desconto'} a partir de ${_moeda.format(cupom.usoMinimo)}'),
                       Text(_validade(cupom)),
                       Text(cupom.status == 'USADO' ? 'Usado' : cupom.status == 'EXPIRADO' ? 'Expirado' : 'Disponível'),
                       if (cupom.status == 'DISPONIVEL')

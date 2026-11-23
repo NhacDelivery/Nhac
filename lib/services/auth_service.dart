@@ -190,7 +190,8 @@ class AuthService with ChangeNotifier {
     try {
       await _dio.post(
         '/auth/enviar-codigo-cadastro',
-        data: {'email': email.trim()},
+        data: {'email': email.trim().toLowerCase()},
+        options: Options(receiveTimeout: const Duration(seconds: 65)),
       );
     } catch (e) {
       throw mapException(e);

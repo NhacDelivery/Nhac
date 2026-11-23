@@ -13,6 +13,8 @@ void main() {
     ));
     final resultado = await CupomRepository(dio: dio).validarCupom('cupom', 30);
     expect(resultado.descontoAplicado, 5);
+    await CupomRepository(dio: dio).validarCupom('cupom', 30, lojaId: 'loja');
+    verify(() => dio.post('/cupons/validar', data: {'cupomId': 'cupom', 'subtotal': 30.0, 'lojaId': 'loja'})).called(1);
     verify(() => dio.post('/cupons/validar', data: {'cupomId': 'cupom', 'subtotal': 30.0})).called(1);
   });
 }

@@ -630,7 +630,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   ? null
                   : () async {
                       final cupom = await context.push<CupomModel>(
-                        '/cupons',
+                        '/cupons?lojaId=${Uri.encodeQueryComponent(cartProvider.lojaId)}',
                         extra: subtotal,
                       );
                       if (!mounted || cupom == null) return;
@@ -1200,7 +1200,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       try {
         final validado = await CupomRepository().validarCupom(
           _cupom!.id,
-          cartProvider.valorTotal,
+          cartProvider.valorTotal, lojaId: cartProvider.lojaId,
         );
         if (!context.mounted) return;
         setState(() {

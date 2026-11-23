@@ -7,9 +7,9 @@ class CupomRepository {
   final Dio _dio;
   CupomRepository({Dio? dio}) : _dio = dio ?? ApiClient().dio;
 
-  Future<List<CupomModel>> buscarCupons() async {
+  Future<List<CupomModel>> buscarCupons({String? lojaId}) async {
     try {
-      final response = await _dio.get('/cupons');
+      final response = await _dio.get('/cupons', queryParameters: lojaId == null ? null : {'lojaId': lojaId});
       return (response.data as List)
           .map((item) => CupomModel.fromMap(Map<String, dynamic>.from(item)))
           .toList();
@@ -27,11 +27,11 @@ class CupomRepository {
     }
   }
 
-  Future<CupomModel> validarCupom(String cupomId, double subtotal) async {
+  Future<CupomModel> validarCupom(String cupomId, double subtotal, {String? lojaId}) async {
     try {
       final response = await _dio.post('/cupons/validar', data: {
         'cupomId': cupomId,
-        'subtotal': subtotal,
+        'subtotal': subtotal, if (lojaId != null) 'lojaId': lojaId,
       });
       return CupomModel.fromMap(Map<String, dynamic>.from(response.data));
     } catch (e) {

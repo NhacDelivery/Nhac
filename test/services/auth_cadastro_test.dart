@@ -47,6 +47,17 @@ void main() {
     ApiClient().atualizarTokenCache(null);
   });
 
+  test('aguarda o envio do código mesmo quando o provedor precisa repetir a tentativa', () async {
+    final adapter = CadastroAdapter({});
+    ApiClient().dio.httpClientAdapter = adapter;
+    final auth = AuthService();
+    addTearDown(auth.dispose);
+    await auth.enviarCodigoCadastro(' Cliente@exemplo.com ');
+    final envio = adapter.requests.singleWhere((r) => r.path.endsWith('enviar-codigo-cadastro'));
+    expect(envio.data, {'email': 'cliente@exemplo.com'});
+    expect(envio.receiveTimeout, const Duration(seconds: 65));
+  });
+
   test('confirmação fornece prova enviada ao registrar e adota sessão do servidor',
       () async {
     final adapter = CadastroAdapter({'tokenCadastro': 'prova-do-email'});
