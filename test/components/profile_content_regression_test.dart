@@ -8,6 +8,9 @@ import 'package:network_image_mock/network_image_mock.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nhac/components/profile_content.dart';
+import 'package:nhac/models/feed/feed_perfil_model.dart';
+import 'package:nhac/models/feed/feed_post_model.dart';
+import 'package:nhac/repositories/feed_repository.dart';
 import 'package:nhac/controllers/endereco_provider.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:nhac/models/usuario/usuario_model.dart';
@@ -24,8 +27,11 @@ class ProfileEnderecoMock extends Mock implements EnderecoRepository {}
 
 class ProfilePedidoMock extends Mock implements PedidoRepository {}
 
+class ProfileFeedMock extends Mock implements FeedRepository {}
+
 void main() {
   late ProfileAuthMock auth;
+  late ProfileFeedMock feed;
   late ProfilePedidoMock pedidos;
   late ProfileUserMock users;
   late UserProvider user;
@@ -33,6 +39,10 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues({});
     auth = ProfileAuthMock();
+    feed = ProfileFeedMock();
+    when(() => feed.buscarPerfil('cliente', page: 0)).thenAnswer((_) async =>
+        const FeedPerfilModel(id: 'cliente', nome: 'Cliente',
+            podeEnviarMensagem: false, publicacoes: [], temMais: false));
     users = ProfileUserMock();
     pedidos = ProfilePedidoMock();
     when(() => auth.usuarioId).thenReturn('cliente');
@@ -70,10 +80,17 @@ void main() {
           builder: (_, __) => Scaffold(
               body: ProfileContent(
                   pedidoRepository: pedidos,
+                  feedRepository: feed,
                   autenticarBiometria: () async => false))),
       GoRoute(
           path: '/meus-pedidos',
           builder: (_, __) => const Scaffold(body: Text('Histórico aberto'))),
+      GoRoute(
+          path: '/feed-post',
+          builder: (_, state) {
+            final post = state.extra! as FeedPostModel;
+            return Scaffold(body: Text('Post aberto: ${post.id}'));
+          }),
       GoRoute(
           path: '/dados-pessoais',
           builder: (_, __) => const Scaffold(body: Text('Dados abertos'))),
@@ -92,6 +109,25 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump();
   }
+
+  testWidgets('Suas publicações usa o autor da sessão e abre o post da grade',
+      (tester) async {
+    const post = FeedPostModel(id: 'meu-post', usuarioId: 'cliente',
+        nomeUsuario: 'Cliente', conteudo: 'Minha receita', curtidas: 0, comentarios: 0);
+    when(() => feed.buscarPerfil('cliente', page: 0)).thenAnswer((_) async =>
+        const FeedPerfilModel(id: 'cliente', nome: 'Cliente', podeEnviarMensagem: false,
+            publicacoes: [post], totalPublicacoes: 1, temMais: false));
+    await montar(tester);
+    await tester.scrollUntilVisible(find.text('Minha receita'), 160);
+    expect(find.text('Suas publicações'), findsOneWidget);
+    expect(find.text('Preferências de comida'), findsNothing);
+    expect(find.byType(SliverGrid), findsOneWidget);
+    verify(() => feed.buscarPerfil('cliente', page: 0)).called(1);
+    await tester.tap(find.text('Minha receita'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Post aberto: meu-post'), findsOneWidget);
+  });
 
   for (final largura in [390.0, 320.0]) {
     for (final comBanner in [false, true]) {
@@ -187,6 +223,7 @@ void main() {
     await montar(tester);
     clearInteractions(pedidos);
     clearInteractions(users);
+    clearInteractions(feed);
     when(() => pedidos.buscarEstatisticas('cliente')).thenAnswer((_) async =>
         {'totalPedidos': 9, 'lojasFavoritadas': 3, 'cuponsResgatados': 2});
     await tester.drag(find.byType(CustomScrollView), const Offset(0, 500));
@@ -195,6 +232,7 @@ void main() {
     await tester.pump();
     verify(() => pedidos.buscarEstatisticas('cliente')).called(1);
     verify(() => users.buscarUsuario('cliente')).called(1);
+    verify(() => feed.buscarPerfil('cliente', page: 0)).called(1);
     expect(find.text('9'), findsOneWidget);
   });
 

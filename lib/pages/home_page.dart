@@ -170,27 +170,28 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     ProfileContent(isActive: _selectedIndex == 3),
                   ],
                 ),
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  height: 40.h,
-                  child: IgnorePointer(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            const Color(0xFFFFE7E5).withValues(alpha: 0.7),
-                            const Color(0xFFFFE7E5).withValues(alpha: 0.6),
-                            const Color(0xFFFFE7E5).withValues(alpha: 0.0),
-                          ],
+                if (_selectedIndex != 3)
+                  Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    height: 40.h,
+                    child: IgnorePointer(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              const Color(0xFFFFE7E5).withValues(alpha: 0.7),
+                              const Color(0xFFFFE7E5).withValues(alpha: 0.6),
+                              const Color(0xFFFFE7E5).withValues(alpha: 0.0),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
                 Positioned(
                   bottom: 0,
                   left: 0,

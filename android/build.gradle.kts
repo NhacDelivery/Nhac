@@ -1,3 +1,4 @@
+import com.android.build.api.variant.LibraryAndroidComponentsExtension
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -25,6 +26,14 @@ subprojects {
 }
 
 subprojects {
+    if (name == "flutter_native_splash") {
+        // O plugin 2.4.4 declara API 31, abaixo da exigida pelas bibliotecas AndroidX.
+        pluginManager.withPlugin("com.android.library") {
+            extensions.getByType<LibraryAndroidComponentsExtension>().finalizeDsl {
+                it.compileSdk = 36
+            }
+        }
+    }
     project.evaluationDependsOn(":app")
 }
 

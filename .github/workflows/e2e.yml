@@ -158,7 +158,7 @@ jobs:
 
       - name: Build backend jar
         working-directory: backend-nhac
-        run: ./mvnw -B -ntp -q -DskipTests package
+        run: mvn -B -ntp -DskipTests package
 
       - name: Capture backend JDK
         id: backend-java

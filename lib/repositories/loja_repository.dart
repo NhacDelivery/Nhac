@@ -135,16 +135,20 @@ class LojaRepository {
       if (response.statusCode == 200 && response.data != null) {
         final List data = response.data['content'] ?? [];
         return data.map((map) {
-          return LojasModel(
-            id: map['lojaId'] ?? '',
-            nome: map['lojaNome'] ?? '',
-            imagemUrl: map['lojaImagemUrl'] ?? '',
-            descricao: '',
-            categoria: '',
-            dadosOperacionais: null,
-            horarios: null,
-            endereco: null,
-          );
+          return LojasModel.fromMap({
+            'id': map['lojaId'],
+            'nome': map['lojaNome'],
+            'imagemUrl': map['lojaImagemUrl'],
+            'bannerUrl': map['bannerUrl'],
+            'categoria': map['categoria'],
+            if (map['tempoEntregaMax'] != null || map['totalAvaliacoes'] != null)
+              'dadosOperacionais': {
+                'tempoEntregaMin': map['tempoEntregaMin'],
+                'tempoEntregaMax': map['tempoEntregaMax'],
+                'avaliacaoMedia': map['avaliacaoMedia'],
+                'totalAvaliacoes': map['totalAvaliacoes'],
+              },
+          });
         }).toList();
       }
       return [];
