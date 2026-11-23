@@ -62,12 +62,17 @@ Siga os passos abaixo para testar o aplicativo em seu ambiente de desenvolviment
    O projeto utiliza o pacote `flutter_dotenv` e um arquivo oculto `.env` declarado nos assets para gerenciar as chaves de API de forma segura. 
    Na raiz do projeto, crie um arquivo chamado `.env` e baseando-se no arquivo `.env.example`, insira a chave necessária seguindo o formato:
    ```env
-   GOOGLE_API_KEY=sua_chave_google
+   GOOGLE_API_KEY=
+   STRIPE_PUBLISHABLE_KEY=
+   SENTRY_DSN=
    GOOGLE_PLACES_API_KEY=
+   ASAAS_API_KEY=
    ```
-   A variável `GOOGLE_PLACES_API_KEY` é opcional e tem prioridade quando preenchida. Caso fique vazia, o app reutiliza `GOOGLE_API_KEY`, inclusive na configuração nativa do Android.
+   A variável `GOOGLE_PLACES_API_KEY` é opcional e tem prioridade quando preenchida. Caso fique vazia, o app reutiliza `GOOGLE_API_KEY`, você PRECISA preencher as restantes das KEYS,
+   a desconsideração dessa orientação vai resultar em CRASH.
+   
 
-4. **Execute o aplicativo**
+5. **Execute o aplicativo**
    Conecte um emulador ou um dispositivo físico via cabo/Wi-Fi e execute o comando:
    ```bash
    flutter run
