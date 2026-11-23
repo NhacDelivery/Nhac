@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:nhac/globals/app_constants.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:nhac/models/pedido_model.dart';
 import 'package:nhac/models/produto/produtos.dart';
@@ -10,7 +11,7 @@ class LocalCacheService {
   static const String _keyUsuario = 'cache_usuario';
   static const String _keyEnderecos = 'cache_enderecos';
   static const String _keyLocalizacaoGps = 'cache_localizacao_gps';
-  static const String _keySearchHistory = 'cache_search_history';
+  static String get _keySearchHistory => 'cache_search_history_v2_${AppConstants.apiBaseUrl}';
   static const String _keyEmailVerificacao = 'email_verificacao_pendente';
 
   static Future<void> salvarEmailVerificacao(String email) async {
@@ -57,7 +58,7 @@ class LocalCacheService {
   static String _keySnapshotPedido(String usuarioId) =>
       'pedido_snapshot_$usuarioId';
   static const Duration retencaoHome = Duration(minutes: 15);
-  static const String _keyCatalogoHome = 'catalogo_home_v1';
+  static String get _keyCatalogoHome => 'catalogo_home_v2_${AppConstants.apiBaseUrl}';
 
   static Future<void> salvarCatalogoHome() async {
     final prefs = await SharedPreferences.getInstance();
@@ -346,7 +347,7 @@ class LocalCacheService {
   }
 
   /// Cache para resultados de busca (stale-while-revalidate)
-  static const String _keySearchResults = 'cache_search_results_v1';
+  static String get _keySearchResults => 'cache_search_results_v2_${AppConstants.apiBaseUrl}';
   static const Duration retencaoBusca = Duration(minutes: 10);
 
   static Future<void> salvarResultadosBusca(

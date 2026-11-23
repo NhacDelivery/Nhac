@@ -17,6 +17,7 @@ import 'package:nhac/pages/chat_loja_page.dart';
 import 'package:nhac/pages/chat_conversa_page.dart';
 import 'package:nhac/pages/checkout_page.dart';
 import 'package:nhac/pages/pagamento_pendente_page.dart';
+import 'package:nhac/models/pedido/pagamento_pendente_model.dart';
 import 'package:nhac/pages/meus_pedidos_page.dart';
 import 'package:nhac/pages/rastreio_pedido_page.dart';
 import 'package:nhac/pages/splash_screen.dart';
@@ -36,6 +37,7 @@ import 'package:nhac/pages/auth/cadastro/telefone_cadastro.dart';
 import 'package:nhac/pages/enderecos_page.dart';
 import 'package:nhac/pages/formas_pagamento_page.dart';
 import 'package:nhac/pages/cupons_page.dart';
+import 'package:nhac/pages/lojas_favoritas_page.dart';
 import 'package:nhac/pages/search_page.dart';
 import 'package:nhac/pages/auth/recuperacao_senha/recuperacao_input_page.dart';
 import 'package:nhac/pages/auth/recuperacao_senha/inserir_codigo_recuperacao_page.dart';
@@ -500,6 +502,13 @@ final GoRouter appRouter = GoRouter(
       ),
     ),
     GoRoute(
+      path: '/favoritos',
+      pageBuilder: (context, state) => _buildSlideRightToLeftPage(
+        key: state.pageKey,
+        child: const LojasFavoritasPage(),
+      ),
+    ),
+    GoRoute(
       path: '/cupons',
       pageBuilder: (context, state) => _buildSlideRightToLeftPage(
         key: state.pageKey,
@@ -525,6 +534,7 @@ final GoRouter appRouter = GoRouter(
       pageBuilder: (context, state) => _buildSlideRightToLeftPage(
         key: state.pageKey,
         child: PagamentoPendentePage(
+          pixInicial: state.extra is PagamentoPendenteModel ? state.extra as PagamentoPendenteModel : null,
           pedidoId: state.uri.queryParameters['pedidoId'] ?? '',
         ),
       ),

@@ -1,12 +1,14 @@
 class OperacaoPagamentoModel {
   final String estado;
   final bool podeSolicitarEstorno;
+  final bool podeContinuarPagamento;
   const OperacaoPagamentoModel(
-      {required this.estado, this.podeSolicitarEstorno = false});
+      {required this.estado, this.podeSolicitarEstorno = false, this.podeContinuarPagamento = false});
   factory OperacaoPagamentoModel.fromMap(Map<String, dynamic> map) =>
       OperacaoPagamentoModel(
           estado: map['estado']?.toString() ?? 'DESCONHECIDO',
-          podeSolicitarEstorno: map['podeSolicitarEstorno'] == true);
+          podeSolicitarEstorno: map['podeSolicitarEstorno'] == true,
+          podeContinuarPagamento: map['podeContinuarPagamento'] == true);
   bool get concluido => estado == 'ESTORNO_CONCLUIDO';
   bool get regular => estado == 'REGULAR';
   String get titulo => switch (estado) {

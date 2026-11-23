@@ -81,7 +81,7 @@ class PedidoRepository {
       final response = await _dio.post(
         '/pedidos',
         data: payload,
-        options: Options(headers: {'Idempotency-Key': idempotencyKey}),
+        options: Options(headers: {'Idempotency-Key': idempotencyKey}, receiveTimeout: const Duration(seconds: 50)),
       );
 
       if (response.statusCode == 201 || response.statusCode == 200) {
@@ -137,7 +137,7 @@ class PedidoRepository {
   Future<PedidoModel> buscarPedidoPorId(String pedidoId) async {
     try {
       final response =
-          await SharedGet.forClient(_dio).get(_dio, '/pedidos/$pedidoId');
+          await SharedGet.forClient(_dio).get(_dio, '/pedidos/$pedidoId', validity: Duration.zero);
       return PedidoModel.fromMap(
         Map<String, dynamic>.from(response.data as Map),
       );

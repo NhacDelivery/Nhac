@@ -9,7 +9,7 @@ class AppConstants {
   // ============================================================
 
   static String get apiBaseUrl {
-    final value = dotenv.env['API_BASE_URL'];
+    final value = dotenv.isInitialized ? dotenv.env['API_BASE_URL'] : null;
 
     if (value == null || value.trim().isEmpty) {
       return 'https://backend-nhac.cloud.run/api/v1';

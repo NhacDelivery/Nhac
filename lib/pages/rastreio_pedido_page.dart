@@ -1,3 +1,6 @@
+import 'package:url_launcher/url_launcher.dart';
+import 'package:nhac/repositories/chat_repository.dart';
+import 'package:nhac/pages/chat_conversa_page.dart';
 import 'package:nhac/components/pedido/operacao_pagamento_card.dart';
 import 'package:nhac/components/estado_com_retry.dart';
 import 'package:nhac/components/botoes/botao_largo_nhac.dart';
@@ -166,13 +169,23 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
   );
   GoogleMapController? _mapController;
 
-  LatLng? get _lojaLocation => _rota == null
-      ? null
-      : LatLng(_rota!.origem.latitude, _rota!.origem.longitude);
+  LatLng? get _lojaLocation => _ponto(
+        _rota?.origem.latitude ?? _loja?.latitude,
+        _rota?.origem.longitude ?? _loja?.longitude,
+      );
 
-  LatLng? get _clienteLocation => _rota == null
-      ? null
-      : LatLng(_rota!.destino.latitude, _rota!.destino.longitude);
+  LatLng? get _clienteLocation => _ponto(
+        _rota?.destino.latitude ?? _pedido?.enderecoEntrega.latitude,
+        _rota?.destino.longitude ?? _pedido?.enderecoEntrega.longitude,
+      );
+
+  LatLng? _ponto(double? lat, double? lng) {
+    if (lat == null || lng == null ||
+        !PontoCoordenadaModel(latitude: lat, longitude: lng).isValido) {
+      return null;
+    }
+    return LatLng(lat, lng);
+  }
 
   @override
   void initState() {
@@ -666,38 +679,36 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     final origem = _lojaLocation;
     final destino = _clienteLocation;
 
-    if (origem == null || destino == null) {
-      return Container(
-        color: Colors.grey.shade200,
-        alignment: Alignment.center,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              _rotaErro ??
-                  'Rota ainda indisponível. Confira as coordenadas da loja e do endereço de entrega.',
-              textAlign: TextAlign.center,
-            ),
-            TextButton(
-              onPressed: () => _carregarDados(tentarRota: true),
-              child: const Text('Tentar novamente'),
-            ),
-          ],
-        ),
+    final centro = destino ?? origem;
+    if (centro == null) {
+      return Center(
+        child: _rotaErro == null
+            ? const CircularProgressIndicator()
+            : TextButton(
+                onPressed: () => _carregarDados(tentarRota: true),
+                child: const Text('Mapa sem coordenadas · Tentar novamente'),
+              ),
       );
     }
+    final pontos = _rota?.waypoints
+            .where((p) => p.isValido)
+            .map((p) => LatLng(p.latitude, p.longitude))
+            .toList() ??
+        const <LatLng>[];
 
-    final pontos = _rota!.waypoints.isNotEmpty
-        ? _rota!.waypoints.map((p) => LatLng(p.latitude, p.longitude)).toList()
-        : <LatLng>[origem, destino];
-
-    return GoogleMap(
-      initialCameraPosition: CameraPosition(target: origem, zoom: 14.5),
+    final mapa = GoogleMap(
+      key: ValueKey((widget.pedidoId, origem, destino)),
+      initialCameraPosition: CameraPosition(
+        target: centro,
+        zoom: 14.5,
+      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.sizeOf(context).height * 0.48, top: 90.h),
       onMapCreated: (controller) {
         _mapController = controller;
+        if (origem == null || destino == null || origem == destino) return;
         Future.delayed(const Duration(milliseconds: 300), () {
-          if (!mounted || !_active) return;
-          _mapController?.animateCamera(
+          if (!mounted || !_active || _mapController != controller) return;
+          controller.animateCamera(
             CameraUpdate.newLatLngBounds(
               LatLngBounds(
                 southwest: LatLng(
@@ -723,12 +734,12 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
         });
       },
       markers: {
-        Marker(
+        if (origem != null) Marker(
           markerId: const MarkerId('loja'),
           position: origem,
           infoWindow: InfoWindow(title: _loja?.nome ?? 'Loja'),
         ),
-        Marker(
+        if (destino != null) Marker(
           markerId: const MarkerId('cliente'),
           position: destino,
           icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
@@ -749,7 +760,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
           ),
       },
       polylines: {
-        Polyline(
+        if (pontos.length >= 2) Polyline(
           polylineId: const PolylineId('rota'),
           points: pontos,
           color: Colors.red,
@@ -759,6 +770,17 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
       myLocationButtonEnabled: false,
       zoomControlsEnabled: false,
     );
+    if (_rotaErro == null) return mapa;
+    return Stack(fit: StackFit.expand, children: [
+      mapa,
+      Align(
+        alignment: const Alignment(0, -0.55),
+        child: ActionChip(
+          label: const Text('Trajeto indisponível · Tentar novamente'),
+          onPressed: () => _carregarDados(tentarRota: true),
+        ),
+      ),
+    ]);
   }
 
   @override
@@ -822,6 +844,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     return Scaffold(
       key: E2EKeys.trackingRoot,
       body: Stack(
+        fit: StackFit.expand,
         children: [
           Semantics(
             key: E2EKeys.trackingOrderId,
@@ -937,6 +960,9 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
             left: 0,
             right: 0,
             child: Container(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.48,
+              ),
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(24.r)),
@@ -948,8 +974,9 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                   ),
                 ],
               ),
-              padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 24.h),
-              child: Column(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(horizontal: 24.w, vertical: 24.h),
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1171,26 +1198,15 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                   if ((status == StatusPedido.pendente || status == StatusPedido.pago) && ['PIX', 'CARTAO', 'STRIPE', 'GOOGLE_PAY']
                       .contains(_pedido!.formaPagamento.toUpperCase()))
                     OperacaoPagamentoCard(
-                        key: ValueKey('operacao-${widget.pedidoId}'),
+                        key: ValueKey('operacao-${widget.pedidoId}-${status.name}'),
+                        aoContinuar: status == StatusPedido.pendente && !_pedidoDesatualizado ? () async {
+                          await context.push('/pagamento?pedidoId=${Uri.encodeQueryComponent(widget.pedidoId)}');
+                        } : null,
                         pedidoId: widget.pedidoId,
                         repository: _pedidoRepository,
                         aoCancelar: () => _carregarDados(silencioso: true)),
                   if (status == StatusPedido.pendente) ...[
                     SizedBox(height: 20.h),
-                    if (_pedido!.formaPagamento.toUpperCase() == 'PIX' ||
-                        _pedido!.formaPagamento.toUpperCase() == 'CARTAO') ...[
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: () => context.push(
-                            '/pagamento?pedidoId=${widget.pedidoId}',
-                          ),
-                          icon: const Icon(Icons.payment),
-                          label: const Text('Continuar pagamento'),
-                        ),
-                      ),
-                      SizedBox(height: 8.h),
-                    ],
                     BotaoLargoNhac(
                       key: const Key('pedido-cancelar-button'),
                       texto: 'Cancelar pedido',
@@ -1200,6 +1216,7 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                   ],
                   SizedBox(height: 32.h),
                 ],
+                ),
               ),
             ),
           ),
@@ -1294,6 +1311,36 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
         ],
       ),
     );
+  }
+
+  bool _abrindoContato = false;
+
+  Future<void> _contatarEntregador({required bool ligar}) async {
+    if (_abrindoContato || _pedido?.entregador == null) return;
+    final pedido = _pedido!;
+    setState(() => _abrindoContato = true);
+    try {
+      final chat = ChatRepository();
+      if (ligar) {
+        final telefone = await chat.telefoneEntregador(pedido.id);
+        if (!mounted || widget.pedidoId != pedido.id) return;
+        final numero = telefone.replaceAll(RegExp(r'[^0-9+]'), '');
+        if (numero.isEmpty || !await launchUrl(Uri(scheme: 'tel', path: numero))) {
+          throw StateError('Não foi possível abrir o discador.');
+        }
+      } else {
+        final id = await chat.abrirConversaEntrega(pedido.id);
+        if (!mounted || widget.pedidoId != pedido.id) return;
+        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ChatConversaPage(
+          conversaId: id, conversaPessoa: true, interlocutorNome: pedido.entregador!.nome,
+          interlocutorFotoUrl: pedido.entregador!.fotoUrl,
+        )));
+      }
+    } catch (e) {
+      if (mounted) _messengerKey.currentState?.showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _abrindoContato = false);
+    }
   }
 
   Widget _buildEntregadorCard() {
@@ -1415,6 +1462,13 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
+                if (!_pedidoDesatualizado && (_pedido!.status == StatusPedido.preparando || _pedido!.status == StatusPedido.saiuEntrega))
+                  Wrap(children: [
+                    TextButton.icon(onPressed: _abrindoContato ? null : () => _contatarEntregador(ligar: true),
+                      icon: const Icon(Icons.phone_outlined), label: const Text('Ligar')),
+                    TextButton.icon(onPressed: _abrindoContato ? null : () => _contatarEntregador(ligar: false),
+                      icon: const Icon(Icons.chat_bubble_outline), label: const Text('Conversar')),
+                  ]),
               ],
             ),
           ),

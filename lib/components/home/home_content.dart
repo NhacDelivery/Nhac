@@ -831,14 +831,23 @@ class _HomeContentState extends State<HomeContent>
 
           if (authService.isAuthenticated &&
               enderecoProvider.enderecos.isEmpty) {
+            final cep = (place.postalCode ?? '').replaceAll(RegExp(r'\D'), '');
+            final rua = EnderecoUtils.normalizarCidade([place.thoroughfare, place.street]);
+            final cidade = EnderecoUtils.normalizarCidade([place.subAdministrativeArea, place.locality]);
+            final bairro = (place.subLocality ?? '').trim();
+            final uf = EnderecoUtils.normalizarEstado(place.administrativeArea);
+            if (cep.length != 8 || rua.isEmpty || bairro.isEmpty || cidade.isEmpty || uf.isEmpty) {
+              setState(() => _currentAddress = 'Complete seu endereço de entrega');
+              return;
+            }
             final novoEndereco = EnderecoModel(
               id: '',
-              rua: place.street ?? 'Desconhecida',
-              numero: place.subThoroughfare ?? 'S/N',
-              bairro: place.subLocality ?? '',
-              cidade: place.subAdministrativeArea ?? '',
-              estado: EnderecoUtils.normalizarEstado(place.administrativeArea),
-              cep: place.postalCode ?? '00000-000',
+              rua: rua,
+              numero: EnderecoUtils.normalizarNumero(place.subThoroughfare),
+              bairro: bairro,
+              cidade: cidade,
+              estado: uf,
+              cep: '${cep.substring(0, 5)}-${cep.substring(5)}',
               isPadrao: true,
             );
             await enderecoProvider.adicionarEnderecoAutomatico(novoEndereco);
