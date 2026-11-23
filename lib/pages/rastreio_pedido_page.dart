@@ -844,15 +844,14 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
     return Scaffold(
       key: E2EKeys.trackingRoot,
       body: Stack(
+        fit: StackFit.expand,
         children: [
           Semantics(
             key: E2EKeys.trackingOrderId,
             value: widget.pedidoId,
             child: const SizedBox.shrink(),
           ),
-          Positioned.fill(
-            child: _buildMapa(),
-          ),
+          _buildMapa(),
 
           Positioned(
             top: MediaQuery.of(context).padding.top + 16.h,
