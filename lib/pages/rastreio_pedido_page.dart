@@ -1,3 +1,6 @@
+import 'package:url_launcher/url_launcher.dart';
+import 'package:nhac/repositories/chat_repository.dart';
+import 'package:nhac/pages/chat_conversa_page.dart';
 import 'package:nhac/components/pedido/operacao_pagamento_card.dart';
 import 'package:nhac/components/estado_com_retry.dart';
 import 'package:nhac/components/botoes/botao_largo_nhac.dart';
@@ -1171,26 +1174,15 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                   if ((status == StatusPedido.pendente || status == StatusPedido.pago) && ['PIX', 'CARTAO', 'STRIPE', 'GOOGLE_PAY']
                       .contains(_pedido!.formaPagamento.toUpperCase()))
                     OperacaoPagamentoCard(
-                        key: ValueKey('operacao-${widget.pedidoId}'),
+                        key: ValueKey('operacao-${widget.pedidoId}-${status.name}'),
+                        aoContinuar: status == StatusPedido.pendente && !_pedidoDesatualizado ? () async {
+                          await context.push('/pagamento?pedidoId=${Uri.encodeQueryComponent(widget.pedidoId)}');
+                        } : null,
                         pedidoId: widget.pedidoId,
                         repository: _pedidoRepository,
                         aoCancelar: () => _carregarDados(silencioso: true)),
                   if (status == StatusPedido.pendente) ...[
                     SizedBox(height: 20.h),
-                    if (_pedido!.formaPagamento.toUpperCase() == 'PIX' ||
-                        _pedido!.formaPagamento.toUpperCase() == 'CARTAO') ...[
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton.icon(
-                          onPressed: () => context.push(
-                            '/pagamento?pedidoId=${widget.pedidoId}',
-                          ),
-                          icon: const Icon(Icons.payment),
-                          label: const Text('Continuar pagamento'),
-                        ),
-                      ),
-                      SizedBox(height: 8.h),
-                    ],
                     BotaoLargoNhac(
                       key: const Key('pedido-cancelar-button'),
                       texto: 'Cancelar pedido',
@@ -1294,6 +1286,36 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
         ],
       ),
     );
+  }
+
+  bool _abrindoContato = false;
+
+  Future<void> _contatarEntregador({required bool ligar}) async {
+    if (_abrindoContato || _pedido?.entregador == null) return;
+    final pedido = _pedido!;
+    setState(() => _abrindoContato = true);
+    try {
+      final chat = ChatRepository();
+      if (ligar) {
+        final telefone = await chat.telefoneEntregador(pedido.id);
+        if (!mounted || widget.pedidoId != pedido.id) return;
+        final numero = telefone.replaceAll(RegExp(r'[^0-9+]'), '');
+        if (numero.isEmpty || !await launchUrl(Uri(scheme: 'tel', path: numero))) {
+          throw StateError('Não foi possível abrir o discador.');
+        }
+      } else {
+        final id = await chat.abrirConversaEntrega(pedido.id);
+        if (!mounted || widget.pedidoId != pedido.id) return;
+        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ChatConversaPage(
+          conversaId: id, conversaPessoa: true, interlocutorNome: pedido.entregador!.nome,
+          interlocutorFotoUrl: pedido.entregador!.fotoUrl,
+        )));
+      }
+    } catch (e) {
+      if (mounted) _messengerKey.currentState?.showSnackBar(SnackBar(content: Text(e.toString())));
+    } finally {
+      if (mounted) setState(() => _abrindoContato = false);
+    }
   }
 
   Widget _buildEntregadorCard() {
@@ -1415,6 +1437,13 @@ class _RastreioPedidoPageState extends State<RastreioPedidoPage>
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
+                if (!_pedidoDesatualizado && (_pedido!.status == StatusPedido.preparando || _pedido!.status == StatusPedido.saiuEntrega))
+                  Wrap(children: [
+                    TextButton.icon(onPressed: _abrindoContato ? null : () => _contatarEntregador(ligar: true),
+                      icon: const Icon(Icons.phone_outlined), label: const Text('Ligar')),
+                    TextButton.icon(onPressed: _abrindoContato ? null : () => _contatarEntregador(ligar: false),
+                      icon: const Icon(Icons.chat_bubble_outline), label: const Text('Conversar')),
+                  ]),
               ],
             ),
           ),

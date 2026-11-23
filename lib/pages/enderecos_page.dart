@@ -138,15 +138,14 @@ class _EnderecosPageState extends State<EnderecosPage> {
           );
         },
       ),
-    ).then((result) => {
-          if (result != null) {_mostrarFormularioComplemento(result)}
-        });
+    ).then((result) {
+      if (mounted && result != null) _mostrarFormularioComplemento(result);
+    });
   }
 
   void _mostrarFormularioComplemento(Map<String, dynamic> enderecoGoogle) {
-    final numeroController =
-        TextEditingController(text: enderecoGoogle['numero']);
-    final complementoController = TextEditingController();
+    var numero = enderecoGoogle['numero']?.toString() ?? '';
+    var complemento = '';
 
     showModalBottomSheet(
       context: context,
@@ -185,8 +184,9 @@ class _EnderecosPageState extends State<EnderecosPage> {
                 children: [
                   Expanded(
                     flex: 1,
-                    child: TextField(
-                      controller: numeroController,
+                    child: TextFormField(
+                      initialValue: numero,
+                      onChanged: (valor) => numero = valor,
                       keyboardType: TextInputType.number,
                       cursorColor: const Color(0xFFFF6961),
                       decoration: const InputDecoration(
@@ -201,8 +201,9 @@ class _EnderecosPageState extends State<EnderecosPage> {
                   const SizedBox(width: 16.0),
                   Expanded(
                     flex: 2,
-                    child: TextField(
-                      controller: complementoController,
+                    child: TextFormField(
+                      initialValue: complemento,
+                      onChanged: (valor) => complemento = valor,
                       textCapitalization: TextCapitalization.sentences,
                       cursorColor: const Color(0xFFFF6961),
                       decoration: const InputDecoration(
@@ -221,10 +222,10 @@ class _EnderecosPageState extends State<EnderecosPage> {
               BotaoLargoNhac(
                 texto: 'Salvar Endereço',
                 onPressed: () {
-                  enderecoGoogle['numero'] = numeroController.text.isEmpty
+                  enderecoGoogle['numero'] = numero.trim().isEmpty
                       ? 'S/N'
-                      : numeroController.text;
-                  enderecoGoogle['complemento'] = complementoController.text;
+                      : numero.trim();
+                  enderecoGoogle['complemento'] = complemento.trim();
 
                   Navigator.pop(context);
 
@@ -495,9 +496,8 @@ class _EnderecosPageState extends State<EnderecosPage> {
 
   void _abrirEdicaoEndereco(EnderecoModel enderecoAtual) {
     final provider = context.read<EnderecoProvider>();
-    final numeroController = TextEditingController(text: enderecoAtual.numero);
-    final complementoController =
-        TextEditingController(text: enderecoAtual.complemento);
+    var numero = enderecoAtual.numero;
+    var complemento = enderecoAtual.complemento ?? '';
 
     bool salvando = false;
     showModalBottomSheet(
@@ -538,8 +538,9 @@ class _EnderecosPageState extends State<EnderecosPage> {
                 children: [
                   Expanded(
                     flex: 1,
-                    child: TextField(
-                      controller: numeroController,
+                    child: TextFormField(
+                      initialValue: numero,
+                      onChanged: (valor) => numero = valor,
                       keyboardType: TextInputType.number,
                       cursorColor: const Color(0xFFFF6961),
                       decoration: const InputDecoration(
@@ -554,8 +555,9 @@ class _EnderecosPageState extends State<EnderecosPage> {
                   const SizedBox(width: 16.0),
                   Expanded(
                     flex: 2,
-                    child: TextField(
-                      controller: complementoController,
+                    child: TextFormField(
+                      initialValue: complemento,
+                      onChanged: (valor) => complemento = valor,
                       textCapitalization: TextCapitalization.sentences,
                       cursorColor: const Color(0xFFFF6961),
                       decoration: const InputDecoration(
@@ -576,10 +578,10 @@ class _EnderecosPageState extends State<EnderecosPage> {
                 carregando: salvando,
                 onPressed: () async {
                   final enderecoAtualizado = enderecoAtual.copyWith(
-                    numero: numeroController.text.isEmpty
+                    numero: numero.trim().isEmpty
                         ? 'S/N'
-                        : numeroController.text,
-                    complemento: complementoController.text,
+                        : numero.trim(),
+                    complemento: complemento.trim(),
                   );
 
                   if (salvando || provider.isLoading) return;
@@ -587,7 +589,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
                   try {
                     await provider.atualizarEndereco(
                         enderecoAtualizado.id, enderecoAtualizado);
-                    if (context.mounted) Navigator.pop(context);
+                    if (context.mounted && ModalRoute.of(context)?.isCurrent == true) Navigator.pop(context);
                     if (mounted) {
                       this.context.showSuccess('Endereço atualizado com sucesso!');
                     }
@@ -605,10 +607,7 @@ class _EnderecosPageState extends State<EnderecosPage> {
         );
         });
       },
-    ).whenComplete(() {
-      numeroController.dispose();
-      complementoController.dispose();
-    });
+    );
   }
 
   void _confirmarisPadrao(EnderecoModel endereco) {

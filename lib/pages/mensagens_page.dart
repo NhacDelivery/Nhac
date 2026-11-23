@@ -223,13 +223,6 @@ class _MensagensPageState extends State<MensagensPage>
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: const Color(0xFFFF6961), // Vermelho do app
-        shape: const CircleBorder(),
-        elevation: 4,
-        child: Icon(Icons.add, color: Colors.white, size: 36.r),
-      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {

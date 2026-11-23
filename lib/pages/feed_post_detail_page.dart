@@ -72,7 +72,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
   bool _seguindoBusy = false;
   bool _alterando = false;
   int _tabAtual = 0;
-  List<FeedCommentModel> get _visibleComments => _comments;
+  List<({FeedCommentModel comentario, int nivel})> get _visibleComments => organizarComentarios(_comments);
   String? get _uid => context.read<AuthService>().usuarioId;
   bool get _podeEditar =>
       _post.usuarioId != null && (_post.usuarioId == _uid || _post.podeEditar);
@@ -154,6 +154,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
           for (final c in [
             ...(mais ? _comments : <FeedCommentModel>[]),
             ...comments,
+            ..._comentariosConfirmados.values,
           ])
             c.id: _comentariosConfirmados[c.id] ?? c,
         }.values.toList();
@@ -190,7 +191,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
         },
       );
       if (mounted) setState(() => _commentPending = true);
-      await _repository.comentar(
+      final enviado = await _repository.comentar(
         _post.id,
         text,
         idempotencyKey: tentativa['key'] as String,
@@ -207,7 +208,16 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
       if (!mounted) return;
       if (_commentController.text.trim() == text) _commentController.clear();
       _commentFocus.unfocus();
-      await _carregarComentarios();
+      if (enviado.respostaAId != null && _comments.any((c) => c.id == enviado.respostaAId)) {
+        // O pai pode estar na segunda página ou mais adiante.
+        setState(() {
+          _comentariosConfirmados[enviado.id] = enviado;
+          _comments = [..._comments.where((c) => c.id != enviado.id), enviado];
+          _porFiltro[_tabAtual] = List.of(_comments);
+        });
+      } else {
+        await _carregarComentarios();
+      }
       await _atualizarPost();
     } catch (e) {
       if (rejeicaoDefinitiva(e)) {
@@ -833,7 +843,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                       ),
                     SliverList(
                       delegate: SliverChildBuilderDelegate(
-                        (context, index) => _buildCommentCard(comments[index]),
+                        (context, index) => _buildCommentCard(comments[index].comentario, comments[index].nivel),
                         childCount: comments.length,
                       ),
                     ),
@@ -1090,10 +1100,10 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
 
   // ─── Comment Card ─────────────────────────────────────────────────────────
 
-  Widget _buildCommentCard(FeedCommentModel comment) {
+  Widget _buildCommentCard(FeedCommentModel comment, int nivel) {
     return Container(
       padding: EdgeInsets.fromLTRB(
-        comment.respostaAId == null ? 16.w : 40.w,
+        (16 + 20 * nivel.clamp(0, 3)).w,
         12.h,
         16.w,
         12.h,
@@ -1147,7 +1157,7 @@ class _FeedPostDetailPageState extends State<FeedPostDetailPage>
                 FeedTimestamp(comment.criadoEm),
                 if (comment.respostaAId != null)
                   Text(
-                    '@${comment.respostaANome ?? "comentário excluído"}',
+                    'Em resposta a ${comment.respostaANome ?? "comentário excluído"}',
                     style: const TextStyle(
                       fontSize: 12,
                       color: Color(0xFF666666),

@@ -1057,6 +1057,7 @@ class _ProfileContentState extends State<ProfileContent>
     return InkWell(
       onTap: switch (label) {
         'Cupons' => () => _abrirResumo('/cupons'),
+        'Favoritos' => () => _abrirResumo('/favoritos'),
         'Pedidos' => () => _abrirResumo('/meus-pedidos'),
         _ => null,
       },

@@ -50,6 +50,24 @@ class ChatRepository {
     }
   }
 
+  Future<String> abrirConversaEntrega(String pedidoId) async {
+    try {
+      final resposta = await _dio.post('/conversas/entregas/${Uri.encodeComponent(pedidoId)}');
+      return resposta.data['id'] as String;
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
+  Future<String> telefoneEntregador(String pedidoId) async {
+    try {
+      final resposta = await _dio.get('/conversas/entregas/${Uri.encodeComponent(pedidoId)}/telefone');
+      return resposta.data['telefone'] as String;
+    } catch (e) {
+      throw mapException(e);
+    }
+  }
+
   Future<String> abrirConversaComPessoa(String usuarioId) async {
     try {
       final response = await _dio.post(

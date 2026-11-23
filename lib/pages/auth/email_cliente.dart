@@ -212,9 +212,9 @@ class _EmailClienteState extends State<EmailCliente> {
                                 try {
                                   final authService = context
                                       .read<AuthService>();
-                                  await authService.loginComGoogle();
+                                  final entrou = await authService.loginComGoogle();
 
-                                  if (context.mounted) {
+                                  if (entrou && context.mounted) {
                                     context
                                         .read<UserProvider>()
                                         .carregarDadosUsuario();
