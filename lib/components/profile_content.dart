@@ -1,4 +1,3 @@
-import 'package:nhac/services/preferencias_comida_service.dart';
 import 'dart:io';
 
 import 'package:nhac/services/home_order_route_observer.dart';
@@ -16,9 +15,10 @@ import 'package:nhac/controllers/endereco_provider.dart';
 import 'package:nhac/controllers/user_provider.dart';
 import 'package:nhac/components/loading_nhac.dart';
 import 'package:nhac/components/profile/banner_perfil.dart';
+import 'package:nhac/components/profile/publicacoes_perfil.dart';
+import 'package:nhac/repositories/feed_repository.dart';
 import 'package:nhac/services/auth_service.dart';
 import 'package:nhac/services/biometric_service.dart';
-import 'package:nhac/services/local_cache_service.dart';
 import 'package:provider/provider.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
@@ -28,10 +28,12 @@ import 'package:nhac/utils/error_ui_helper.dart';
 class ProfileContent extends StatefulWidget {
   final bool isActive;
   final PedidoRepository? pedidoRepository;
+  final FeedRepository? feedRepository;
   final Future<bool> Function()? autenticarBiometria;
   const ProfileContent({
     super.key,
     this.pedidoRepository,
+    this.feedRepository,
     this.autenticarBiometria,
     this.isActive = true,
   });
@@ -42,6 +44,7 @@ class ProfileContent extends StatefulWidget {
 
 class _ProfileContentState extends State<ProfileContent>
     with RouteAware, WidgetsBindingObserver {
+  final _publicacoes = GlobalKey<PublicacoesPerfilState>();
   ModalRoute<dynamic>? _route;
 
   @override
@@ -117,113 +120,20 @@ class _ProfileContentState extends State<ProfileContent>
   bool _carregandoEstatisticas = false;
   bool _erroEstatisticas = false;
   bool _confirmandoIdentidade = false;
-  Set<String> _preferencias = {};
-  String? _erroSincronizacaoPreferencias;
-  bool _preferenciasCarregadas = false, _salvandoPreferencias = false;
-  String? _contaPreferencias;
-
-  static const _opcoesPreferencia = <(String, IconData)>[
-    ('Pizza', Icons.local_pizza),
-    ('Vegetariana', Icons.ramen_dining),
-    ('Salgados', Icons.fastfood),
-    ('Padarias', Icons.bakery_dining),
-    ('Frutos do mar', Icons.set_meal),
-    ('Doces', Icons.cake),
-  ];
-
-  Future<void> _carregarPreferencias() async {
-    final usuarioId = context.read<AuthService>().usuarioId;
-    if (usuarioId == null) return;
-    try {
-      Set<String> salvas;
-      try {
-        salvas = await PreferenciasComidaService.carregar(usuarioId);
-        if (mounted) setState(() => _erroSincronizacaoPreferencias = null);
-      } catch (_) {
-        salvas = await LocalCacheService.carregarPreferenciasComida(usuarioId);
-        if (mounted && context.read<AuthService>().usuarioId == usuarioId) {
-          setState(() => _erroSincronizacaoPreferencias =
-              'Usando as preferências deste aparelho. Atualize o perfil para tentar sincronizar.');
-        }
-      }
-      if (mounted && context.read<AuthService>().usuarioId == usuarioId) {
-        setState(() {
-          _preferencias = salvas;
-          _contaPreferencias = usuarioId;
-          _preferenciasCarregadas = true;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Não foi possível carregar suas preferências. Atualize o perfil para tentar novamente.',
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  Future<void> _alternarPreferencia(String nome) async {
-    final usuarioId = context.read<AuthService>().usuarioId;
-    if (!_preferenciasCarregadas ||
-        _salvandoPreferencias ||
-        usuarioId == null ||
-        usuarioId != _contaPreferencias) {
-      return;
-    }
-    final novas = {..._preferencias};
-    if (!novas.remove(nome)) novas.add(nome);
-    setState(() => _salvandoPreferencias = true);
-    try {
-      try {
-        await PreferenciasComidaService.salvar(usuarioId, novas);
-      } catch (_) {
-        final salvas = await LocalCacheService.carregarPreferenciasComida(
-          usuarioId,
-        );
-        if (salvas.length != novas.length || !salvas.containsAll(novas)) {
-          rethrow;
-        }
-        if (mounted) {
-          context.showError(
-            'Preferências salvas neste aparelho. Sincronização pendente; reabra o perfil quando estiver conectado.',
-          );
-        }
-      }
-      if (mounted && context.read<AuthService>().usuarioId == usuarioId) {
-        setState(() => _preferencias = novas);
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Não foi possível salvar suas preferências. Tente novamente.',
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _salvandoPreferencias = false);
-    }
-  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _carregarEstatisticas();
-    _carregarPreferencias();
   }
 
   Future<void> _atualizarPerfil() async {
+    final publicacoes = _publicacoes.currentState;
     await Future.wait([
       context.read<UserProvider>().carregarDadosUsuario(),
       _carregarEstatisticas(),
-      _carregarPreferencias(),
+      if (publicacoes != null) publicacoes.atualizar(),
     ]);
   }
 
@@ -816,9 +726,30 @@ class _ProfileContentState extends State<ProfileContent>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                RichText(
-                                  text: TextSpan(
-                                    text: usuario.nome,
+                                Container(
+                                  constraints: BoxConstraints(maxWidth: 220.w),
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 12.w,
+                                    vertical: 7.h,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.94),
+                                    borderRadius: BorderRadius.circular(14.r),
+                                    border: Border.all(
+                                      color: const Color(0xFF5D201C).withValues(alpha: 0.08),
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.12),
+                                        blurRadius: 12.r,
+                                        offset: Offset(0, 3.h),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    usuario.nome,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       fontSize: 22.sp,
                                       fontWeight: FontWeight.bold,
@@ -988,65 +919,17 @@ class _ProfileContentState extends State<ProfileContent>
                       ],
                     ),
                   ),
-                  SizedBox(height: 32.h),
-                  Text(
-                    'Preferências de comida',
-                    style: TextStyle(
-                      fontSize: 18.sp,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF5D201C),
-                    ),
-                  ),
-                  SizedBox(height: 4.h),
-                  Text(
-                    _erroSincronizacaoPreferencias ??
-                        'Salvas na sua conta e neste aparelho. Ainda não mudam as recomendações.',
-                    style: TextStyle(
-                      fontSize: 12.sp,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  SizedBox(height: 12.h),
-                  Container(
-                    padding: EdgeInsets.symmetric(vertical: 20.h),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(24.r),
-                      border: Border.all(color: Colors.white, width: 2),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(
-                            0xFF5D201C,
-                          ).withValues(alpha: 0.03),
-                          blurRadius: 15.r,
-                          offset: Offset(0, 5.h),
-                        ),
-                      ],
-                    ),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: EdgeInsets.symmetric(horizontal: 20.w),
-                      physics: const BouncingScrollPhysics(),
-                      child: Row(
-                        children: [
-                          for (final (i, pref)
-                              in _opcoesPreferencia.indexed) ...[
-                            if (i > 0) SizedBox(width: 20.w),
-                            _buildPreferenceItem(
-                              pref.$2,
-                              pref.$1,
-                              _preferencias.contains(pref.$1),
-                              onTap: () => _alternarPreferencia(pref.$1),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  SizedBox(height: 120.h),
                 ]),
               ),
             ),
+            PublicacoesPerfil(
+              key: _publicacoes,
+              usuarioId: usuario.id,
+              titulo: 'Suas publicações',
+              ativo: widget.isActive,
+              repository: widget.feedRepository,
+            ),
+            SliverToBoxAdapter(child: SizedBox(height: 120.h)),
           ],
         ),
       ),
@@ -1133,57 +1016,6 @@ class _ProfileContentState extends State<ProfileContent>
             const Icon(Icons.chevron_right, color: Colors.grey),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildPreferenceItem(
-    IconData icon,
-    String label,
-    bool isSelected, {
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16.r),
-      child: Column(
-        children: [
-          Container(
-            padding: EdgeInsets.all(16.w),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16.r),
-              border: isSelected
-                  ? Border.all(color: const Color(0xFFFF6961), width: 2)
-                  : Border.all(color: Colors.grey.shade200, width: 1),
-              boxShadow: isSelected
-                  ? [
-                      BoxShadow(
-                        color: const Color(0xFFFF6961).withValues(alpha: 0.2),
-                        blurRadius: 8.r,
-                        offset: Offset(0, 4.h),
-                      ),
-                    ]
-                  : null,
-            ),
-            child: Icon(
-              icon,
-              color: isSelected
-                  ? const Color(0xFFFF6961)
-                  : const Color(0xFF5D201C),
-              size: 28.r,
-            ),
-          ),
-          SizedBox(height: 8.h),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11.sp,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              color: const Color(0xFF5D201C),
-            ),
-          ),
-        ],
       ),
     );
   }
