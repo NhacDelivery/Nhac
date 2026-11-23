@@ -53,6 +53,7 @@ dependencies:
   barcode_widget: ^2.0.4
   animations: ^2.0.11
 dev_dependencies:
+  google_maps_flutter_platform_interface: ^2.17.0
   crypto: ^3.0.7
   sentry_dart_plugin: ^3.3.0
   flutter_test:
