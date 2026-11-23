@@ -62,8 +62,8 @@ class EnderecoProvider with ChangeNotifier {
           _authService.usuarioId == null || _enderecos.isNotEmpty || _mutando) {
         return;
       }
-      // GPS nunca substitui um padrão escolhido no servidor.
-      await adicionarEndereco(endereco.copyWith(isPadrao: false));
+      await _alterarEndereco((usuarioId) => _enderecoRepository
+          .adicionarEnderecoAutomatico(usuarioId, endereco.copyWith(isPadrao: true)));
     } finally {
       _cadastrandoAutomatico = false;
     }

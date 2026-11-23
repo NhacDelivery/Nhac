@@ -1,5 +1,9 @@
 import 'package:nhac/models/pedido/operacao_pagamento_model.dart';
 import 'dart:async';
+import 'package:flutter/services.dart' show PlatformViewCreatedCallback;
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart' as maps;
+import 'package:nhac/models/entrega/rota_entrega_model.dart';
 import 'package:nhac/components/estado_com_retry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -16,6 +20,15 @@ import 'package:nhac/repositories/entrega_repository.dart';
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/repositories/pedido_repository.dart';
 import 'package:nhac/services/pedido_status_socket_service.dart';
+
+class MapaTeste extends maps.GoogleMapsFlutterPlatform {
+  @override
+  Widget buildViewWithConfiguration(int id, PlatformViewCreatedCallback criado, {
+    required maps.MapWidgetConfiguration widgetConfiguration,
+    maps.MapConfiguration mapConfiguration = const maps.MapConfiguration(),
+    maps.MapObjects mapObjects = const maps.MapObjects(),
+  }) => const SizedBox.expand();
+}
 
 class MockPedidoRepository extends Mock implements PedidoRepository {}
 
@@ -122,6 +135,29 @@ void main() {
     });
   }
 
+  testWidgets('mostra destino antes do aceite enquanto o trajeto está pendente', (tester) async {
+    setupScreen(tester);
+    final anterior = maps.GoogleMapsFlutterPlatform.instance;
+    maps.GoogleMapsFlutterPlatform.instance = MapaTeste();
+    addTearDown(() => maps.GoogleMapsFlutterPlatform.instance = anterior);
+    final pedido = criarPedido(status: StatusPedido.pendente).copyWith(
+      enderecoEntrega: EnderecoModel.fromMap({...endereco.toMap(), 'latitude': -23.55, 'longitude': -46.63}),
+    );
+    when(() => mockPedidoRepository.buscarPedidoPorId('pedido-novo')).thenAnswer((_) async => pedido);
+    final rota = Completer<RotaEntregaModel>();
+    when(() => mockEntregaRepository.buscarRota('pedido-novo')).thenAnswer((_) => rota.future);
+    await tester.pumpWidget(createWidgetUnderTest('pedido-novo'));
+    await tester.pump();
+    final mapa = tester.widget<GoogleMap>(find.byType(GoogleMap));
+    expect(mapa.initialCameraPosition.target, const LatLng(-23.55, -46.63));
+    expect(mapa.markers.map((m) => m.markerId.value), contains('cliente'));
+    expect(mapa.polylines, isEmpty);
+    rota.completeError(Exception('sem trajeto'));
+    await tester.pump();
+    expect(find.byType(GoogleMap), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   group('F3 - Nome do motoboy ao aceitar no rastreio', () {
     const entregador = EntregadorPedidoModel(
       nome: 'Carlos S.',
@@ -210,7 +246,8 @@ void main() {
     expect(find.text('Pedido não encontrado.'), findsNothing);
     final retry =
         find.text('Não foi possível consultar a loja. Tentar novamente');
-    await tester.ensureVisible(retry);
+    await Scrollable.ensureVisible(tester.element(retry), alignment: 0.5);
+    await tester.pumpAndSettle();
     expect(retry, findsOneWidget);
     when(() => mockLojaRepository.buscarLoja(any())).thenAnswer((_) async =>
         LojasModel(
@@ -265,7 +302,8 @@ void main() {
     await tester.pumpAndSettle();
     final aviso = find.text(
         'Não foi possível atualizar o pedido. Exibindo a última informação recebida.');
-    await tester.ensureVisible(aviso);
+    await Scrollable.ensureVisible(tester.element(aviso), alignment: 0.5);
+    await tester.pumpAndSettle();
     expect(aviso, findsOneWidget);
     expect(find.text('Pedido não encontrado.'), findsNothing);
     when(() => mockPedidoRepository.buscarPedidoPorId('stale-pedido'))
@@ -273,7 +311,8 @@ void main() {
     final retry = find.descendant(
         of: find.ancestor(of: aviso, matching: find.byType(BannerErroInline)),
         matching: find.byType(TextButton));
-    await tester.ensureVisible(retry);
+    await Scrollable.ensureVisible(tester.element(retry), alignment: 0.5);
+    await tester.pumpAndSettle();
     await tester.tap(retry);
     await tester.pumpAndSettle();
     expect(aviso, findsNothing);

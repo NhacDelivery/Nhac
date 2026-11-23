@@ -13,11 +13,13 @@ import 'package:nhac/repositories/pedido_repository.dart';
 /// Recupera sempre a cobrança existente; nenhuma credencial fica no dispositivo.
 class PagamentoPendentePage extends StatefulWidget {
   final String pedidoId;
+  final PagamentoPendenteModel? pixInicial;
   final PedidoRepository? repository;
   const PagamentoPendentePage({
     super.key,
     required this.pedidoId,
     this.repository,
+    this.pixInicial,
   });
 
   @override
@@ -35,7 +37,14 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
   @override
   void initState() {
     super.initState();
-    _carregar();
+    final pix = widget.pixInicial;
+    if (pix != null && pix.pedidoId == widget.pedidoId && pix.formaPagamento == 'PIX' &&
+        pix.expiraEm?.isAfter(DateTime.now()) == true) {
+      _pagamento = pix;
+      _carregando = false;
+    } else {
+      _carregar();
+    }
   }
 
   Future<void> _carregar() async {
@@ -46,6 +55,10 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
     try {
       final pagamento = await _repository.buscarPagamento(widget.pedidoId);
       if (!mounted) return;
+      if (pagamento.aguardandoConfirmacao) {
+        context.go('/rastreio?pedidoId=${Uri.encodeQueryComponent(widget.pedidoId)}');
+        return;
+      }
       setState(() {
         _pagamento = pagamento;
         _carregando = false;
@@ -87,6 +100,10 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
       final pagamentoAtual = await _repository.buscarPagamento(widget.pedidoId);
       final secret = pagamentoAtual.clientSecret;
       if (!mounted) return;
+      if (pagamentoAtual.aguardandoConfirmacao) {
+        context.go('/rastreio?pedidoId=${Uri.encodeQueryComponent(widget.pedidoId)}');
+        return;
+      }
       if (secret == null || secret.isEmpty) {
         context.showError('O pagamento com cartão não está disponível.');
         return;
@@ -98,15 +115,20 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
         ),
       );
       await Stripe.instance.presentPaymentSheet();
+      _repository.invalidarPedido(widget.pedidoId);
       if (!mounted) return;
-      final pedido = await _repository.buscarPedidoPorId(widget.pedidoId);
-      if (!mounted) return;
-      if (pedido.status.pagamentoConfirmado) {
-        await mostrarNotaFiscalEVerPedido(context, pedidoId: widget.pedidoId);
-      } else {
-        context.showSuccess('Pagamento enviado. Aguardando confirmação.');
-        context.go('/rastreio?pedidoId=${widget.pedidoId}');
+      try {
+        final pedido = await _repository.buscarPedidoPorId(widget.pedidoId);
+        if (!mounted) return;
+        if (pedido.status.pagamentoConfirmado) {
+          await mostrarNotaFiscalEVerPedido(context, pedidoId: widget.pedidoId);
+          return;
+        }
+      } catch (_) {
+        if (!mounted) return;
       }
+      context.showSuccess('Pagamento enviado. Acompanhe a confirmação no pedido.');
+      context.go('/rastreio?pedidoId=${Uri.encodeQueryComponent(widget.pedidoId)}');
     } catch (_) {
       if (mounted) {
         context.showError(
@@ -149,9 +171,10 @@ class _PagamentoPendentePageState extends State<PagamentoPendentePage> {
     final pagamento = _pagamento!;
     if (pagamento.formaPagamento == 'PIX') {
       return QrCodePixPage(
-        pixQrCode: pagamento.qrCodeUrl ?? pagamento.pixCopiaECola ?? '',
+        pixQrCode: pagamento.pixCopiaECola ?? pagamento.qrCodeUrl ?? '',
         pixCopiaECola: pagamento.pixCopiaECola,
         paymentId: widget.pedidoId,
+        pedidoRepository: _repository,
         valor: pagamento.valorTotal,
         expiraEm: pagamento.expiraEm,
         simulacaoDisponivel: pagamento.simulacaoDisponivel,

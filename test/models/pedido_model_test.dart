@@ -20,6 +20,17 @@ void main() {
     isPadrao: true,
   );
 
+  test('pedido pendente traz o destino antes de ter rota ou entregador', () {
+    final pedido = PedidoModel.fromMap({
+      'status': 'PENDENTE',
+      'enderecoEntrega': {...endereco.toMap(), 'latitude': -23.55, 'longitude': -46.63},
+    });
+    expect(pedido.status, StatusPedido.pendente);
+    expect(pedido.entregador, isNull);
+    expect(pedido.enderecoEntrega.latitude, -23.55);
+    expect(pedido.enderecoEntrega.longitude, -46.63);
+  });
+
   test('request preserva campos exigidos pelo DTO sem enviar preço', () {
     final request = CriarPedidoRequest(
       lojaId: 'loja1',

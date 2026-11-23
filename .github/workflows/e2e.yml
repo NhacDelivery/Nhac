@@ -35,6 +35,7 @@ jobs:
     outputs:
       app_sha: ${{ steps.revisions.outputs.app_sha }}
       backend_sha: ${{ steps.revisions.outputs.backend_sha }}
+      backend_ref: ${{ steps.backend.outputs.ref }}
     steps:
       - name: Resolver revisão do app
         uses: actions/checkout@v4
@@ -43,11 +44,24 @@ jobs:
           ref: ${{ inputs.app_ref || (github.event_name == 'schedule' && 'eu-e-tu' || github.sha) }}
           path: Nhac
           persist-credentials: false
+      - name: Selecionar backend para esta revisão do app
+        id: backend
+        env:
+          REQUESTED_REF: ${{ inputs.backend_ref }}
+          PR_BRANCH: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.head_ref || '' }}
+        run: |
+          set -euo pipefail
+          ref="${REQUESTED_REF:-main}"
+          if [[ -z "$REQUESTED_REF" && -n "$PR_BRANCH" ]]; then
+            matched=$(git ls-remote --heads https://github.com/NhacDelivery/backend-nhac.git "refs/heads/$PR_BRANCH")
+            if [[ -n "$matched" ]]; then ref="$PR_BRANCH"; fi
+          fi
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
       - name: Resolver revisão do backend
         uses: actions/checkout@v4
         with:
           repository: NhacDelivery/backend-nhac
-          ref: ${{ inputs.backend_ref || 'main' }}
+          ref: ${{ steps.backend.outputs.ref }}
           path: backend-nhac
           persist-credentials: false
       - name: Fixar commits para todos os devices
@@ -101,7 +115,7 @@ jobs:
           EXPECTED_APP_SHA: ${{ needs.resolve-revisions.outputs.app_sha }}
           EXPECTED_BACKEND_SHA: ${{ needs.resolve-revisions.outputs.backend_sha }}
           APP_REF: ${{ inputs.app_ref || (github.event_name == 'schedule' && 'eu-e-tu' || github.sha) }}
-          BACKEND_REF: ${{ inputs.backend_ref || 'main' }}
+          BACKEND_REF: ${{ needs.resolve-revisions.outputs.backend_ref }}
         run: |
           python3 - <<'PYTHON'
           import json, os, subprocess
@@ -144,7 +158,7 @@ jobs:
 
       - name: Build backend jar
         working-directory: backend-nhac
-        run: ./mvnw -B -ntp -q -DskipTests package
+        run: mvn -B -ntp -DskipTests package
 
       - name: Capture backend JDK
         id: backend-java

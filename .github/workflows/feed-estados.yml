@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - 'lib/pages/feed_page.dart'
+      - 'lib/pages/feed_perfil_page.dart'
+      - 'lib/components/profile/banner_perfil.dart'
       - 'lib/components/feed_publish_invite.dart'
       - 'test/pages/feed*test.dart'
       - '.github/workflows/feed-estados.yml'
@@ -31,7 +33,7 @@ jobs:
       - name: Formatar arquivos alterados
         run: dart format lib/pages/feed_page.dart lib/components/feed_publish_invite.dart test/pages/feed_publish_invite_test.dart
       - name: Feed, navegação, acessibilidade e capturas
-        run: flutter test --update-goldens --dart-define=CAPTURE_UI=true test/pages/feed_publish_invite_test.dart test/pages/feed_design_regression_test.dart test/pages/feed_merge_regression_test.dart test/pages/feed_content_test.dart test/components/feed_timestamp_test.dart
+        run: flutter test --update-goldens --dart-define=CAPTURE_UI=true test/pages/feed_publish_invite_test.dart test/pages/feed_design_regression_test.dart test/pages/feed_merge_regression_test.dart test/pages/feed_content_test.dart test/pages/feed_perfil_page_test.dart test/components/feed_timestamp_test.dart
       - run: flutter build web --release
       - uses: actions/upload-artifact@v6
         if: always()

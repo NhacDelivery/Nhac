@@ -20,6 +20,7 @@ import 'package:nhac/globals/exceptions.dart';
 import 'package:nhac/repositories/loja_repository.dart';
 import 'package:nhac/globals/ui_utils.dart';
 import 'package:nhac/e2e/e2e_keys.dart';
+import 'package:nhac/utils/validators.dart';
 import 'package:nhac/globals/app_constants.dart';
 import 'package:nhac/services/local_cache_service.dart';
 
@@ -629,7 +630,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                   ? null
                   : () async {
                       final cupom = await context.push<CupomModel>(
-                        '/cupons',
+                        '/cupons?lojaId=${Uri.encodeQueryComponent(cartProvider.lojaId)}',
                         extra: subtotal,
                       );
                       if (!mounted || cupom == null) return;
@@ -1188,9 +1189,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
         : null;
 
     final cpfPagador = _cpfController.text.replaceAll(RegExp(r'\D'), '');
-    if (_formaPagamento == 'PIX' && cpfPagador.isEmpty) {
+    final erroCpf = _formaPagamento == 'PIX' ? Validators.validarCPF(cpfPagador) : null;
+    if (erroCpf != null) {
       setState(() => _isSubmitting = false);
-      context.showError('CPF é obrigatório para pagamento via PIX.');
+      context.showError('Confira o CPF para o Pix. $erroCpf');
       return;
     }
 
@@ -1198,7 +1200,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       try {
         final validado = await CupomRepository().validarCupom(
           _cupom!.id,
-          cartProvider.valorTotal,
+          cartProvider.valorTotal, lojaId: cartProvider.lojaId,
         );
         if (!context.mounted) return;
         setState(() {
@@ -1311,7 +1313,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       if (_formaPagamento == 'Cartão de crédito' || _formaPagamento == 'PIX') {
         await _tentativasCheckout.concluir(uid);
         if (!context.mounted || authService.usuarioId != uid) return;
-        context.go('/pagamento?pedidoId=$idGerado');
+        context.go('/pagamento?pedidoId=$idGerado', extra: respostaPedido.pagamentoPix);
       } else {
         // Dinheiro
         await _exibirSucessoEVoltar(dadosLocais);

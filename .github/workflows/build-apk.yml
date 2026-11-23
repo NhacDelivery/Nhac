@@ -59,6 +59,7 @@ jobs:
       - name: Prepare app config
         uses: ./.github/actions/prepare-flutter-config
         with:
+          api_base_url: ${{ vars.API_BASE_URL }}
           env_file_content: ${{ secrets.ENV_FILE }}
           google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
 
@@ -125,6 +126,7 @@ jobs:
       - name: Prepare app config
         uses: ./.github/actions/prepare-flutter-config
         with:
+          api_base_url: ${{ vars.API_BASE_URL }}
           env_file_content: ${{ secrets.ENV_FILE }}
           google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
 
@@ -182,6 +184,7 @@ jobs:
       - name: Prepare app config
         uses: ./.github/actions/prepare-flutter-config
         with:
+          api_base_url: ${{ vars.API_BASE_URL }}
           env_file_content: ${{ secrets.ENV_FILE }}
           google_services_json: ${{ secrets.GOOGLE_SERVICES_JSON }}
           require_keystore: 'true'

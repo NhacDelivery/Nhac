@@ -10,6 +10,8 @@ class EnderecoModel {
   final String cep;
   final String? complemento;
   final bool isPadrao;
+  final double? latitude;
+  final double? longitude;
 
   EnderecoModel({
     this.id = '',
@@ -21,6 +23,8 @@ class EnderecoModel {
     required this.cep,
     this.complemento,
     this.isPadrao = false,
+    this.latitude,
+    this.longitude,
   });
 
   EnderecoModel copyWith({
@@ -44,6 +48,8 @@ class EnderecoModel {
       cep: cep ?? this.cep,
       complemento: complemento ?? this.complemento,
       isPadrao: isPadrao ?? this.isPadrao,
+      latitude: latitude,
+      longitude: longitude,
     );
   }
 
@@ -58,6 +64,8 @@ class EnderecoModel {
       cep: map['cep']?.toString() ?? '',
       complemento: map['complemento']?.toString(),
       isPadrao: safeBool(map['isPadrao']),
+      latitude: double.tryParse(map['latitude']?.toString() ?? ''),
+      longitude: double.tryParse(map['longitude']?.toString() ?? ''),
     );
   }
 

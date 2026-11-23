@@ -223,13 +223,6 @@ class _MensagensPageState extends State<MensagensPage>
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {},
-        backgroundColor: const Color(0xFFFF6961), // Vermelho do app
-        shape: const CircleBorder(),
-        elevation: 4,
-        child: Icon(Icons.add, color: Colors.white, size: 36.r),
-      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: (index) {
@@ -371,6 +364,12 @@ class _MensagensPageState extends State<MensagensPage>
                 child: CircleAvatar(
                   radius: 25.r,
                   backgroundColor: Colors.grey.shade300,
+                  foregroundImage: item.pessoaFotoUrl?.isNotEmpty == true
+                      ? CachedNetworkImageProvider(item.pessoaFotoUrl!)
+                      : null,
+                  onForegroundImageError: item.pessoaFotoUrl?.isNotEmpty == true
+                      ? (_, __) {}
+                      : null,
                   child: Icon(Icons.person, color: Colors.white, size: 34.r),
                 ),
               ),
@@ -449,6 +448,7 @@ class _MensagensPageState extends State<MensagensPage>
                 _abrir('/chat-pessoa', {
                   'conversaId': item.id,
                   'pessoaNome': item.pessoaNome,
+                  'fotoUrl': item.pessoaFotoUrl,
                   'heroTag': item.id.toString(),
                   'cardRect': cardRect,
                 });

@@ -26,6 +26,11 @@ class EnderecoRepository {
     }
   }
 
+  Future<void> adicionarEnderecoAutomatico(String usuarioId, EnderecoModel endereco) async {
+    await _dio.post('/usuarios/$usuarioId/enderecos',
+        queryParameters: {'somenteSeVazio': true}, data: endereco.toMap());
+  }
+
   Future<void> removerEndereco(String usuarioId, String enderecoId) async {
     try {
       await _dio.delete('/usuarios/$usuarioId/enderecos/$enderecoId');

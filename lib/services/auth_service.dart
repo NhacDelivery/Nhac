@@ -1,3 +1,5 @@
+import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:dio/dio.dart';
 import 'package:nhac/repositories/cart_repository.dart';
 import 'package:nhac/services/local_cache_service.dart';
@@ -69,6 +71,27 @@ class AuthService with ChangeNotifier {
         response.data['usuarioId'] == usuarioEsperado;
   }
 
+  Future<String?> _selecionarContaGoogle() async {
+    final id = dotenv.env['GOOGLE_SERVER_CLIENT_ID']?.trim();
+    final google = GoogleSignIn(serverClientId: id == null || id.isEmpty ? null : id);
+    try {
+      if (await google.isSignedIn()) await google.signOut();
+      final conta = await google.signIn();
+      if (conta == null) return null;
+      final token = (await conta.authentication).idToken;
+      if (token == null || token.isEmpty) {
+        throw AuthException('O Google não forneceu o token de login para este aplicativo.');
+      }
+      return token;
+    } on PlatformException catch (e) {
+      if (e.code == 'sign_in_canceled') return null;
+      if (e.code == 'network_error') {
+        throw AuthException('Falha de conexão com o Google. Tente novamente.');
+      }
+      throw AuthException('Não foi possível entrar com o Google nesta versão do Nhac. Confira a configuração de login do aplicativo.');
+    }
+  }
+
   /// Confirma a identidade de uma conta Google (que não tem senha) pedindo o
   /// login do Google de novo. Só vale se for a mesma conta da sessão atual, e
   /// a sessão não é substituída. Devolve false se a pessoa cancelar.
@@ -76,16 +99,8 @@ class AuthService with ChangeNotifier {
     final usuarioEsperado = _usuarioId;
     if (usuarioEsperado == null) return false;
     try {
-      final googleSignIn = GoogleSignIn();
-      await googleSignIn.signOut();
-      final googleUser = await googleSignIn.signIn();
-      if (googleUser == null) return false;
-      final idToken = (await googleUser.authentication).idToken;
-      if (idToken == null) {
-        throw AuthException(
-          'Não foi possível obter o token de autenticação do Google.',
-        );
-      }
+      final idToken = await _selecionarContaGoogle();
+      if (idToken == null) return false;
       final response = await _dio.post(
         '/auth/social',
         data: {'idToken': idToken},
@@ -175,7 +190,8 @@ class AuthService with ChangeNotifier {
     try {
       await _dio.post(
         '/auth/enviar-codigo-cadastro',
-        data: {'email': email.trim()},
+        data: {'email': email.trim().toLowerCase()},
+        options: Options(receiveTimeout: const Duration(seconds: 65)),
       );
     } catch (e) {
       throw mapException(e);
@@ -428,32 +444,13 @@ class AuthService with ChangeNotifier {
     }
   }
 
-  Future<void> loginComGoogle() async {
+  Future<bool> loginComGoogle() async {
     try {
-      final GoogleSignIn googleSignIn = GoogleSignIn();
-
-      await googleSignIn.signOut();
-
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-
-      if (googleUser == null) return;
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-      final String? idToken = googleAuth.idToken;
-
-      if (idToken != null) {
-        final response = await _dio.post(
-          '/auth/social',
-          data: {'idToken': idToken},
-        );
-
-        await _salvarSessaoDaResposta(response.data, viaGoogle: true);
-      } else {
-        throw AuthException(
-          'Não foi possível obter o token de autenticação do Google.',
-        );
-      }
+      final idToken = await _selecionarContaGoogle();
+      if (idToken == null) return false;
+      final response = await _dio.post('/auth/social', data: {'idToken': idToken});
+      await _salvarSessaoDaResposta(response.data, viaGoogle: true);
+      return true;
     } catch (e) {
       throw mapException(e);
     }

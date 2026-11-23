@@ -40,7 +40,7 @@ android {
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        
+
         val envFile = rootProject.file("../.env")
         val envProperties = Properties()
         if (envFile.exists()) {
@@ -89,4 +89,6 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // NotificationCompat.ProgressStyle e os métodos de Live Updates exigem AndroidX Core 1.17.0+.
+    implementation("androidx.core:core:1.17.0")
 }

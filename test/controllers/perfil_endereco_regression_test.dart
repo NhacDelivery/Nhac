@@ -207,7 +207,7 @@ void main() {
     final gps = provider.adicionarEnderecoAutomatico(novo);
     leitura.complete([antigo]);
     await Future.wait([inicial, gps]);
-    verifyNever(() => repo.adicionarEndereco(any(), any()));
+    verifyNever(() => repo.adicionarEnderecoAutomatico(any(), any()));
     expect(provider.enderecos.single.isPadrao, true);
     provider.dispose();
   });
@@ -217,7 +217,7 @@ void main() {
     when(() => repo.buscarEnderecos('cliente')).thenThrow(Exception('offline'));
     final provider = EnderecoProvider(authService: auth, repository: repo);
     await provider.adicionarEnderecoAutomatico(novo);
-    verifyNever(() => repo.adicionarEndereco(any(), any()));
+    verifyNever(() => repo.adicionarEnderecoAutomatico(any(), any()));
     expect(provider.erro, isNotNull);
     provider.dispose();
   });
@@ -226,14 +226,14 @@ void main() {
     final repo = EnderecoMock();
     final leitura = Completer<List<EnderecoModel>>();
     when(() => repo.buscarEnderecos('cliente')).thenAnswer((_) => leitura.future);
-    when(() => repo.adicionarEndereco('cliente', any())).thenAnswer((_) async {});
+    when(() => repo.adicionarEnderecoAutomatico('cliente', any())).thenAnswer((_) async {});
     final provider = EnderecoProvider(authService: auth, repository: repo);
     final primeiro = provider.adicionarEnderecoAutomatico(novo);
     final segundo = provider.adicionarEnderecoAutomatico(novo);
     leitura.complete([]);
     await Future.wait([primeiro, segundo]);
-    final salvo = verify(() => repo.adicionarEndereco('cliente', captureAny())).captured.single as EnderecoModel;
-    expect(salvo.isPadrao, false);
+    final salvo = verify(() => repo.adicionarEnderecoAutomatico('cliente', captureAny())).captured.single as EnderecoModel;
+    expect(salvo.isPadrao, true);
     provider.dispose();
   });
 

@@ -11,11 +11,12 @@ class OperacaoPagamentoCard extends StatefulWidget {
   final String pedidoId;
   final PedidoRepository repository;
   final Future<void> Function()? aoCancelar;
+  final Future<void> Function()? aoContinuar;
   const OperacaoPagamentoCard(
       {super.key,
       required this.pedidoId,
       required this.repository,
-      this.aoCancelar});
+      this.aoCancelar, this.aoContinuar});
   @override
   State<OperacaoPagamentoCard> createState() => _OperacaoPagamentoCardState();
 }
@@ -141,6 +142,16 @@ class _OperacaoPagamentoCardState extends State<OperacaoPagamentoCard>
   @override
   Widget build(BuildContext context) {
     final dados = _dados;
+    if (dados?.podeContinuarPagamento == true && widget.aoContinuar != null && _erro == null) {
+      return FilledButton.icon(
+        onPressed: _consultando ? null : () async {
+          await widget.aoContinuar!();
+          if (mounted) await _carregar();
+        },
+        icon: const Icon(Icons.payment),
+        label: const Text('Continuar pagamento'),
+      );
+    }
     if (dados?.regular == true &&
         dados?.podeSolicitarEstorno != true &&
         _erro == null) {

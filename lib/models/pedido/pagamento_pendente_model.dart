@@ -10,6 +10,7 @@ class PagamentoPendenteModel {
   final String? qrCodeUrl;
   final String? clientSecret;
   final bool simulacaoDisponivel;
+  final bool aguardandoConfirmacao;
 
   const PagamentoPendenteModel({
     required this.pedidoId,
@@ -21,6 +22,7 @@ class PagamentoPendenteModel {
     this.qrCodeUrl,
     this.clientSecret,
     required this.simulacaoDisponivel,
+    this.aguardandoConfirmacao = false,
   });
 
   factory PagamentoPendenteModel.fromMap(Map<String, dynamic> map) =>
@@ -34,5 +36,6 @@ class PagamentoPendenteModel {
         qrCodeUrl: map['qrCodeUrl']?.toString(),
         clientSecret: map['clientSecret']?.toString(),
         simulacaoDisponivel: map['simulacaoDisponivel'] == true,
+        aguardandoConfirmacao: map['aguardandoConfirmacao'] == true,
       );
 }

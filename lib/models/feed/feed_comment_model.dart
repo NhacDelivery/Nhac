@@ -43,3 +43,32 @@ class FeedCommentModel {
         criadoEm: DateTime.parse(map['criadoEm'] as String),
       );
 }
+
+/// Mantém a ordem dos tópicos do filtro e reúne cada resposta com seu pai.
+/// Uma resposta cujo pai está em outra página aparece como tópico identificado.
+List<({FeedCommentModel comentario, int nivel})> organizarComentarios(
+    List<FeedCommentModel> comentarios) {
+  final ids = comentarios.map((c) => c.id).toSet();
+  final filhos = <String, List<FeedCommentModel>>{};
+  final raizes = <FeedCommentModel>[];
+  for (final c in comentarios) {
+    final pai = c.respostaAId;
+    if (pai != null && ids.contains(pai)) {
+      (filhos[pai] ??= []).add(c);
+    } else {
+      raizes.add(c);
+    }
+  }
+  final resultado = <({FeedCommentModel comentario, int nivel})>[];
+  final visitados = <String>{};
+  final pilha = [for (final raiz in raizes.reversed) (comentario: raiz, nivel: 0)];
+  while (pilha.isNotEmpty) {
+    final item = pilha.removeLast();
+    if (!visitados.add(item.comentario.id)) continue;
+    resultado.add(item);
+    for (final filho in (filhos[item.comentario.id] ?? const <FeedCommentModel>[]).reversed) {
+      pilha.add((comentario: filho, nivel: item.nivel + 1));
+    }
+  }
+  return resultado;
+}
