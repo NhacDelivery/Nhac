@@ -4,6 +4,7 @@ class ConversaPessoaResumo {
   final String id;
   final String pessoaId;
   final String pessoaNome;
+  final String? pessoaFotoUrl;
   final String ultimaMensagem;
   final DateTime ultimaMensagemData;
   final int mensagensNaoLidas;
@@ -12,6 +13,7 @@ class ConversaPessoaResumo {
     required this.id,
     required this.pessoaId,
     required this.pessoaNome,
+    this.pessoaFotoUrl,
     required this.ultimaMensagem,
     required this.ultimaMensagemData,
     required this.mensagensNaoLidas,
@@ -33,6 +35,9 @@ class ConversaPessoaResumo {
           map['pessoaNome']?.toString() ??
           map['nome']?.toString() ??
           'Usuário',
+      pessoaFotoUrl: (interlocutor['imagemUrl'] ?? map['pessoaFotoUrl'])
+          ?.toString()
+          .trim(),
       ultimaMensagem:
           map['ultimaMensagemPreview']?.toString() ??
           map['ultimaMensagem']?.toString() ??
@@ -53,6 +58,7 @@ class ConversaPessoaResumo {
       'id': id,
       'pessoaId': pessoaId,
       'pessoaNome': pessoaNome,
+      'pessoaFotoUrl': pessoaFotoUrl,
       'ultimaMensagem': ultimaMensagem,
       'ultimaMensagemData': ultimaMensagemData.toUtc().toIso8601String(),
       'mensagensNaoLidas': mensagensNaoLidas,
@@ -63,6 +69,7 @@ class ConversaPessoaResumo {
     String? id,
     String? pessoaId,
     String? pessoaNome,
+    String? pessoaFotoUrl,
     String? ultimaMensagem,
     DateTime? ultimaMensagemData,
     int? mensagensNaoLidas,
@@ -71,6 +78,7 @@ class ConversaPessoaResumo {
       id: id ?? this.id,
       pessoaId: pessoaId ?? this.pessoaId,
       pessoaNome: pessoaNome ?? this.pessoaNome,
+      pessoaFotoUrl: pessoaFotoUrl ?? this.pessoaFotoUrl,
       ultimaMensagem: ultimaMensagem ?? this.ultimaMensagem,
       ultimaMensagemData: ultimaMensagemData ?? this.ultimaMensagemData,
       mensagensNaoLidas: mensagensNaoLidas ?? this.mensagensNaoLidas,
