@@ -43,7 +43,7 @@ runs:
     - name: Create and validate local config files
       shell: bash
       env:
-        API_BASE_URL: ${{ inputs.api_base_url || vars.API_BASE_URL }}
+        API_BASE_URL: ${{ inputs.api_base_url }}
         ENV_FILE_CONTENT: ${{ inputs.env_file_content }}
         GOOGLE_SERVICES_JSON_CONTENT: ${{ inputs.google_services_json }}
         REQUIRE_KEYSTORE: ${{ inputs.require_keystore }}
