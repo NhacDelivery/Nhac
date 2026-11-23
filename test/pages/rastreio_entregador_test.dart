@@ -210,7 +210,8 @@ void main() {
     expect(find.text('Pedido não encontrado.'), findsNothing);
     final retry =
         find.text('Não foi possível consultar a loja. Tentar novamente');
-    await tester.ensureVisible(retry);
+    await Scrollable.ensureVisible(tester.element(retry), alignment: 0.5);
+    await tester.pumpAndSettle();
     expect(retry, findsOneWidget);
     when(() => mockLojaRepository.buscarLoja(any())).thenAnswer((_) async =>
         LojasModel(
@@ -265,7 +266,8 @@ void main() {
     await tester.pumpAndSettle();
     final aviso = find.text(
         'Não foi possível atualizar o pedido. Exibindo a última informação recebida.');
-    await tester.ensureVisible(aviso);
+    await Scrollable.ensureVisible(tester.element(aviso), alignment: 0.5);
+    await tester.pumpAndSettle();
     expect(aviso, findsOneWidget);
     expect(find.text('Pedido não encontrado.'), findsNothing);
     when(() => mockPedidoRepository.buscarPedidoPorId('stale-pedido'))
@@ -273,7 +275,8 @@ void main() {
     final retry = find.descendant(
         of: find.ancestor(of: aviso, matching: find.byType(BannerErroInline)),
         matching: find.byType(TextButton));
-    await tester.ensureVisible(retry);
+    await Scrollable.ensureVisible(tester.element(retry), alignment: 0.5);
+    await tester.pumpAndSettle();
     await tester.tap(retry);
     await tester.pumpAndSettle();
     expect(aviso, findsNothing);
