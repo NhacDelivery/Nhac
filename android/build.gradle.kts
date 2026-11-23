@@ -1,4 +1,3 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
@@ -28,13 +27,14 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
-// pay_android 3.2.0 compila Java em 11, mas deixa o Kotlin no padrão 1.8.
-// Mantém os dois compiladores no mesmo alvo sem alterar outras dependências.
+// pay_android 3.2.0 define Java em 11, mas mantém Kotlin em 1.8.
+// Aplica o alvo Kotlin depois da avaliação do módulo para prevalecer sobre
+// a configuração padrão definida pelo próprio plugin.
 subprojects {
     if (name == "pay_android") {
-        tasks.withType<KotlinCompile>().configureEach {
-            compilerOptions {
-                jvmTarget.set(JvmTarget.JVM_11)
+        afterEvaluate {
+            tasks.withType<KotlinCompile>().configureEach {
+                kotlinOptions.jvmTarget = "11"
             }
         }
     }
