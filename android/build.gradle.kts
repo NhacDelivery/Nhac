@@ -26,6 +26,16 @@ subprojects {
 }
 
 subprojects {
+    if (name == "stripe_android") {
+        // O Nhac usa PaymentSheet. O SDK restrito de emissão de cartões é opcional.
+        configurations.matching { it.name == "compileOnly" }.configureEach {
+            dependencies.withType<ExternalModuleDependency>().configureEach {
+                if (group == "com.stripe" && name == "stripe-android-issuing-push-provisioning") {
+                    exclude(group = "com.google.android.gms", module = "play-services-tapandpay")
+                }
+            }
+        }
+    }
     if (name == "flutter_native_splash") {
         // O plugin 2.4.4 declara API 31, abaixo da exigida pelas bibliotecas AndroidX.
         pluginManager.withPlugin("com.android.library") {
